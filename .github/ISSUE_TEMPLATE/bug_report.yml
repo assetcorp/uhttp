@@ -1,0 +1,77 @@
+name: Bug report
+description: Report something that does not work as documented.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug. Please fill in the sections below so that the problem is easy to reproduce.
+  - type: input
+    id: version
+    attributes:
+      label: uhttp version
+      description: Give the version of @delali/uhttp that you use.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Paste the output of `node --version`.
+      placeholder: v24.16.0
+    validations:
+      required: true
+  - type: input
+    id: uws-version
+    attributes:
+      label: uWebSockets.js version
+      description: Give the tag or commit that you installed uWebSockets.js from.
+      placeholder: v20.69.0
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which part
+      description: Say where the problem happens.
+      options:
+        - Routing and middleware
+        - Request bodies and uploads
+        - Responses and headers
+        - WebSockets
+        - Worker threads
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Give a minimal code sample or a sequence of steps that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and errors
+      description: Paste any error message, stack trace, or log. GitHub formats this field as code, so it needs no backticks.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I use a supported Node.js version and the latest version of the package.
+          required: true

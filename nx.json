@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "sharedGlobals": [
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/biome.json"
+    ],
+    "production": [
+      "default",
+      "!{projectRoot}/**/__tests__/**/*",
+      "!{projectRoot}/vitest.config.ts",
+      "!{projectRoot}/benchmarks/**/*"
+    ]
+  },
+  "release": {
+    "projects": ["uhttp"],
+    "projectsRelationship": "independent",
+    "releaseTagPattern": "{projectName}@v{version}",
+    "version": {
+      "conventionalCommits": false,
+      "updateDependents": "never"
+    },
+    "changelog": {
+      "automaticFromRef": true,
+      "workspaceChangelog": false,
+      "projectChangelogs": {
+        "createRelease": "github"
+      }
+    },
+    "git": {
+      "commit": true,
+      "tag": true,
+      "commitMessage": "chore(release): {projectName}@v{version}"
+    }
+  },
+  "targetDefaults": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"],
+      "outputs": ["{projectRoot}/dist"],
+      "cache": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "cache": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": true
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "cache": true
+    },
+    "api": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "lint": {
+      "cache": false
+    },
+    "format": {
+      "cache": false
+    }
+  }
+}
