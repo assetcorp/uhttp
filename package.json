@@ -1,0 +1,36 @@
+{
+  "name": "uhttp",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo for uhttp, an HTTP and WebSocket server for Node.js on uWebSockets.js.",
+  "author": "Delali (https://sondelali.com)",
+  "license": "MIT",
+  "homepage": "https://github.com/assetcorp/uhttp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/assetcorp/uhttp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/assetcorp/uhttp/issues"
+  },
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "test:coverage": "nx run-many -t test:coverage",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
+    "format": "biome check --write .",
+    "check": "biome check --error-on-warnings ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "24.19.1",
+    "nx": "23.2.1",
+    "typescript": "7.0.2"
+  }
+}

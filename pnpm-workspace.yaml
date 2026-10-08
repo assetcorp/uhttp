@@ -1,0 +1,8 @@
+packages:
+  - packages/*
+  - benchmarks/*
+
+minimumReleaseAge: 5760
+
+allowBuilds:
+  nx: true
