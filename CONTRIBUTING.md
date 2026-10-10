@@ -35,11 +35,11 @@ On every pull request, the `Speed` workflow compares the speed of the change wit
 The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups. Vitest runs each group as a project of the same name, so every line of its output shows which group the test belongs to.
 
 - `integration/` holds the tests that send requests through `app.request()`. Those requests go through the real router, middleware, request context, and body parsers, but no socket and no uWebSockets.js take part. Mirror the source directory that a test covers, as `integration/body/parsers.test.ts` does for `src/body/`.
-- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1, with `fetch` or a raw `net` socket as the client. Name each file after the behaviour that a client sees, as `e2e/bodies-and-uploads.test.ts` does.
+- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1. Most of these tests use the client in `helpers/http-client.ts`, while the rest use `fetch`. That client rejects any response that breaks HTTP/1.1, and it reports whether the server kept the connection open, closed it cleanly, or reset it. Name each file after the behaviour that a client sees, as `e2e/request-bodies.test.ts` does.
 - `package/` holds the tests of the built files and of the manifest that npm publishes.
 - `helpers/` holds the helpers that the three groups share.
 
-Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never runs the code that writes to the socket, so a fault in that code shows up only in an end-to-end test.
+Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never runs the code that writes to the socket, so a fault in that code shows up only in an end-to-end test. In each end-to-end test, send the whole request that a real client would send, including the body of a request that the server rejects. Then check what happened to the connection after the response, as well as the response itself.
 
 ## Repository layout
 

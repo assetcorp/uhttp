@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { createApp, type TestHeaders } from '../../index.js'
-import { rawRequest } from '../helpers/raw-http.js'
+import { describe, expect, it, vi } from 'vitest'
+import { createApp, type TestHeaders, UhttpError } from '../../index.js'
+import { openConnection, send } from '../helpers/http-client.js'
+import { SMUGGLED_REQUEST } from '../helpers/replies.js'
 import { start } from '../helpers/server.js'
 
 const PARSER_ERROR_BODY = '<h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>'
+const HELLO_CHUNKS = '5\r\nhello\r\n0\r\n\r\n'
 
 interface Case {
   name: string
@@ -44,20 +46,73 @@ const CASES: readonly Case[] = [
   { name: 'a Host with a comma', lines: [['Host', 'a,b']] },
   { name: 'a Host with an @', lines: [['Host', 'user@example.com']] },
   {
-    name: 'Content-Length with Transfer-Encoding',
-    lines: [
-      ['Host', 'localhost'],
-      ['Content-Length', '0'],
-      ['Transfer-Encoding', 'chunked'],
-    ],
-  },
-  {
     name: 'a mixed-case header name',
     lines: [
       ['Host', 'localhost'],
       ['X-Mixed-Case', 'kept'],
     ],
   },
+]
+
+function echoRequest(lines: readonly string[], body: string): string {
+  const head = ['POST /echo HTTP/1.1', 'Host: localhost', 'Content-Type: text/plain', ...lines].join('\r\n')
+  return `${head}\r\n\r\n${body}`
+}
+
+function echoApp(handled: string[]) {
+  return createApp()
+    .post('/echo', async c => {
+      handled.push('echo')
+      try {
+        return c.text(`[${await c.req.body.text()}]`)
+      } catch (error) {
+        handled.push(error instanceof UhttpError ? error.code : String(error))
+        throw error
+      }
+    })
+    .get('/admin', c => {
+      handled.push('admin')
+      return c.text('admin')
+    })
+    .get('/hello', c => c.text('Hello'))
+}
+
+const MALFORMED_HEADS: readonly (readonly [string, string])[] = [
+  [
+    'Content-Length with Transfer-Encoding',
+    echoRequest(['Content-Length: 0', 'Transfer-Encoding: chunked'], HELLO_CHUNKS),
+  ],
+  [
+    'Transfer-Encoding with Content-Length',
+    echoRequest(['Transfer-Encoding: chunked', 'Content-Length: 5'], '0\r\n\r\n'),
+  ],
+  ['two different Content-Length values', echoRequest(['Content-Length: 5', 'Content-Length: 6'], 'hello!')],
+  ['a Content-Length with a plus sign', echoRequest(['Content-Length: +5'], 'hello')],
+  ['a negative Content-Length', echoRequest(['Content-Length: -1'], 'hello')],
+  ['a Content-Length with a space inside', echoRequest(['Content-Length: 5 5'], 'hello')],
+  ['a hexadecimal Content-Length', echoRequest(['Content-Length: 0x5'], 'hello')],
+  ['a Content-Length list', echoRequest(['Content-Length: 5,5'], 'hello')],
+  ['a Content-Length that overflows', echoRequest(['Content-Length: 99999999999999999999'], 'hello')],
+  ['whitespace before the colon of Content-Length', echoRequest(['Content-Length : 5'], 'hello')],
+  ['a Transfer-Encoding of gzip', echoRequest(['Transfer-Encoding: gzip'], HELLO_CHUNKS)],
+  ['a Transfer-Encoding that ends with gzip', echoRequest(['Transfer-Encoding: chunked, gzip'], HELLO_CHUNKS)],
+  ['a Transfer-Encoding of identity', echoRequest(['Transfer-Encoding: identity'], HELLO_CHUNKS)],
+  ['a folded header line', echoRequest(['Content-Length: 5', 'X-Note: a', ' b'], 'hello')],
+  ['a NUL in a header value', echoRequest(['Content-Length: 5', 'X-Note: a\0b'], 'hello')],
+  ['a parenthesis in a header name', echoRequest(['Content-Length: 5', 'X(Note): a'], 'hello')],
+  ['request lines that end in LF alone', 'GET /hello HTTP/1.1\nHost: localhost\n\n'],
+  ['a Transfer-Encoding of xchunked', echoRequest(['Transfer-Encoding: xchunked'], HELLO_CHUNKS)],
+  [
+    'a chunked Transfer-Encoding followed by a line of identity',
+    echoRequest(['Transfer-Encoding: chunked', 'Transfer-Encoding: identity'], HELLO_CHUNKS),
+  ],
+]
+
+const MALFORMED_CHUNKS: readonly (readonly [string, string])[] = [
+  ['a chunk size that overflows', `10000000000000005\r\nhello\r\n0\r\n\r\n`],
+  ['a chunk size that is not hexadecimal', 'zz\r\nhello\r\n0\r\n\r\n'],
+  ['a chunk longer than its size', '2\r\nhello\r\n0\r\n\r\n'],
+  ['chunk lines that end in LF alone', '5\nhello\n0\n\n'],
 ]
 
 describe('app.request() and uWebSockets.js', () => {
@@ -67,25 +122,113 @@ describe('app.request() and uWebSockets.js', () => {
 
     for (const { name, lines } of CASES) {
       const head = ['GET /headers HTTP/1.1', ...lines.map(([key, value]) => `${key}: ${value}`), '', ''].join('\r\n')
-      const native = await rawRequest(server.port, head)
+      const { response } = await send(server.port, head)
       const headers: TestHeaders = lines
       const tested = await app.request('/headers', { headers })
 
       expect({ status: tested.status, body: await tested.text() }, name).toEqual({
-        status: native.status,
-        body: native.body.toString(),
+        status: response.status,
+        body: response.body.toString(),
       })
     }
   })
 })
 
 describe('the parser of uWebSockets.js', () => {
-  it('sends HTML outside the JSON contract of the package for a request with no Host', async () => {
+  it('sends HTML outside the JSON contract of the package for a request with no Host, and closes the connection', async () => {
     const server = await start(createApp())
 
-    const response = await rawRequest(server.port, 'GET /users HTTP/1.1\r\n\r\n')
+    const { connection, response } = await send(server.port, 'GET /users HTTP/1.1\r\n\r\n')
+
+    expect([response.status, response.body.toString()]).toEqual([400, PARSER_ERROR_BODY])
+    expect(await connection.waitForClose()).toBe('closed')
+  })
+
+  it.each(MALFORMED_HEADS)(
+    'answers 400 to %s before any handler runs, closes the connection, and runs no request hidden behind it',
+    async (_name, request) => {
+      const handled: string[] = []
+      const server = await start(echoApp(handled))
+
+      const { connection, response } = await send(server.port, `${request}${SMUGGLED_REQUEST}`)
+
+      expect(response.status).toBe(400)
+      expect(await connection.waitForClose()).toBe('closed')
+      expect(handled).toEqual([])
+    },
+  )
+
+  it.each(MALFORMED_CHUNKS)(
+    'answers 400 to a chunked body with %s, fails the read in the handler, and runs no request hidden behind it',
+    async (_name, body) => {
+      const handled: string[] = []
+      const server = await start(echoApp(handled))
+
+      const { connection, response } = await send(
+        server.port,
+        `${echoRequest(['Transfer-Encoding: chunked'], body)}${SMUGGLED_REQUEST}`,
+      )
+
+      expect(response.status).toBe(400)
+      expect(await connection.waitForClose()).toBe('closed')
+      await vi.waitFor(() => expect(handled).toEqual(['echo', 'REQUEST_ABORTED']))
+    },
+  )
+
+  it('answers 501 to a Transfer-Encoding of gzip before chunked, which the package cannot decode, before any handler runs', async () => {
+    const handled: string[] = []
+    const server = await start(echoApp(handled))
+
+    const { connection, response } = await send(
+      server.port,
+      `${echoRequest(['Transfer-Encoding: gzip, chunked'], HELLO_CHUNKS)}${SMUGGLED_REQUEST}`,
+    )
+
+    expect(response.status).toBe(501)
+    expect(await connection.waitForClose()).toBe('closed')
+    expect(handled).toEqual([])
+  })
+
+  it('answers 400 to a bare CR inside a header value, and closes the connection', async () => {
+    const server = await start(echoApp([]))
+
+    const { connection, response } = await send(
+      server.port,
+      'GET /hello HTTP/1.1\r\nHost: localhost\r\nX-Note: a\rb\r\n\r\n',
+    )
 
     expect(response.status).toBe(400)
-    expect(response.body.toString()).toBe(PARSER_ERROR_BODY)
+    expect(await connection.waitForClose()).toBe('closed')
+  })
+
+  it.each([
+    ['a Transfer-Encoding of Chunked in another case', ['Transfer-Encoding: Chunked'], HELLO_CHUNKS],
+    ['a Transfer-Encoding of chunked with trailing whitespace', ['Transfer-Encoding: chunked '], HELLO_CHUNKS],
+    ['a chunk extension', ['Transfer-Encoding: chunked'], '5;name=value\r\nhello\r\n0\r\n\r\n'],
+    [
+      'a trailer field after the last chunk',
+      ['Transfer-Encoding: chunked'],
+      '5\r\nhello\r\n0\r\nX-Checksum: 1\r\n\r\n',
+    ],
+    ['a Content-Length with whitespace before it', ['Content-Length:  5'], 'hello'],
+    ['a Content-Length with a leading zero', ['Content-Length: 05'], 'hello'],
+    ['two identical Content-Length lines', ['Content-Length: 5', 'Content-Length: 5'], 'hello'],
+  ])('reads the body of a request with %s, and keeps the connection open', async (_name, lines, body) => {
+    const server = await start(echoApp([]))
+    const connection = await openConnection(server.port)
+
+    const response = await connection.exchange(echoRequest(lines, body))
+    const next = await connection.exchange('GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n')
+
+    expect([response.status, response.body.toString()]).toEqual([200, '[hello]'])
+    expect([next.status, next.body.toString()]).toEqual([200, 'Hello'])
+  })
+
+  it('serves a request whose target is in absolute form', async () => {
+    const server = await start(echoApp([]))
+
+    const { response } = await send(server.port, 'GET http://localhost/hello HTTP/1.1\r\nHost: localhost\r\n\r\n')
+
+    expect([response.status, response.body.toString()]).toEqual([200, 'Hello'])
   })
 })

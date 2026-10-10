@@ -1,87 +1,145 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { createApp, type Server, serve, UhttpError } from '../../index.js'
+import { describe, expect, it } from 'vitest'
+import { createApp, serve, UhttpError } from '../../index.js'
+import { openConnection, requestHead, send } from '../helpers/http-client.js'
+import { errorBody, expectHello } from '../helpers/replies.js'
+import { memoryLogger, pause, start } from '../helpers/server.js'
 
-const HOST = '127.0.0.1'
-
-let server: Server | undefined
-
-afterEach(async () => {
-  await server?.close()
-  server = undefined
-})
-
-function url(path: string): string {
-  if (server === undefined) throw new Error('The test started no server.')
-  return `http://${HOST}:${server.port}${path}`
-}
-
-function pause(milliseconds: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, milliseconds))
-}
+const INTERNAL_ERROR = errorBody('INTERNAL_ERROR', 'The request failed.')
 
 describe('serve()', () => {
-  it('serves a GET route over the network on the port that the operating system assigns for port 0', async () => {
-    server = await serve({ app: createApp().get('/hello', c => c.text('Hello, World!')), port: 0, host: HOST })
+  it('serves a GET route on the port that the operating system assigns for port 0, over a connection that it keeps open', async () => {
+    const server = await start(createApp().get('/hello', c => c.text('Hello, World!')))
+    const connection = await openConnection(server.port)
 
-    const response = await fetch(url('/hello'))
+    const first = await connection.exchange(requestHead('GET', '/hello'))
+    const second = await connection.exchange(requestHead('GET', '/hello'))
 
     expect(server.port).toBeGreaterThan(0)
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toBe('text/plain; charset=UTF-8')
-    expect(await response.text()).toBe('Hello, World!')
+    expect(first.status).toBe(200)
+    expect(first.headers.get('content-type')).toEqual(['text/plain; charset=UTF-8'])
+    expect(first.headers.get('content-length')).toEqual(['13'])
+    expect(first.body.toString()).toBe('Hello, World!')
+    expect([second.status, second.body.toString()]).toEqual([200, 'Hello, World!'])
+  })
+
+  it('answers requests that a client pipelines on one connection in the order that it sent them', async () => {
+    const app = createApp()
+      .get('/first', c => c.text('first'))
+      .get('/second', c => c.json({ order: 2 }))
+      .get('/third', c => c.text('third', 201))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+
+    void connection.write(requestHead('GET', '/first') + requestHead('GET', '/second') + requestHead('GET', '/third'))
+    const responses = [await connection.response(), await connection.response(), await connection.response()]
+
+    expect(responses.map(response => [response.status, response.body.toString()])).toEqual([
+      [200, 'first'],
+      [200, '{"order":2}'],
+      [201, 'third'],
+    ])
+  })
+
+  it('never answers pipelined requests out of order or mixes their replies when the first reply is still pending', async () => {
+    const handled: string[] = []
+    const app = createApp()
+      .get('/slow', async c => {
+        handled.push('slow')
+        await pause(50)
+        return c.text('slow')
+      })
+      .get('/fast', c => {
+        handled.push('fast')
+        return c.text('fast')
+      })
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+
+    void connection.write(requestHead('GET', '/slow') + requestHead('GET', '/fast'))
+    const bodies: string[] = []
+    for (let index = 0; index < 2; index++) {
+      const response = await connection.response().catch(() => undefined)
+      if (response === undefined) break
+      bodies.push(response.body.toString())
+    }
+    await pause(100)
+
+    expect(['slow', 'fast'].slice(0, bodies.length)).toEqual(bodies)
+    expect(['slow', 'fast'].slice(0, handled.length)).toEqual(handled)
+  })
+
+  it('closes the connection after the reply when the client sends Connection: close', async () => {
+    const server = await start(createApp().get('/hello', c => c.text('Hello')))
+
+    const { connection, response } = await send(server.port, requestHead('GET', '/hello', ['Connection: close']))
+
+    expect([response.status, response.body.toString()]).toEqual([200, 'Hello'])
+    expect(await connection.waitForClose()).toBe('closed')
   })
 
   it('sends the reply of a handler that awaits before it returns', async () => {
-    const app = createApp().get('/slow', async c => {
-      await pause(5)
-      return c.json({ ready: true }, 202)
-    })
-    server = await serve({ app, port: 0, host: HOST })
+    const app = createApp()
+      .get('/slow', async c => {
+        await pause(5)
+        return c.json({ ready: true }, 202)
+      })
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
 
-    const response = await fetch(url('/slow'))
+    const response = await connection.exchange(requestHead('GET', '/slow'))
 
     expect(response.status).toBe(202)
-    expect(response.headers.get('content-type')).toBe('application/json')
-    expect(await response.json()).toEqual({ ready: true })
+    expect(response.headers.get('content-type')).toEqual(['application/json'])
+    expect(response.body.toString()).toBe('{"ready":true}')
+    await expectHello(connection)
   })
 
   it('passes the method, the path, and the query string from the network to the handler', async () => {
-    server = await serve({ app: createApp().get('/search', c => c.json({ ...c.req })), port: 0, host: HOST })
+    const server = await start(createApp().get('/search', c => c.json({ ...c.req })))
+    const connection = await openConnection(server.port)
 
-    const response = await fetch(url('/search?q=uhttp&page=2'))
+    const bodies: unknown[] = []
+    for (const target of ['/search?q=uhttp&page=2', '/search', '/search?']) {
+      bodies.push(JSON.parse((await connection.exchange(requestHead('GET', target))).body.toString()))
+    }
 
-    expect(await response.json()).toEqual({ method: 'GET', path: '/search', query: 'q=uhttp&page=2' })
-  })
-
-  it('passes an empty query string to the handler when the URL has no question mark', async () => {
-    server = await serve({ app: createApp().get('/search', c => c.json({ ...c.req })), port: 0, host: HOST })
-
-    const response = await fetch(url('/search'))
-
-    expect(await response.json()).toEqual({ method: 'GET', path: '/search', query: '' })
+    expect(bodies).toEqual([
+      { method: 'GET', path: '/search', query: 'q=uhttp&page=2' },
+      { method: 'GET', path: '/search', query: '' },
+      { method: 'GET', path: '/search', query: '' },
+    ])
   })
 
   it('returns the same JSON 404 as app.request() for a path that has no route', async () => {
-    server = await serve({ app: createApp().get('/hello', c => c.text('Hello')), port: 0, host: HOST })
+    const app = createApp().get('/hello', c => c.text('Hello'))
+    const server = await start(app)
 
-    const response = await fetch(url('/missing'))
+    const { response } = await send(server.port, requestHead('GET', '/missing'))
+    const tested = await app.request('/missing')
 
     expect(response.status).toBe(404)
-    expect(await response.json()).toEqual({
-      error: { code: 'NOT_FOUND', message: 'The app has no route for this path.' },
-    })
+    expect(response.headers.get('content-type')).toEqual(['application/json'])
+    expect(response.body.toString()).toBe(await tested.text())
   })
 
-  it('sends a 204 without a body', async () => {
-    server = await serve({ app: createApp().get('/empty', c => c.text('ignored', 204)), port: 0, host: HOST })
+  it('sends a 204 with no body and no length, so that the next response on the connection parses', async () => {
+    const app = createApp()
+      .get('/empty', c => c.text('ignored', 204))
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
 
-    const response = await fetch(url('/empty'))
+    void connection.write(requestHead('GET', '/empty') + requestHead('GET', '/hello'))
+    const empty = await connection.response()
+    const next = await connection.response()
 
-    expect(response.status).toBe(204)
-    expect(await response.text()).toBe('')
+    expect([empty.status, empty.framing, empty.body.length]).toEqual([204, 'none', 0])
+    expect(empty.headers.has('content-length')).toBe(false)
+    expect([next.status, next.body.toString()]).toEqual([200, 'Hello'])
   })
 
-  it('returns a 500 with a generic message when a handler throws or rejects', async () => {
+  it('returns a 500 with a generic message when a handler throws or rejects, and keeps the connection open', async () => {
     const app = createApp()
       .get('/throws', () => {
         throw new Error('secret')
@@ -90,22 +148,23 @@ describe('serve()', () => {
         await pause(1)
         throw new Error('secret')
       })
-    server = await serve({ app, port: 0, host: HOST })
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
 
     for (const path of ['/throws', '/rejects']) {
-      const response = await fetch(url(path))
-      expect(response.status).toBe(500)
-      expect(await response.json()).toEqual({
-        error: { code: 'INTERNAL_ERROR', message: 'The request failed.' },
-      })
+      const response = await connection.exchange(requestHead('GET', path))
+      expect([response.status, response.body.toString()]).toEqual([500, INTERNAL_ERROR])
     }
+    await expectHello(connection)
   })
 
-  it('serves the next request after a client disconnects before its handler returns', async () => {
+  it('serves the next client after a client disconnects before its handler returns, and logs no error', async () => {
+    const { entries, logger } = memoryLogger()
     const started = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     const answered = Promise.withResolvers<void>()
-    const app = createApp()
+    const app = createApp({ logger })
       .get('/slow', async c => {
         started.resolve()
         await release.promise
@@ -113,43 +172,46 @@ describe('serve()', () => {
         return c.text('late')
       })
       .get('/hello', c => c.text('Hello'))
-    server = await serve({ app, port: 0, host: HOST })
+    const server = await start(app)
+    const abandoned = await openConnection(server.port)
 
-    const controller = new AbortController()
-    const abandoned = fetch(url('/slow'), { signal: controller.signal })
+    void abandoned.write(requestHead('GET', '/slow'))
     await started.promise
-    controller.abort()
-    await expect(abandoned).rejects.toThrow()
+    abandoned.destroy()
     await pause(50)
     release.resolve()
     await answered.promise
     await pause(10)
 
-    const response = await fetch(url('/hello'))
-    expect(await response.text()).toBe('Hello')
+    await expectHello(await openConnection(server.port))
+    expect(entries).toEqual([])
   })
 
-  it('closes its socket, so that a later fetch rejects', async () => {
-    server = await serve({ app: createApp().get('/hello', c => c.text('Hello')), port: 0, host: HOST })
-    const address = url('/hello')
+  it('closes its open connections and refuses new ones once it closes', async () => {
+    const server = await start(createApp().get('/hello', c => c.text('Hello')))
+    const connection = await openConnection(server.port)
+    await expectHello(connection)
 
     await server.close()
 
-    await expect(fetch(address)).rejects.toThrow()
+    expect(await connection.waitForClose()).toBe('closed')
+    await expect(openConnection(server.port)).rejects.toThrow()
   })
 
   it('returns the same promise from a second call to close()', async () => {
-    server = await serve({ app: createApp(), port: 0, host: HOST })
+    const server = await start(createApp())
 
     expect(server.close()).toBe(server.close())
   })
 
   it('listens on every interface when you leave out the host', async () => {
-    server = await serve({ app: createApp().get('/hello', c => c.text('Hello')), port: 0 })
+    const server = await serve({ app: createApp().get('/hello', c => c.text('Hello')), port: 0 })
 
-    const response = await fetch(url('/hello'))
-
-    expect(await response.text()).toBe('Hello')
+    try {
+      await expectHello(await openConnection(server.port))
+    } finally {
+      await server.close()
+    }
   })
 
   it('throws for a port outside the TCP range of 0 to 65535', async () => {
