@@ -16,7 +16,9 @@
   "release": {
     "projects": ["uhttp"],
     "projectsRelationship": "independent",
-    "releaseTagPattern": "{projectName}@v{version}",
+    "releaseTag": {
+      "pattern": "{projectName}@v{version}"
+    },
     "version": {
       "conventionalCommits": false,
       "updateDependents": "never"
