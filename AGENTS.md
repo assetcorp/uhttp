@@ -22,7 +22,8 @@ Read the file that you're editing and follow what it already does. The rules bel
 
 ## Gotchas
 
-- **uWebSockets.js is a required peer dependency.** Its author publishes it on GitHub alone, so a host installs it with `pnpm add -E uWebSockets.js@github:uNetworking/uWebSockets.js#v20.69.0`. The supply-chain gate accepts that one URL dependency when its pin is a version tag or a commit SHA.
+- **uWebSockets.js is a required peer dependency.** Its author publishes it on GitHub alone, so a host installs it with `pnpm add -E uWebSockets.js@github:uNetworking/uWebSockets.js#v20.71.0`. The package lists `>=20.70.0 <21` as its peer range, because v20.69.0 and earlier parse a request with duplicate `Content-Length` headers without an error. In `packages/ts/package.json`, the development dependency is the commit of the v20.71.0 tag. The supply-chain gate accepts that one URL dependency when its pin is a version tag or a commit SHA.
+- **The ESM entry of uWebSockets.js v20.71.0 is broken.** In that tag, `ESM_wrapper.mjs` imports an `index.js` that is missing from the tag, so `import 'uWebSockets.js'` throws. The package therefore loads uWebSockets.js through `createRequire`, which loads `uws.js` on every version in the peer range.
 - **The dependency age gate refuses a package that npm published less than four days ago.** The supply-chain gate refuses an unpinned action reference, a `pull_request_target` trigger, and any URL dependency other than the pinned `uWebSockets.js`.
 - **`nx release` writes `packages/ts/CHANGELOG.md`, and a generator writes `BENCHMARKS.md`.** Edit the source that each one reads, and leave the generated file alone.
 - **A benchmark result is a committed file.** The generator reads the newest directory under `benchmarks/results/runs/`, so a fresh run of the suite changes what the published page reports. Run the suite only when somebody asks you to.

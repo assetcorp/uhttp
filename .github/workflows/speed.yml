@@ -1,0 +1,79 @@
+name: Speed
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: speed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare speed with main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout the change with actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Checkout main with actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .speed/main
+          persist-credentials: false
+
+      - name: Setup pnpm with pnpm/action-setup v6.1.0
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+
+      - name: Setup Node.js 24 with actions/setup-node v7.1.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            .speed/main/pnpm-lock.yaml
+
+      - name: Install and compile the change
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir packages/ts run compile
+
+      - name: Check that main has a uhttp package to compare
+        id: main
+        run: |
+          if [ -f .speed/main/packages/ts/package.json ] && grep -q '"compile"' .speed/main/packages/ts/package.json; then
+            echo "comparable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "comparable=false" >> "$GITHUB_OUTPUT"
+            printf '## Speed compared with main\n\nMain has no uhttp package for this job to compile, so the job measured nothing.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install and compile main
+        if: steps.main.outputs.comparable == 'true'
+        working-directory: .speed/main
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir packages/ts run compile
+
+      - name: Compare main with the change
+        id: compare
+        if: steps.main.outputs.comparable == 'true'
+        continue-on-error: true
+        env:
+          BASE_ENTRY: .speed/main/packages/ts/dist/index.js
+          CHANGE_ENTRY: packages/ts/dist/index.js
+        run: node packages/ts/benchmarks/speed-guard/compare.ts
+
+      - name: Report a comparison that ended before it wrote a table
+        if: steps.compare.outcome == 'failure'
+        run: |
+          printf '## Speed compared with main\n\nThe comparison script exited before it wrote a table, so open the log of the comparison step to find the error.\n' >> "$GITHUB_STEP_SUMMARY"
