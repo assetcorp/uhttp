@@ -4,6 +4,8 @@
 
 ```ts
 
+import type { Writable } from 'node:stream';
+
 // @public
 export class App extends Group {
     request(target: string, init?: TestRequestInit): Promise<Response>;
@@ -12,8 +14,10 @@ export class App extends Group {
 // @public
 export interface AppOptions {
     readonly logger?: Logger;
+    readonly maxBodyBytes?: number;
     readonly notFound?: Handler;
     readonly onError?: ErrorHandler;
+    readonly timeoutMs?: number;
 }
 
 // @public
@@ -33,7 +37,7 @@ export class Context {
 export function createApp(options?: AppOptions): App;
 
 // @public
-export type ErrorCode = 'INVALID_PATH_PARAMETER' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED' | 'INTERNAL_ERROR' | 'MISSING_REPLY' | 'NEXT_CALLED_TWICE' | 'UNDECLARED_HEADER' | 'UNDECLARED_CLIENT_ADDRESS' | 'INVALID_HEADER' | 'INVALID_EVENT' | 'INVALID_STREAM' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_APP_OPTIONS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED';
+export type ErrorCode = 'INVALID_PATH_PARAMETER' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED' | 'PAYLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' | 'INVALID_JSON' | 'VALIDATION_FAILED' | 'INVALID_MULTIPART' | 'REQUEST_ABORTED' | 'HANDLER_TIMEOUT' | 'INTERNAL_ERROR' | 'MISSING_REPLY' | 'NEXT_CALLED_TWICE' | 'UNDECLARED_HEADER' | 'UNDECLARED_CLIENT_ADDRESS' | 'UNDECLARED_BODY' | 'BODY_ALREADY_READ' | 'INVALID_SCHEMA' | 'INVALID_UPLOAD' | 'INVALID_HEADER' | 'INVALID_EVENT' | 'INVALID_STREAM' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_APP_OPTIONS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED';
 
 // @public
 export type ErrorHandler = (error: unknown, context: Context) => Reply | Promise<Reply>;
@@ -54,6 +58,9 @@ export interface EventStreamOptions {
 
 // @public
 export type EventStreamProducer = (events: EventStream) => void | Promise<void>;
+
+// @public
+export type FormFields = Record<string, string | string[]>;
 
 // @public
 export class Group {
@@ -100,6 +107,21 @@ export interface MiddlewareDefinition {
 export type MiddlewareHandler = (context: Context, next: Next) => Reply | void | Promise<Reply | undefined> | Promise<void>;
 
 // @public
+export interface MultipartOptions {
+    readonly file?: (file: UploadFile) => UploadDestination | Promise<UploadDestination>;
+    readonly maxFieldBytes?: number;
+    readonly maxFileBytes?: number;
+    readonly maxParts?: number;
+    readonly maxTotalBytes?: number;
+}
+
+// @public
+export interface MultipartResult {
+    readonly fields: FormFields;
+    readonly files: readonly UploadedFile[];
+}
+
+// @public
 export type Next = () => Promise<void>;
 
 // @public
@@ -118,7 +140,19 @@ export interface ReplyStream {
 }
 
 // @public
+export interface RequestBody {
+    bytes(): Promise<Uint8Array>;
+    form(): Promise<FormFields>;
+    json(): Promise<unknown>;
+    json<Schema extends StandardSchemaV1>(schema: Schema): Promise<StandardSchemaV1.InferOutput<Schema>>;
+    multipart(options?: MultipartOptions): Promise<MultipartResult>;
+    stream(): AsyncIterable<Uint8Array>;
+    text(): Promise<string>;
+}
+
+// @public
 export interface RequestInfo {
+    readonly body: RequestBody;
     readonly clientAddress: string;
     readonly contentLength: number | undefined;
     readonly contentType: string | undefined;
@@ -144,8 +178,11 @@ export type RouteArguments = readonly [...stack: (Middleware | RouteOptions)[], 
 
 // @public
 export interface RouteOptions {
+    readonly body?: boolean;
     readonly clientAddress?: boolean;
     readonly headers?: readonly string[] | 'all';
+    readonly maxBodyBytes?: number;
+    readonly timeoutMs?: number;
 }
 
 // @public
@@ -173,6 +210,41 @@ export interface ServerSentEvent {
 }
 
 // @public
+export interface StandardSchemaV1<Input = unknown, Output = Input> {
+    readonly '~standard': StandardSchemaV1.Props<Input, Output>;
+}
+
+// @public
+export namespace StandardSchemaV1 {
+    export interface FailureResult {
+        readonly issues: ReadonlyArray<Issue>;
+    }
+    export type InferOutput<Schema extends StandardSchemaV1> = NonNullable<Schema['~standard']['types']>['output'];
+    export interface Issue {
+        readonly message: string;
+        readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined;
+    }
+    export interface PathSegment {
+        readonly key: PropertyKey;
+    }
+    export interface Props<Input = unknown, Output = Input> {
+        readonly types?: Types<Input, Output> | undefined;
+        readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>;
+        readonly vendor: string;
+        readonly version: 1;
+    }
+    export type Result<Output> = SuccessResult<Output> | FailureResult;
+    export interface SuccessResult<Output> {
+        readonly issues?: undefined;
+        readonly value: Output;
+    }
+    export interface Types<Input = unknown, Output = Input> {
+        readonly input: Input;
+        readonly output: Output;
+    }
+}
+
+// @public
 export interface StreamOptions {
     readonly contentType?: string;
     readonly headers?: HeaderRecord;
@@ -184,10 +256,14 @@ export interface StreamOptions {
 export type StreamProducer = (stream: ResponseStream) => void | Promise<void>;
 
 // @public
+export type TestBody = string | Uint8Array | ArrayBuffer | Iterable<string | Uint8Array> | AsyncIterable<string | Uint8Array>;
+
+// @public
 export type TestHeaders = Readonly<Record<string, string | readonly string[]>> | readonly (readonly [string, string])[];
 
 // @public
 export interface TestRequestInit {
+    readonly body?: TestBody;
     readonly clientAddress?: string;
     readonly headers?: TestHeaders;
     readonly method?: string;
@@ -196,9 +272,43 @@ export interface TestRequestInit {
 
 // @public
 export class UhttpError extends Error {
-    constructor(code: ErrorCode, message: string, options?: ErrorOptions);
+    constructor(code: ErrorCode, message: string, options?: UhttpErrorOptions);
     readonly code: ErrorCode;
+    readonly issues: readonly ValidationIssue[] | undefined;
     readonly status: number;
+}
+
+// @public
+export interface UhttpErrorOptions extends ErrorOptions {
+    readonly issues?: readonly ValidationIssue[];
+}
+
+// @public
+export type UploadDestination = UploadStream | {
+    readonly stream: UploadStream;
+    readonly discard?: () => void | Promise<void>;
+};
+
+// @public
+export interface UploadedFile extends UploadFile {
+    readonly bytes: Uint8Array | undefined;
+    readonly size: number;
+}
+
+// @public
+export interface UploadFile {
+    readonly contentType: string | undefined;
+    readonly field: string;
+    readonly filename: string;
+}
+
+// @public
+export type UploadStream = Writable | WritableStream<Uint8Array>;
+
+// @public
+export interface ValidationIssue {
+    readonly message: string;
+    readonly path: readonly (string | number)[];
 }
 
 ```

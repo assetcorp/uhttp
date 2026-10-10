@@ -1,5 +1,6 @@
 import type { GuardRecord, RegistryContents, RouteRecord } from './compile.js'
 import { UhttpError } from './errors.js'
+import { checkedLimit, checkedTimeLimit } from './limits.js'
 import { joinPath, Matcher, parseGroupPrefix, parseRoutePath } from './router/index.js'
 import type { Handler, Middleware, RouteArguments, RouteOptions } from './types.js'
 
@@ -87,9 +88,21 @@ function isHandler(value: unknown): value is Handler {
   return typeof value === 'function'
 }
 
+function checkRouteLimits(value: object): void {
+  const body: unknown = Reflect.get(value, 'body')
+  if (body !== undefined && typeof body !== 'boolean') {
+    throw new UhttpError('INVALID_ROUTE', 'Set the body of a route to true or false.')
+  }
+  const maxBodyBytes: unknown = Reflect.get(value, 'maxBodyBytes')
+  if (maxBodyBytes !== undefined) checkedLimit(maxBodyBytes, 'INVALID_ROUTE', 'maxBodyBytes')
+  const timeoutMs: unknown = Reflect.get(value, 'timeoutMs')
+  if (timeoutMs !== undefined) checkedTimeLimit(timeoutMs, 'INVALID_ROUTE')
+}
+
 function isRouteOptions(value: unknown): value is RouteOptions {
   if (typeof value !== 'object' || value === null || isMiddleware(value)) return false
   checkDeclarations(value, 'a route', true)
+  checkRouteLimits(value)
   return true
 }
 
@@ -187,7 +200,8 @@ export class Group {
    * pass the handler last.
    * @returns The method returns this group, so that you can chain another route.
    * @throws {@link UhttpError} with the code `INVALID_ROUTE` when the path breaks the rules of the
-   * router, or when the method already has a route of the same shape.
+   * router, when the method already has a route of the same shape, or when a route option has the
+   * wrong type.
    */
   get(path: string, ...args: RouteArguments): this {
     return this.#add('GET', path, args)

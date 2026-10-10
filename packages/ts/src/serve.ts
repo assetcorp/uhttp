@@ -1,7 +1,7 @@
 import type { HttpRequest, HttpResponse, TemplatedApp, us_listen_socket } from 'uWebSockets.js'
 import { createRequire } from 'node:module'
 import { type App, compiledOf } from './app.js'
-import type { CompiledApp } from './compile.js'
+import { type CompiledApp, headRouteOf } from './compile.js'
 import { MAX_PORT, MIN_PORT } from './constants.js'
 import { UhttpError } from './errors.js'
 import { fallbackHandler, routeHandler } from './native/index.js'
@@ -75,7 +75,7 @@ function registrarOf(native: TemplatedApp, method: string): Register {
 function registerRoutes(native: TemplatedApp, app: CompiledApp): void {
   for (const route of app.routes) {
     registrarOf(native, route.method)(route.path, routeHandler(app, route, route.method))
-    if (route.method === 'GET') registrarOf(native, 'HEAD')(route.path, routeHandler(app, route, 'HEAD'))
+    if (route.method === 'GET') registrarOf(native, 'HEAD')(route.path, routeHandler(app, headRouteOf(route), 'HEAD'))
   }
   native.any('/*', fallbackHandler(app))
 }

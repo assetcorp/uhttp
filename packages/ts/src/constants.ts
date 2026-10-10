@@ -100,6 +100,63 @@ export const DEFAULT_SSE_HEARTBEAT_MS = 30_000
 /** The server-sent events helper sends this comment as its heartbeat. */
 export const SSE_HEARTBEAT_COMMENT = ':\n\n'
 
+/** When neither the app nor the route sets `maxBodyBytes`, the package accepts a request body of up to 1 MiB. */
+export const DEFAULT_MAX_BODY_BYTES = 1_048_576
+
+/** The package attaches a body reader on routes of these methods unless the route sets `body: false`. */
+export const BODY_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH']
+
+/**
+ * The package pauses the upload once this many bytes of the body wait unread, so that it holds
+ * about one chunk of a large body at a time.
+ */
+export const BODY_HIGH_WATER_MARK_BYTES = 65_536
+
+/**
+ * uWebSockets.js clears its 10-second idle timer while an upload is paused, so the package closes
+ * the connection itself once an upload stays paused for this many milliseconds.
+ */
+export const BODY_PAUSE_TIMEOUT_MS = 10_000
+
+/** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, which this 0 means. */
+export const DEFAULT_TIMEOUT_MS = 0
+
+/** `setTimeout` fires at once for a delay above this many milliseconds, so the package throws for a longer time limit. */
+export const MAX_TIMEOUT_MS = 2_147_483_647
+
+/** `form()` throws once a URL-encoded body has more parameters than this. */
+export const MAX_FORM_FIELDS = 1_000
+
+/** The package sends no more than this many problems in the reply to a body that fails validation. */
+export const VALIDATION_ISSUE_COUNT = 10
+
+/** The package cuts the message of each validation problem to this many characters. */
+export const VALIDATION_MESSAGE_LENGTH = 256
+
+/** The package keeps no more than this many segments of the path of each validation problem. */
+export const VALIDATION_PATH_SEGMENTS = 16
+
+/** When you leave out `maxParts`, `multipart()` throws once a body has more parts than this. */
+export const DEFAULT_MAX_MULTIPART_PARTS = 1_000
+
+/** When you leave out `maxFieldBytes`, `multipart()` throws for a field value longer than this. */
+export const DEFAULT_MAX_MULTIPART_FIELD_BYTES = 1_048_576
+
+/** `multipart()` throws for a boundary longer than this, because RFC 2046 allows 1 to 70 characters. */
+export const MAX_MULTIPART_BOUNDARY_LENGTH = 70
+
+/** RFC 2046 allows these characters in a multipart boundary, and a space too, apart from at its end. */
+export const MULTIPART_BOUNDARY_CHARACTERS = "0-9A-Za-z'()+_,\\-./:=?"
+
+/** `multipart()` throws once the headers of one part take more bytes than this, which is busboy's limit too. */
+export const MAX_PART_HEADER_BYTES = 16_384
+
+/** `multipart()` throws for a part with more header lines than this. */
+export const MAX_PART_HEADER_COUNT = 16
+
+/** `multipart()` throws for a field name longer than this many bytes. */
+export const MAX_PART_NAME_BYTES = 256
+
 /** The package writes the reason phrase from this table after each standard status code from 200 to 511. */
 export const STATUS_TEXT: Readonly<Record<number, string>> = {
   200: 'OK',

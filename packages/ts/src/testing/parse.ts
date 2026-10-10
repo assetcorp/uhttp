@@ -14,10 +14,27 @@ type Lines = readonly (readonly [string, string])[]
 export type TestHeaders = Readonly<Record<string, string | readonly string[]>> | readonly (readonly [string, string])[]
 
 /**
+ * You pass a request body to {@link App.request} as text, as bytes, or as a list or an async
+ * iterable of chunks. {@link App.request} sends text and bytes with a `content-length` header, and
+ * chunks with `transfer-encoding: chunked`, unless your headers set either one.
+ */
+export type TestBody =
+  | string
+  | Uint8Array
+  | ArrayBuffer
+  | Iterable<string | Uint8Array>
+  | AsyncIterable<string | Uint8Array>
+
+/**
  * You pass these settings to {@link App.request}, which sends a request through the app without
  * a network.
  */
 export interface TestRequestInit {
+  /**
+   * {@link App.request} sends this body in the chunks that you pass, so that a test can place a
+   * chunk boundary anywhere in the body.
+   */
+  readonly body?: TestBody
   /** When you leave out the method, {@link App.request} sends a `GET`. */
   readonly method?: string
   /**
@@ -81,6 +98,26 @@ function framingIsValid(lines: Lines): boolean {
   return isDecimalDigits(first) && lengths.every(length => length === first)
 }
 
+/**
+ * Returns the length of a body that a test passed whole, or `undefined` for a body in chunks.
+ *
+ * @param body - The test passed this body.
+ * @returns The function returns the length in bytes, counting text as UTF-8.
+ * @internal
+ */
+export function wholeBodyLength(body: TestBody): number | undefined {
+  if (typeof body === 'string') return Buffer.byteLength(body)
+  if (body instanceof Uint8Array || body instanceof ArrayBuffer) return body.byteLength
+  return undefined
+}
+
+function addFraming(lines: (readonly [string, string])[], body: TestBody | undefined): void {
+  if (body === undefined) return
+  if (lines.some(([name]) => name === 'content-length' || name === 'transfer-encoding')) return
+  const length = wholeBodyLength(body)
+  lines.push(length === undefined ? ['transfer-encoding', CHUNKED] : ['content-length', String(length)])
+}
+
 function hostIsValid(lines: Lines): boolean {
   const hosts = lines.filter(([name]) => name === 'host')
   const [host] = hosts
@@ -116,6 +153,7 @@ export function parseTestRequest(target: string, init: TestRequestInit): ParsedT
     lines.push([name.toLowerCase(), value.replace(EDGE_WHITESPACE, '')])
   }
   if (!lines.some(([name]) => name === 'host')) lines.unshift(['host', TEST_REQUEST_HOST])
+  addFraming(lines, init.body)
   if (lines.length > MAX_REQUEST_HEADER_COUNT) return undefined
   if (headBytes(method, target, lines) > maxHeadBytes()) return undefined
   if (!hostIsValid(lines) || !framingIsValid(lines)) return undefined

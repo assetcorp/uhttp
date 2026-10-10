@@ -1,3 +1,5 @@
+import type { BodyReader } from './body/reader.js'
+import { ReaderBody, type RequestBody } from './body/request-body.js'
 import { UhttpError } from './errors.js'
 import type { Exchange } from './exchange.js'
 import { isDecimalDigits } from './headers.js'
@@ -29,9 +31,15 @@ export interface RequestInfo {
   readonly clientAddress: string
   /**
    * The package creates this signal the first time that your code asks for it, and the signal fires
-   * when the client goes before the response ends.
+   * when the client goes before the response ends, or with a `HANDLER_TIMEOUT` error as its reason
+   * when the handler passes the time limit of its route.
    */
   readonly signal: AbortSignal
+  /**
+   * You read the request body through this object, on a POST, PUT, or PATCH route, or on a route
+   * that sets `body: true`.
+   */
+  readonly body: RequestBody
   /**
    * Returns the decoded value of a path parameter.
    *
@@ -84,6 +92,8 @@ export class CopiedRequest implements RequestInfo {
   readonly #headerValues: readonly (string | undefined)[]
   readonly #allHeaders: ReadonlyMap<string, string> | undefined
   readonly #clientAddress: string | undefined
+  readonly #reader: BodyReader | undefined
+  #body: RequestBody | undefined
 
   /**
    * Creates the copy of one request.
@@ -100,6 +110,7 @@ export class CopiedRequest implements RequestInfo {
    * @param headerValues - The package passes the values of the declared headers in the same order as the names.
    * @param allHeaders - The package passes every header of the request when the route copies every header.
    * @param clientAddress - The package passes the client address, and it is `undefined` when nobody declared it.
+   * @param reader - The package passes the body reader, and it is `undefined` on a route without one.
    */
   constructor(
     exchange: Exchange,
@@ -114,6 +125,7 @@ export class CopiedRequest implements RequestInfo {
     headerValues: readonly (string | undefined)[],
     allHeaders: ReadonlyMap<string, string> | undefined,
     clientAddress: string | undefined,
+    reader: BodyReader | undefined,
   ) {
     this.#exchange = exchange
     this.method = method
@@ -127,6 +139,12 @@ export class CopiedRequest implements RequestInfo {
     this.#headerValues = headerValues
     this.#allHeaders = allHeaders
     this.#clientAddress = clientAddress
+    this.#reader = reader
+  }
+
+  get body(): RequestBody {
+    this.#body ??= new ReaderBody(this.#exchange, this.#reader, this.contentType)
+    return this.#body
   }
 
   get contentLength(): number | undefined {

@@ -1,5 +1,5 @@
 import type { Context } from './context.js'
-import { UhttpError } from './errors.js'
+import { isClientError, UhttpError } from './errors.js'
 import type { Exchange } from './exchange.js'
 import { errorReply, Reply } from './reply.js'
 import type { Handler, Logger, MiddlewareHandler, Next } from './types.js'
@@ -10,16 +10,16 @@ const MISSING_REPLY_MESSAGE =
 const NEXT_CALLED_TWICE_MESSAGE = 'A middleware called next() a second time.'
 
 /**
- * Returns the reply that the default error handler sends. For a `UhttpError` below 500, the reply
- * has the status, the code, and the message of the error. For any other error, it is a 500 whose
- * message is 'The request failed.' alone.
+ * Returns the reply that the default error handler sends. For a `UhttpError` below 500 or with the
+ * code `HANDLER_TIMEOUT`, the reply has the status, the code, and the message of the error. For any
+ * other error, it is a 500 whose message is 'The request failed.' alone.
  *
  * @param error - The package passes the error that it caught.
  * @returns The function returns a JSON error reply.
  * @internal
  */
 export function defaultErrorReply(error: unknown): Reply {
-  if (error instanceof UhttpError && error.status < 500) return errorReply(error)
+  if (isClientError(error)) return errorReply(error)
   return errorReply(new UhttpError('INTERNAL_ERROR', INTERNAL_ERROR_MESSAGE))
 }
 
@@ -35,7 +35,7 @@ export function defaultErrorReply(error: unknown): Reply {
  */
 export function logServerError(logger: Logger | undefined, error: unknown, method: string, path: string): void {
   if (logger === undefined) return
-  if (error instanceof UhttpError && error.status < 500) return
+  if (isClientError(error)) return
   try {
     logger.error({ err: error, method, path }, INTERNAL_ERROR_MESSAGE)
   } catch {
@@ -51,39 +51,43 @@ function missingReply(): UhttpError {
   return new UhttpError('MISSING_REPLY', MISSING_REPLY_MESSAGE)
 }
 
-function fail(context: Context, exchange: Exchange, error: unknown): undefined | Promise<void> {
+/**
+ * Returns the reply for an error: the reply of the app's error handler, or the default error reply
+ * when the app has none or when that handler fails. The function logs every error for which the client receives a
+ * 500.
+ *
+ * @param context - The package passes the context of the request.
+ * @param exchange - The package passes the state of the request, from which the function takes the error handler.
+ * @param error - The package passes the error that it caught.
+ * @returns The function returns the reply, or a promise of the reply that never rejects.
+ * @internal
+ */
+export function replyForError(context: Context, exchange: Exchange, error: unknown): Reply | Promise<Reply> {
   const { logger, onError } = exchange.runtime
   logFor(logger, error, context)
-  if (onError === undefined) {
-    exchange.assign(defaultErrorReply(error))
-    return undefined
-  }
-  const fallBack = (handlerError: unknown): void => {
+  if (onError === undefined) return defaultErrorReply(error)
+  const fallBack = (handlerError: unknown): Reply => {
     logFor(logger, handlerError, context)
-    exchange.assign(defaultErrorReply(error))
+    return defaultErrorReply(error)
   }
   let result: unknown
   try {
     result = onError(error, context)
   } catch (handlerError) {
-    fallBack(handlerError)
+    return fallBack(handlerError)
+  }
+  if (result instanceof Reply) return result
+  if (!(result instanceof Promise)) return fallBack(missingReply())
+  return result.then(value => (value instanceof Reply ? value : fallBack(missingReply())), fallBack)
+}
+
+function fail(context: Context, exchange: Exchange, error: unknown): undefined | Promise<void> {
+  const reply = replyForError(context, exchange, error)
+  if (reply instanceof Reply) {
+    exchange.assign(reply)
     return undefined
   }
-  if (result instanceof Reply) {
-    exchange.assign(result)
-    return undefined
-  }
-  if (!(result instanceof Promise)) {
-    fallBack(missingReply())
-    return undefined
-  }
-  return result.then(value => {
-    if (value instanceof Reply) {
-      exchange.assign(value)
-      return
-    }
-    fallBack(missingReply())
-  }, fallBack)
+  return reply.then(value => exchange.assign(value))
 }
 
 function callHandler(context: Context, exchange: Exchange, handler: Handler): undefined | Promise<void> {

@@ -19,16 +19,18 @@ function writeHead(res: HttpResponse, exchange: Exchange, reply: Reply): void {
   })
 }
 
-function endWithoutBody(res: HttpResponse, length: number | undefined): void {
-  if (length === undefined) res.endWithoutBody()
-  else res.endWithoutBody(length)
+function endWithoutBody(res: HttpResponse, length: number | undefined, close: boolean): void {
+  if (length !== undefined) res.endWithoutBody(length, close)
+  else if (close) res.endWithoutBody(undefined, true)
+  else res.endWithoutBody()
 }
 
 /**
  * Writes the current reply of a request to uWebSockets.js. For a reply with a body, the function
  * writes the status, the headers, and the body in one cork. For a streamed reply, it writes the
  * headers and then starts the producer. For a HEAD request, it writes the headers with the length
- * of the body, and it never calls a stream producer.
+ * of the body, and it never calls a stream producer. When the package stopped reading the body of
+ * the request, or rejected the request early, the function closes the connection after the reply.
  *
  * @param res - The package passes the response of uWebSockets.js, which the caller has corked.
  * @param exchange - The package passes the state of the request, which stores the headers.
@@ -42,18 +44,16 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
   const stream = reply.stream
   const hasBody = statusHasBody(reply.status)
   const bodyless = context.req.method === 'HEAD' || !hasBody
-  if (stream !== undefined) {
-    if (bodyless) {
-      endWithoutBody(res, hasBody ? stream.length : undefined)
-      exchange.end()
-      return
-    }
+  if (stream !== undefined && !bodyless) {
+    exchange.body?.keepFlowing()
     new NativeStream(res, exchange, context, stream.length).start(stream.produce)
     return
   }
-  if (!hasBody) endWithoutBody(res, undefined)
-  else if (bodyless) endWithoutBody(res, bodyByteLength(reply.body))
-  else res.end(reply.body ?? '')
+  const close = exchange.shouldCloseConnection()
+  if (stream !== undefined) endWithoutBody(res, hasBody ? stream.length : undefined, close)
+  else if (!hasBody) endWithoutBody(res, undefined, close)
+  else if (bodyless) endWithoutBody(res, bodyByteLength(reply.body), close)
+  else res.end(reply.body ?? '', close)
   exchange.end()
 }
 

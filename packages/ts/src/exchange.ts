@@ -1,3 +1,4 @@
+import { UhttpError } from './errors.js'
 import { settableHeaderName } from './headers.js'
 import type { Reply } from './reply.js'
 import type { ErrorHandler, Handler, Logger } from './types.js'
@@ -22,6 +23,30 @@ export interface AppRuntime {
   readonly notFound: Handler | undefined
   /** The package calls this handler for every error that the chain throws. */
   readonly onError: ErrorHandler | undefined
+  /** The package accepts a request body of up to this many bytes, unless the route sets its own limit. */
+  readonly maxBodyBytes: number
+  /** A handler has this many milliseconds before the package sends a 503, and 0 means no limit. */
+  readonly timeoutMs: number
+}
+
+/**
+ * The package asks the body reader of a request, through this interface, whether the response can
+ * leave the connection open.
+ *
+ * @internal
+ */
+export interface BodyState {
+  /**
+   * Returns `true` when the package must close the connection after the response, because it
+   * stopped reading the body before its end. Otherwise, the reader drops the rest of the body.
+   */
+  settle(): boolean
+  /**
+   * Stops pausing the source for the rest of the request. uWebSockets.js stops writes together
+   * with reads on a paused socket, so the package calls this method when a streamed reply starts,
+   * and the body limit of the route then bounds the chunks that wait unread.
+   */
+  keepFlowing(): void
 }
 
 /**
@@ -40,12 +65,23 @@ export class Exchange {
   closed = false
   /** This is `true` when the client went before the response ended. */
   aborted = false
+  /** This is `true` once the handler has passed its time limit, after which the chain's reply never goes out. */
+  timedOut = false
+  /** When this is `true`, the package closes the connection after the response. */
+  closeConnection = false
+  /** The body reader of the request, which is `undefined` on a route without one. */
+  body: BodyState | undefined
   #reply: Reply | undefined
+  #final = false
   #replySetAt = 0
   #headers: Map<string, ContextHeader> | undefined
   #clock = 0
   #controller: AbortController | undefined
+  #signalFired = false
+  #signalReason: unknown
   #listeners: (() => void)[] | undefined
+  #released: UhttpError | undefined
+  #releaseListeners: ((error: UhttpError) => void)[] | undefined
 
   /**
    * Creates the state of one request.
@@ -58,28 +94,90 @@ export class Exchange {
 
   /**
    * Returns the abort signal of the request. The package creates the signal on the first call, and
-   * the signal fires when the client goes before the response ends.
+   * the signal fires when the client goes before the response ends or when the handler passes its
+   * time limit.
    *
    * @returns The getter returns the same signal on every call.
    */
   get signal(): AbortSignal {
     if (this.#controller === undefined) {
       this.#controller = new AbortController()
-      if (this.aborted) this.#controller.abort()
+      if (this.#signalFired) this.#controller.abort(this.#signalReason)
     }
     return this.#controller.signal
   }
 
   /**
-   * Records that the client went before the response ended. The method then fires the abort signal
-   * and calls every close listener.
+   * Records that the client went before the response ended. The method then fires the abort signal,
+   * releases the body reader and the upload destinations, and calls every close listener.
    */
   abort(): void {
     if (this.closed) return
     this.aborted = true
     this.closed = true
-    this.#controller?.abort()
+    this.#fireSignal(undefined)
+    this.release(new UhttpError('REQUEST_ABORTED', 'The client went before the request body ended.'))
     this.#notify()
+  }
+
+  /**
+   * Records that the handler passed its time limit. The method fires the abort signal with the
+   * error as its reason and then releases the body reader and the upload destinations, while the
+   * connection stays open for the 503.
+   *
+   * @param error - The package passes the `HANDLER_TIMEOUT` error.
+   */
+  expire(error: UhttpError): void {
+    if (this.closed || this.timedOut) return
+    this.timedOut = true
+    this.closeConnection = true
+    this.#fireSignal(error)
+    this.release(error)
+  }
+
+  /**
+   * Adds a listener that the package calls once with the error that ends the reading of the body,
+   * which happens on an abort, a body limit, or a time limit.
+   *
+   * @param listener - The package calls this function once.
+   */
+  onRelease(listener: (error: UhttpError) => void): void {
+    if (this.#released !== undefined) {
+      listener(this.#released)
+      return
+    }
+    this.#releaseListeners ??= []
+    this.#releaseListeners.push(listener)
+  }
+
+  /**
+   * Calls every release listener once with the error that ends the reading of the body.
+   *
+   * @param error - The package passes the error that the body reader and the uploads fail with.
+   */
+  release(error: UhttpError): void {
+    if (this.#released !== undefined) return
+    this.#released = error
+    const listeners = this.#releaseListeners
+    this.#releaseListeners = undefined
+    for (const listener of listeners ?? []) listener(error)
+  }
+
+  /**
+   * Returns `true` when the package must close the connection after the response, because it
+   * rejected the request early, stopped reading its body, or passed the time limit.
+   *
+   * @returns The method returns `false` when the connection can serve another request.
+   */
+  shouldCloseConnection(): boolean {
+    if (this.body?.settle() === true) this.closeConnection = true
+    return this.closeConnection
+  }
+
+  #fireSignal(reason: unknown): void {
+    this.#signalFired = true
+    this.#signalReason = reason
+    this.#controller?.abort(reason)
   }
 
   /**
@@ -117,9 +215,21 @@ export class Exchange {
    * @param reply - The package makes this reply the current one.
    */
   assign(reply: Reply): void {
-    if (reply === this.#reply) return
+    if (this.#final || reply === this.#reply) return
     this.#reply = reply
     this.#replySetAt = ++this.#clock
+  }
+
+  /**
+   * Makes a reply the current reply of the request for good, so that a later reply of the chain
+   * never replaces it. The package calls this method with the reply to a handler that passed its
+   * time limit.
+   *
+   * @param reply - The package makes this reply the last one.
+   */
+  finalize(reply: Reply): void {
+    this.assign(reply)
+    this.#final = true
   }
 
   /**

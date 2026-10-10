@@ -186,8 +186,9 @@ export class NativeStream implements ResponseStream {
       return
     }
     const res = this.#res
+    const close = this.#exchange.shouldCloseConnection()
     res.cork(() => {
-      res.end()
+      res.end(undefined, close)
     })
     this.#exchange.end()
   }

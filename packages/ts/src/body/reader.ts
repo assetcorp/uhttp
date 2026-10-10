@@ -1,0 +1,265 @@
+import { BODY_HIGH_WATER_MARK_BYTES, BODY_PAUSE_TIMEOUT_MS } from '../constants.js'
+import { UhttpError } from '../errors.js'
+import type { BodyState, Exchange } from '../exchange.js'
+import { isDecimalDigits } from '../headers.js'
+
+const IDENTITY = 'identity'
+
+interface Waiter {
+  readonly resolve: (chunk: Uint8Array | undefined) => void
+  readonly reject: (error: unknown) => void
+}
+
+/**
+ * The body reader controls the flow of the body through this interface, which uWebSockets.js and
+ * `app.request()` each implement.
+ *
+ * @internal
+ */
+export interface BodySource {
+  /** Stops the flow of the body until the next call to `resume`. */
+  pause(): void
+  /** Restarts the flow of the body. */
+  resume(): void
+  /** Closes the connection, after which the package treats the client as gone. */
+  close(): void
+}
+
+/**
+ * The package reads these framing headers of a request before it attaches a body reader.
+ *
+ * @internal
+ */
+export interface BodyFraming {
+  /** The client sent this raw `content-length` header, and it is `undefined` when the request has none. */
+  readonly contentLength: string | undefined
+  /** The client sent this `transfer-encoding` header, and it is `undefined` when the request has none. */
+  readonly transferEncoding: string | undefined
+  /** The client sent this `content-encoding` header, and it is `undefined` when the request has none. */
+  readonly contentEncoding: string | undefined
+}
+
+/**
+ * Returns the error with which the package rejects a request before it reads any of the body: a
+ * 415 for a compressed body, or a 413 for a declared length above the limit.
+ *
+ * @param framing - The package passes the framing headers of the request.
+ * @param limit - The package passes the body limit of the route in bytes.
+ * @returns The function returns the error, or `undefined` when the package can read the body.
+ * @internal
+ */
+export function earlyRejection(framing: BodyFraming, limit: number): UhttpError | undefined {
+  const { contentEncoding } = framing
+  if (contentEncoding !== undefined && contentEncoding.trim().toLowerCase() !== IDENTITY) {
+    return new UhttpError(
+      'UNSUPPORTED_MEDIA_TYPE',
+      'Send the request body uncompressed, without a Content-Encoding header.',
+    )
+  }
+  const declared = declaredLength(framing)
+  return declared !== undefined && declared > limit ? tooLarge(limit) : undefined
+}
+
+/**
+ * Returns the length of the body that a request declares in `content-length`.
+ *
+ * @param framing - The package passes the framing headers of the request.
+ * @returns The function returns the length in bytes, or `undefined` when the header is missing or
+ * is not a whole number.
+ * @internal
+ */
+export function declaredLength(framing: BodyFraming): number | undefined {
+  const { contentLength } = framing
+  return contentLength !== undefined && isDecimalDigits(contentLength) ? Number(contentLength) : undefined
+}
+
+/**
+ * Returns `true` when a request has no body, because it declares a length of 0, or because it
+ * declares neither a length nor a chunked encoding.
+ *
+ * @param framing - The package passes the framing headers of the request.
+ * @returns The function returns `false` when a body can follow the headers.
+ * @internal
+ */
+export function declaresNoBody(framing: BodyFraming): boolean {
+  if (framing.contentLength !== undefined) return declaredLength(framing) === 0
+  return framing.transferEncoding === undefined
+}
+
+function tooLarge(limit: number): UhttpError {
+  return new UhttpError('PAYLOAD_TOO_LARGE', `The request body is larger than the limit of ${limit} bytes.`)
+}
+
+/**
+ * The package queues the chunks of one request body in this reader. The reader counts the bytes
+ * as they arrive, pauses the source once enough bytes wait unread, and closes the connection when
+ * the source stays paused for longer than uWebSockets.js would let a connection idle.
+ *
+ * @internal
+ */
+export class BodyReader implements BodyState {
+  /** The reader fails once the body passes this many bytes. */
+  readonly limit: number
+  readonly #exchange: Exchange
+  readonly #source: BodySource
+  readonly #queue: Uint8Array[] = []
+  #queuedBytes = 0
+  #received = 0
+  #ended = false
+  #discarding = false
+  #paused = false
+  #flowing = false
+  #error: UhttpError | undefined
+  #waiter: Waiter | undefined
+  #pauseTimer: ReturnType<typeof setTimeout> | undefined
+
+  /**
+   * Creates the reader of one request body and attaches it to the state of the request.
+   *
+   * @param exchange - The package passes the state of the request, which releases the reader.
+   * @param source - The package passes the source that the reader pauses and resumes.
+   * @param limit - The package passes the body limit of the route in bytes.
+   * @param empty - The package passes `true` when the request has no body.
+   */
+  constructor(exchange: Exchange, source: BodySource, limit: number, empty: boolean) {
+    this.limit = limit
+    this.#exchange = exchange
+    this.#source = source
+    this.#ended = empty
+    exchange.body = this
+    exchange.onRelease(error => this.fail(error))
+    exchange.onClose(() => this.#closed())
+  }
+
+  /** This is `true` while the reader takes more chunks from the source. */
+  get accepting(): boolean {
+    return this.#error === undefined && !this.#ended && !this.#discarding
+  }
+
+  /**
+   * Adds a copied chunk of the body. The reader fails with `PAYLOAD_TOO_LARGE` once the count passes
+   * the limit, and it pauses the source once enough bytes wait unread.
+   *
+   * @param chunk - The source passes a copy of the bytes, which the reader keeps.
+   * @param last - The source passes `true` with the last chunk of the body.
+   */
+  push(chunk: Uint8Array, last: boolean): void {
+    if (!this.accepting) {
+      if (last && this.#discarding) this.#ended = true
+      return
+    }
+    this.#received += chunk.byteLength
+    if (this.#received > this.limit) {
+      this.#exchange.closeConnection = true
+      this.#pause()
+      this.fail(tooLarge(this.limit))
+      return
+    }
+    if (chunk.byteLength > 0) {
+      this.#queue.push(chunk)
+      this.#queuedBytes += chunk.byteLength
+    }
+    if (last) this.#ended = true
+    this.#wake()
+    if (!last && this.#queuedBytes >= BODY_HIGH_WATER_MARK_BYTES) this.#pause()
+  }
+
+  /**
+   * Fails every read from now on with an error, and drops the queued chunks.
+   *
+   * @param error - The package passes the error that every read rejects with.
+   */
+  fail(error: UhttpError): void {
+    if (this.#error !== undefined) return
+    this.#error = error
+    this.#queue.length = 0
+    this.#queuedBytes = 0
+    const waiter = this.#waiter
+    this.#waiter = undefined
+    waiter?.reject(error)
+  }
+
+  /**
+   * Returns the next chunk of the body, and resumes the source once the queue runs low.
+   *
+   * @returns The promise resolves to the next chunk, or to `undefined` at the end of the body. It
+   * rejects with the error of a failed reader.
+   */
+  read(): Promise<Uint8Array | undefined> {
+    if (this.#error !== undefined) return Promise.reject(this.#error)
+    const chunk = this.#queue.shift()
+    if (chunk !== undefined) {
+      this.#queuedBytes -= chunk.byteLength
+      if (this.#paused && this.#queuedBytes < BODY_HIGH_WATER_MARK_BYTES) this.#resume()
+      return Promise.resolve(chunk)
+    }
+    if (this.#ended) return Promise.resolve(undefined)
+    if (this.#paused) this.#resume()
+    return new Promise((resolve, reject) => {
+      this.#waiter = { resolve, reject }
+    })
+  }
+
+  /**
+   * Returns `true` when the package must close the connection after the response, because the
+   * reader failed or paused the source before the end of the body. Otherwise, the reader drops the
+   * rest of the body as it arrives.
+   *
+   * @returns The method returns `false` for a body that arrived in full or that still flows.
+   */
+  settle(): boolean {
+    if (this.#ended && this.#error === undefined) return false
+    const close = this.#error !== undefined || this.#paused
+    if (this.#paused) this.#resume()
+    this.#discarding = true
+    this.#queue.length = 0
+    this.#queuedBytes = 0
+    return close
+  }
+
+  /**
+   * Stops pausing the source for the rest of the request, and resumes it when it is paused, so that
+   * a streamed reply can flow while the body stays unread.
+   */
+  keepFlowing(): void {
+    this.#flowing = true
+    if (this.#paused) this.#resume()
+  }
+
+  #wake(): void {
+    const waiter = this.#waiter
+    if (waiter === undefined) return
+    const chunk = this.#queue.shift()
+    if (chunk === undefined && !this.#ended) return
+    this.#waiter = undefined
+    if (chunk !== undefined) this.#queuedBytes -= chunk.byteLength
+    waiter.resolve(chunk)
+  }
+
+  #pause(): void {
+    if (this.#paused || this.#flowing) return
+    this.#paused = true
+    this.#source.pause()
+    this.#pauseTimer = setTimeout(() => {
+      this.#pauseTimer = undefined
+      this.#source.close()
+    }, BODY_PAUSE_TIMEOUT_MS)
+  }
+
+  #resume(): void {
+    this.#paused = false
+    this.#stopTimer()
+    this.#source.resume()
+  }
+
+  #closed(): void {
+    this.#stopTimer()
+    if (!this.#ended) this.fail(new UhttpError('REQUEST_ABORTED', 'The response ended before the request body.'))
+  }
+
+  #stopTimer(): void {
+    if (this.#pauseTimer === undefined) return
+    clearTimeout(this.#pauseTimer)
+    this.#pauseTimer = undefined
+  }
+}
