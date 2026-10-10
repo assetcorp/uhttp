@@ -20,16 +20,16 @@ const decoder = new TextDecoder()
  * Your `file` callback receives these details of each file before its first byte.
  */
 export interface UploadFile {
-  /** The form sent the file under this field name. */
+  /** The client sent the file under this field name. */
   readonly field: string
-  /** The client named the file this, and the package keeps the basename alone, which can be empty. */
+  /** The client sent this filename, of which the package keeps only the basename, so it can be empty. */
   readonly filename: string
   /** The client sent this content type for the file, which is `undefined` when it sent none. */
   readonly contentType: string | undefined
 }
 
 /**
- * `multipart()` returns each file in this shape once the file is complete.
+ * `multipart()` returns each file in this shape once the package has written the whole file.
  */
 export interface UploadedFile extends UploadFile {
   /** The file has this many bytes. */
@@ -39,14 +39,14 @@ export interface UploadedFile extends UploadFile {
 }
 
 /**
- * You pass these options to `multipart()`. Every limit is finite by default, and the package
- * answers 413 once the upload passes one.
+ * You pass these options to `multipart()`. Every limit has a finite default, and once an upload
+ * passes one of them, the package answers 413.
  */
 export interface MultipartOptions {
   /**
-   * The package calls this callback for each file and streams the file into the destination that it
-   * returns, while it pauses the upload whenever the destination is busy. Without the callback, the
-   * package keeps each file in memory.
+   * The package calls this callback for each file and writes the file into the destination that
+   * the callback returns. While the destination has a full buffer, the package waits for it to drain
+   * before it reads more of the upload. Without the callback, the package keeps each file in memory.
    *
    * @param file - The package passes the field name, the filename, and the content type.
    * @returns The callback returns the destination, or a promise of it.
@@ -66,9 +66,9 @@ export interface MultipartOptions {
  * `multipart()` returns the fields and the files of the form in this shape.
  */
 export interface MultipartResult {
-  /** The form sent these fields, with a list of values for a repeated name. */
+  /** The client sent these fields, with a list of values for a repeated name. */
   readonly fields: FormFields
-  /** The form sent these files, in order. */
+  /** The client sent these files, in the order of the body. */
   readonly files: readonly UploadedFile[]
 }
 
@@ -229,9 +229,9 @@ class Upload {
 }
 
 /**
- * Returns the fields and the files of a multipart body. On a limit, a malformed body, an abort, or
- * a time limit, the function destroys every destination, deletes every file that it wrote, and
- * marks the connection for closing, before it throws.
+ * Returns the fields and the files of a multipart body. On any failure, the function destroys every
+ * destination, discards every file that it wrote, and marks the connection for closing before it
+ * throws.
  *
  * @param body - The package passes the stream of the request body.
  * @param mediaType - The package passes the parsed content type, with the boundary among its parameters.

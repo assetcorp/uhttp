@@ -12,8 +12,8 @@ function headerOf(req: HttpRequest, name: string): string | undefined {
 
 /**
  * Attaches the body reader of a request inside the synchronous handler of uWebSockets.js, after
- * the copy of the request. The function attaches an `onData` handler only to a request whose body
- * flows, and it copies each chunk before uWebSockets.js frees it.
+ * the copy of the request. The function attaches an `onData` handler only to a request with a body
+ * to read, and it copies each chunk before uWebSockets.js frees it.
  *
  * @param res - The package passes the response of uWebSockets.js.
  * @param req - The package passes the request of uWebSockets.js, which is valid until the handler returns.

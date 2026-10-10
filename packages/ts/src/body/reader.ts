@@ -11,8 +11,8 @@ interface Waiter {
 }
 
 /**
- * The body reader controls the flow of the body through this interface, which uWebSockets.js and
- * `app.request()` each implement.
+ * The body reader controls the flow of the body through this interface, which the package
+ * implements once over uWebSockets.js and once for `app.request()`.
  *
  * @internal
  */
@@ -21,7 +21,7 @@ export interface BodySource {
   pause(): void
   /** Restarts the flow of the body. */
   resume(): void
-  /** Closes the connection, after which the package treats the client as gone. */
+  /** Closes the connection, after which the package treats the client as disconnected. */
   close(): void
 }
 
@@ -91,9 +91,10 @@ function tooLarge(limit: number): UhttpError {
 }
 
 /**
- * The package queues the chunks of one request body in this reader. The reader counts the bytes
- * as they arrive, pauses the source once enough bytes wait unread, and closes the connection when
- * the source stays paused for longer than uWebSockets.js would let a connection idle.
+ * The package queues the chunks of one request body in this reader. The reader counts the bytes as
+ * the source delivers them, and it pauses the source once it holds 64 KiB that the handler hasn't
+ * read. When the source has been paused for 10 seconds, the reader closes the connection, because
+ * uWebSockets.js clears its idle timer during a pause.
  *
  * @internal
  */
@@ -138,7 +139,7 @@ export class BodyReader implements BodyState {
 
   /**
    * Adds a copied chunk of the body. The reader fails with `PAYLOAD_TOO_LARGE` once the count passes
-   * the limit, and it pauses the source once enough bytes wait unread.
+   * the limit, and it pauses the source once it holds 64 KiB that the handler hasn't read.
    *
    * @param chunk - The source passes a copy of the bytes, which the reader keeps.
    * @param last - The source passes `true` with the last chunk of the body.
@@ -180,7 +181,7 @@ export class BodyReader implements BodyState {
   }
 
   /**
-   * Returns the next chunk of the body, and resumes the source once the queue runs low.
+   * Returns the next chunk of the body, and resumes the source once the queue drops below 64 KiB.
    *
    * @returns The promise resolves to the next chunk, or to `undefined` at the end of the body. It
    * rejects with the error of a failed reader.
@@ -202,10 +203,11 @@ export class BodyReader implements BodyState {
 
   /**
    * Returns `true` when the package must close the connection after the response, because the
-   * reader failed or paused the source before the end of the body. Otherwise, the reader drops the
-   * rest of the body as it arrives.
+   * reader failed or paused the source before the end of the body. Otherwise, the reader discards
+   * the rest of the body as the source delivers it.
    *
-   * @returns The method returns `false` for a body that arrived in full or that still flows.
+   * @returns The method returns `false` for a body that the source delivered in full, or that the
+   * source is still delivering.
    */
   settle(): boolean {
     if (this.#ended && this.#error === undefined) return false
@@ -219,7 +221,7 @@ export class BodyReader implements BodyState {
 
   /**
    * Stops pausing the source for the rest of the request, and resumes it when it is paused, so that
-   * a streamed reply can flow while the body stays unread.
+   * uWebSockets.js can write a streamed reply while the handler leaves the body unread.
    */
   keepFlowing(): void {
     this.#flowing = true

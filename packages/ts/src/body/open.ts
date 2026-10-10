@@ -11,7 +11,7 @@ import { type BodyFraming, BodyReader, type BodySource, declaresNoBody, earlyRej
 export interface OpenedBody {
   /** The handler reads the body through this reader, which is `undefined` on a route without one. */
   readonly reader: BodyReader | undefined
-  /** The package sends the request through this chain, whose handler throws an early rejection. */
+  /** The package sends the request through this chain, whose handler throws the early rejection when there is one. */
   readonly chain: RequestChain
   /** This is `true` when the source has to deliver the chunks of the body to the reader. */
   readonly flowing: boolean
@@ -20,9 +20,8 @@ export interface OpenedBody {
 /**
  * Prepares the body of a request after the copy of the request. On a route without a body reader,
  * the function changes nothing. For a compressed body or a declared length above the limit of the
- * route, it fails the reader with the early rejection, replaces the handler with one that throws
- * it, and marks the connection for closing, because the client has already been invited to send
- * the body.
+ * route, it fails the reader with the early rejection and replaces the handler with one that throws
+ * it. It also marks the connection for closing, because the client can still be sending the body.
  *
  * @param exchange - The package passes the state of the request.
  * @param chain - The package passes the chain of the request, with the limits of the route.

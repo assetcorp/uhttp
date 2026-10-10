@@ -7,9 +7,9 @@ const HEX_DIGIT = /^[0-9A-Fa-f]{2}$/
 const decoder = new TextDecoder()
 
 /**
- * `form()` and `multipart()` return the fields of a form in this shape: a flat map from each name
- * to its value, or to a list of values for a name that the form repeats. The map has no prototype,
- * so a field named `__proto__` is an ordinary entry.
+ * `form()` and `multipart()` return the fields of a form in this shape, which maps each name to its
+ * value, or to a list of values when the form repeats the name. The map has no prototype, so a
+ * field named `__proto__` is an ordinary entry.
  */
 export type FormFields = Record<string, string | string[]>
 
@@ -17,8 +17,8 @@ export type FormFields = Record<string, string | string[]>
  * Adds one value to the fields of a form, and turns the entry into a list when the name repeats.
  *
  * @param fields - The function adds the value to these fields.
- * @param name - The form sent this name.
- * @param value - The form sent this value.
+ * @param name - The client sent this name.
+ * @param value - The client sent this value.
  * @internal
  */
 export function addField(fields: FormFields, name: string, value: string): void {

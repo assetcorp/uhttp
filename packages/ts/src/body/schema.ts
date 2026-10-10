@@ -3,8 +3,7 @@ import { UhttpError, type ValidationIssue } from '../errors.js'
 
 /**
  * A schema from any validator that implements Standard Schema v1, such as Valibot, Zod, or
- * ArkType, has this shape. You pass such a schema to `json(schema)`, and the package depends on no
- * validator.
+ * ArkType, has this shape. You pass such a schema to `json(schema)`.
  */
 export interface StandardSchemaV1<Input = unknown, Output = Input> {
   /** The validator puts its Standard Schema interface under this key. */
@@ -12,8 +11,8 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
 }
 
 /**
- * The types of Standard Schema v1, which the package copies from the specification at
- * standardschema.dev so that it depends on no package for them.
+ * The package copies these types of Standard Schema v1 from the specification at
+ * standardschema.dev, so that it depends on no validator for them.
  */
 export declare namespace StandardSchemaV1 {
   /** A validator implements Standard Schema through these properties. */
@@ -36,15 +35,15 @@ export declare namespace StandardSchemaV1 {
   /** A validation either succeeds with a value or fails with a list of problems. */
   export type Result<Output> = SuccessResult<Output> | FailureResult
 
-  /** A successful validation returns the output value. */
+  /** The validator returns this shape when the value passes the schema. */
   export interface SuccessResult<Output> {
     /** The validator returns this value, which can differ from the input when the schema transforms it. */
     readonly value: Output
-    /** A successful result has no problems. */
+    /** The validator leaves this `undefined` for a value that passes. */
     readonly issues?: undefined
   }
 
-  /** A failed validation returns the problems that it found. */
+  /** The validator returns this shape when the value fails the schema. */
   export interface FailureResult {
     /** The validator lists the problems here. */
     readonly issues: ReadonlyArray<Issue>
@@ -60,7 +59,7 @@ export declare namespace StandardSchemaV1 {
 
   /** A validator can write one segment of a path in this shape. */
   export interface PathSegment {
-    /** The segment is this key. */
+    /** The validator puts the key of the segment here. */
     readonly key: PropertyKey
   }
 
@@ -103,7 +102,7 @@ function issueOf(issue: unknown): ValidationIssue {
 
 /**
  * Returns the output of a Standard Schema for a value. The function awaits the validator inside a
- * guard, and it throws a typed error when the validator throws or rejects.
+ * guard, so that it can throw a typed error when the validator throws or rejects.
  *
  * @param schema - The handler passes the schema.
  * @param value - The package passes the parsed body.

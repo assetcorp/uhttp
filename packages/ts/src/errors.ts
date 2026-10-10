@@ -15,13 +15,15 @@
  *   request.
  * - The package throws `PAYLOAD_TOO_LARGE` when a request body, a form, or an upload passes one of
  *   its limits.
- * - The package throws `UNSUPPORTED_MEDIA_TYPE` when a body parser meets a content type or a charset
- *   that it can't parse, or when a request body is compressed.
+ * - The package throws `UNSUPPORTED_MEDIA_TYPE` when a body parser receives a content type or a
+ *   charset that it can't parse, or when the client compresses a request body.
  * - The package throws `INVALID_JSON` when a JSON body fails to parse or contains a `__proto__` key
  *   or a `constructor` key with a `prototype` key.
  * - The package throws `VALIDATION_FAILED` when a JSON body fails its schema.
- * - The package throws `INVALID_MULTIPART` when a multipart body breaks the rules of RFC 7578.
- * - The package throws `REQUEST_ABORTED` from a body read when the client goes before the body ends.
+ * - The package throws `INVALID_MULTIPART` when a multipart body has an invalid boundary, a part
+ *   without a name, a control character in a name or a filename, or no closing boundary.
+ * - The package throws `REQUEST_ABORTED` from a read of the body when the client disconnects before
+ *   the body ends.
  * - The package throws `HANDLER_TIMEOUT` when a handler passes the time limit of its route.
  * - The package throws `UNDECLARED_HEADER` when your code asks for a header that neither the route
  *   nor its middleware declared.
@@ -31,7 +33,7 @@
  *   reader.
  * - The package throws `BODY_ALREADY_READ` when your code reads a body after it streamed that body.
  * - The package throws `INVALID_SCHEMA` when a schema lacks the Standard Schema interface, or when
- *   its validator throws or returns something else.
+ *   its validator throws, rejects, or returns something other than a Standard Schema result.
  * - The package throws `INVALID_UPLOAD` when you pass `multipart()` a limit that is not a whole
  *   number of zero or more, when its `file` callback returns something other than a writable
  *   stream, or when a destination closes before the package has written the whole file.
@@ -47,7 +49,7 @@
  *   can't match, or a route option of the wrong type.
  * - The package throws `INVALID_STATUS` when you pass a helper a status that its reply can't have.
  * - The package throws `INVALID_APP_OPTIONS` when you pass {@link createApp} an option of the wrong
- *   type.
+ *   type, or a limit that is not a whole number of zero or more.
  * - The package throws `INVALID_SERVE_OPTIONS` when you pass {@link serve} a port outside the TCP
  *   range.
  * - The package throws `LISTEN_FAILED` when the operating system can't bind the address that you
@@ -121,7 +123,10 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
 export interface ValidationIssue {
   /** The validator wrote this message, which the package cuts to 256 characters. */
   readonly message: string
-  /** The validator reports this path from the root of the body to the value with the problem, such as `['user', 'age']`. */
+  /**
+   * The validator reports this path from the root of the body to the value with the problem, such
+   * as `['user', 'age']`, and the package keeps its first 16 segments.
+   */
   readonly path: readonly (string | number)[]
 }
 
@@ -148,7 +153,10 @@ export class UhttpError extends Error {
   readonly code: ErrorCode
   /** This HTTP status corresponds to the code. */
   readonly status: number
-  /** For a `VALIDATION_FAILED` error, the package puts the first problems that the validator found here, and for any other error this is `undefined`. */
+  /**
+   * For a `VALIDATION_FAILED` error, the package puts the first problems that the validator found
+   * here, while for any other error this is `undefined`.
+   */
   readonly issues: readonly ValidationIssue[] | undefined
 
   /**

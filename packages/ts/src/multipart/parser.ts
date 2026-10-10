@@ -29,9 +29,9 @@ function malformed(message: string): UhttpError {
 /**
  * The package parses a `multipart/form-data` body with this state machine, which follows busboy's
  * design. In the preamble and in each part, it searches for `CRLF--boundary` with the native
- * `indexOf`, and it copies the tail of a chunk that could start a boundary in front of the next
- * chunk, so that it finds a boundary that straddles two chunks. A boundary that is followed by
- * anything other than `--` or `CRLF` is part of the data, as busboy treats it.
+ * `indexOf`. When the tail of a chunk could start a boundary, the parser copies that tail in front
+ * of the next chunk, so that it finds a boundary that two chunks split between them. The parser
+ * treats a boundary followed by anything other than `--` or `CRLF` as data, as busboy does.
  *
  * @internal
  */
@@ -60,9 +60,10 @@ export class MultipartParser {
    * Parses one chunk and reports every event that it completes.
    *
    * @param chunk - The package passes the next chunk of the body.
-   * @param emit - The parser calls this function for each event, with data that stays valid.
-   * @throws {@link UhttpError} with the code `INVALID_MULTIPART` or `PAYLOAD_TOO_LARGE` when a part
-   * header breaks the rules or passes a limit.
+   * @param emit - The parser calls this function for each event, with data that remains valid after
+   * the call returns.
+   * @throws {@link UhttpError} with the code `INVALID_MULTIPART` or `PAYLOAD_TOO_LARGE` when the
+   * headers of a part are malformed or pass a limit.
    */
   push(chunk: Uint8Array, emit: (event: PartEvent) => void): void {
     const input = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)

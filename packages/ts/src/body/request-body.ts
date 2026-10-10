@@ -14,23 +14,28 @@ const MULTIPART_TYPE = 'multipart/form-data'
 /**
  * You read the body of a request through `c.req.body`. A route has a body reader when its method
  * is POST, PUT, or PATCH, or when it sets `body: true`. Every method enforces the body limit of the
- * route, and you can read a buffered body more than once, while a streamed body can be read once.
+ * route. The package keeps the bytes of a body that a parser has read, so you can read that body
+ * again, but once you stream a body that no parser has read, every later read throws.
  */
 export interface RequestBody {
   /**
-   * Returns the body as an async iterable of copied byte chunks, so that your code has one chunk in
-   * memory at a time. The package pauses the upload until your code reads the next chunk.
+   * Returns the body as an async iterable of byte chunks, which the package copies out of the
+   * memory of uWebSockets.js. The package pauses the upload once it holds 64 KiB that your code
+   * hasn't read. After a parser has read the body, the iterable yields the kept bytes as one chunk.
    *
-   * @returns The iterable yields each chunk as it arrives.
+   * @returns The iterable yields the chunks in the order that the client sent them.
    * @throws {@link UhttpError} with the code `PAYLOAD_TOO_LARGE` once the body passes the limit of the
-   * route, `REQUEST_ABORTED` when the client goes, `UNDECLARED_BODY` on a route without a body
-   * reader, or `BODY_ALREADY_READ` after an earlier stream of the body.
+   * route, `REQUEST_ABORTED` when the client disconnects, `UNDECLARED_BODY` on a route without a
+   * body reader, or `BODY_ALREADY_READ` after an earlier stream of the body.
    */
   stream(): AsyncIterable<Uint8Array>
   /**
    * Returns the whole body as bytes, whatever its content type.
    *
    * @returns The promise resolves to the bytes of the body.
+   * @throws {@link UhttpError} with the code `PAYLOAD_TOO_LARGE` once the body passes the limit of the
+   * route, `REQUEST_ABORTED` when the client disconnects, `UNDECLARED_BODY` on a route without a
+   * body reader, or `BODY_ALREADY_READ` after a stream of the body.
    */
   bytes(): Promise<Uint8Array>
   /**
@@ -58,9 +63,10 @@ export interface RequestBody {
    *
    * @param schema - You pass the schema that the body must match.
    * @returns The promise resolves to the output of the schema.
-   * @throws {@link UhttpError} with the codes of `json()` without a schema, with `VALIDATION_FAILED`
-   * and the first 10 problems when the body fails the schema, or with `INVALID_SCHEMA` when the
-   * validator throws.
+   * @throws {@link UhttpError} with any code that `json()` throws without a schema, with
+   * `VALIDATION_FAILED` and the first 10 problems when the body fails the schema, or with
+   * `INVALID_SCHEMA` when the validator throws, rejects, or returns something other than a Standard
+   * Schema result.
    */
   json<Schema extends StandardSchemaV1>(schema: Schema): Promise<StandardSchemaV1.InferOutput<Schema>>
   /**
@@ -78,10 +84,12 @@ export interface RequestBody {
    * callback.
    *
    * @param options - You can pass the `file` callback and the limits of the upload here.
-   * @returns The promise resolves once every file is complete.
+   * @returns The promise resolves to the fields and the files once the package has written every
+   * file.
    * @throws {@link UhttpError} with the code `UNSUPPORTED_MEDIA_TYPE` for another content type,
-   * `INVALID_MULTIPART` for a body that breaks RFC 7578, or `PAYLOAD_TOO_LARGE` once the upload
-   * passes a limit. On any failure, the package destroys every destination first.
+   * `INVALID_MULTIPART` for a malformed body, `PAYLOAD_TOO_LARGE` once the upload passes a limit,
+   * or `INVALID_UPLOAD` for an invalid option or destination. On any failure, the package destroys
+   * every destination first.
    */
   multipart(options?: MultipartOptions): Promise<MultipartResult>
 }
@@ -138,7 +146,7 @@ export class ReaderBody implements RequestBody {
    *
    * @param exchange - The package passes the state of the request.
    * @param reader - The package passes the body reader, which is `undefined` on a route without one.
-   * @param contentType - The client sent this `content-type` header.
+   * @param contentType - The package passes the `content-type` header that the client sent.
    */
   constructor(exchange: Exchange, reader: BodyReader | undefined, contentType: string | undefined) {
     this.#exchange = exchange

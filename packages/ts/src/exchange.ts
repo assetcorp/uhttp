@@ -30,21 +30,23 @@ export interface AppRuntime {
 }
 
 /**
- * The package asks the body reader of a request, through this interface, whether the response can
- * leave the connection open.
+ * Through this interface, the package checks with the body reader of a request whether it can keep
+ * the connection open after the response.
  *
  * @internal
  */
 export interface BodyState {
   /**
-   * Returns `true` when the package must close the connection after the response, because it
-   * stopped reading the body before its end. Otherwise, the reader drops the rest of the body.
+   * Returns `true` when the package must close the connection after the response, because the
+   * reader stopped reading the body before its end. Otherwise, the reader discards the rest of the
+   * body as uWebSockets.js delivers it.
    */
   settle(): boolean
   /**
-   * Stops pausing the source for the rest of the request. uWebSockets.js stops writes together
-   * with reads on a paused socket, so the package calls this method when a streamed reply starts,
-   * and the body limit of the route then bounds the chunks that wait unread.
+   * Stops pausing the source for the rest of the request. uWebSockets.js stops writing to a paused
+   * socket as well as reading from it, so the package calls this method when a streamed reply
+   * starts. The reader can then hold up to the body limit of the route in chunks that your code
+   * hasn't read.
    */
   keepFlowing(): void
 }
@@ -65,11 +67,11 @@ export class Exchange {
   closed = false
   /** This is `true` when the client went before the response ended. */
   aborted = false
-  /** This is `true` once the handler has passed its time limit, after which the chain's reply never goes out. */
+  /** This is `true` once the handler has passed its time limit, from which point the package discards the reply of the chain. */
   timedOut = false
   /** When this is `true`, the package closes the connection after the response. */
   closeConnection = false
-  /** The body reader of the request, which is `undefined` on a route without one. */
+  /** This is the body reader of the request, or `undefined` on a route without one. */
   body: BodyState | undefined
   #reply: Reply | undefined
   #final = false
@@ -94,8 +96,8 @@ export class Exchange {
 
   /**
    * Returns the abort signal of the request. The package creates the signal on the first call, and
-   * the signal fires when the client goes before the response ends or when the handler passes its
-   * time limit.
+   * the signal fires when the client disconnects before the response ends or when the handler
+   * passes its time limit.
    *
    * @returns The getter returns the same signal on every call.
    */
@@ -108,7 +110,7 @@ export class Exchange {
   }
 
   /**
-   * Records that the client went before the response ended. The method then fires the abort signal,
+   * Records that the client disconnected before the response ended. The method then fires the abort signal,
    * releases the body reader and the upload destinations, and calls every close listener.
    */
   abort(): void {
@@ -116,14 +118,14 @@ export class Exchange {
     this.aborted = true
     this.closed = true
     this.#fireSignal(undefined)
-    this.release(new UhttpError('REQUEST_ABORTED', 'The client went before the request body ended.'))
+    this.release(new UhttpError('REQUEST_ABORTED', 'The client disconnected before the request body ended.'))
     this.#notify()
   }
 
   /**
    * Records that the handler passed its time limit. The method fires the abort signal with the
-   * error as its reason and then releases the body reader and the upload destinations, while the
-   * connection stays open for the 503.
+   * error as its reason and then releases the body reader and the upload destinations, but it
+   * leaves the connection open for the 503.
    *
    * @param error - The package passes the `HANDLER_TIMEOUT` error.
    */
@@ -137,7 +139,7 @@ export class Exchange {
 
   /**
    * Adds a listener that the package calls once with the error that ends the reading of the body,
-   * which happens on an abort, a body limit, or a time limit.
+   * which happens when the client disconnects or when the handler passes its time limit.
    *
    * @param listener - The package calls this function once.
    */
@@ -164,8 +166,9 @@ export class Exchange {
   }
 
   /**
-   * Returns `true` when the package must close the connection after the response, because it
-   * rejected the request early, stopped reading its body, or passed the time limit.
+   * Returns `true` when the package must close the connection after the response, because the
+   * package rejected the request early or stopped reading its body, or because the handler passed
+   * its time limit.
    *
    * @returns The method returns `false` when the connection can serve another request.
    */

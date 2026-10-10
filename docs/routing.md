@@ -125,7 +125,7 @@ const requireLogin: Middleware = {
 
 `c.req.header()` throws a `UhttpError` with the code `UNDECLARED_HEADER` for a header that nobody declared, so the first test that calls that code fails with the name of the missing header in its message. `c.req.clientAddress` throws `UNDECLARED_CLIENT_ADDRESS` in the same way when nobody declared the client address.
 
-The same options object sets the body reader, the body limit, and the time limit of a route, through `body`, `maxBodyBytes`, and `timeoutMs`, which [Request bodies and validation](bodies.md) describes.
+You set the body reader, the body limit, and the time limit of a route in the same options object, with `body`, `maxBodyBytes`, and `timeoutMs`, which [Request bodies and validation](bodies.md) describes.
 
 A client can send some headers, such as `x-forwarded-for` and `cookie`, on several lines. For those list headers, the package collects every line and joins the lines into one value, with a semicolon and a space between cookie lines and a comma and a space between the lines of any other list header. For any other header, it copies the first line. For a route such as a proxy, pass `{ headers: 'all' }` to copy every header, and `c.req.headers()` then returns all of them.
 

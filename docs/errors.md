@@ -28,11 +28,11 @@ Match on the code, because the message can change between releases.
 | `NOT_FOUND` | 404 | A path has no route. You can throw it yourself for a missing record. |
 | `METHOD_NOT_ALLOWED` | 405 | A path has routes, but none for the method of the request. |
 | `PAYLOAD_TOO_LARGE` | 413 | A request body, a form, or an upload passes one of its limits. |
-| `UNSUPPORTED_MEDIA_TYPE` | 415 | A body parser meets a content type or a charset that it can't parse, or a request body is compressed. |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | A body parser receives a content type or a charset that it can't parse, or the client compresses a request body. |
 | `INVALID_JSON` | 400 | A JSON body fails to parse, or it contains a `__proto__` key or a `constructor` key with a `prototype` key. |
-| `VALIDATION_FAILED` | 400 | A JSON body fails its schema. The reply lists the first 10 problems under `issues`. |
-| `INVALID_MULTIPART` | 400 | A multipart body has an invalid boundary, a part without a name, a control character in a name, or no closing boundary. |
-| `REQUEST_ABORTED` | 400 | The client goes before the body ends, so a pending read of the body rejects. Nobody receives this reply. |
+| `VALIDATION_FAILED` | 400 | A JSON body fails its schema. The package lists the first 10 problems under `issues`. |
+| `INVALID_MULTIPART` | 400 | A multipart body has an invalid boundary, a part without a name, a control character in a name or a filename, or no closing boundary. |
+| `REQUEST_ABORTED` | 400 | The client disconnects before the body ends, so a pending read of the body rejects with this code. Only your code sees this error, because the client has gone or the response has ended. |
 | `HANDLER_TIMEOUT` | 503 | A handler passes the time limit of its route. |
 | `INTERNAL_ERROR` | 500 | The package sends this code to the client for every error that maps to 500. |
 | `MISSING_REPLY` | 500 | The middleware chain ends without a reply, or an error handler returns something other than a reply. |
@@ -41,7 +41,7 @@ Match on the code, because the message can change between releases.
 | `UNDECLARED_CLIENT_ADDRESS` | 500 | Your code asks for the client address, and nobody declared it. |
 | `UNDECLARED_BODY` | 500 | Your code reads the body on a route without a body reader. |
 | `BODY_ALREADY_READ` | 500 | Your code reads a body after it streamed that body. |
-| `INVALID_SCHEMA` | 500 | A schema lacks the Standard Schema interface, or its validator throws, rejects, or returns something else. |
+| `INVALID_SCHEMA` | 500 | A schema lacks the Standard Schema interface, or its validator throws, rejects, or returns something other than a Standard Schema result. |
 | `INVALID_UPLOAD` | 500 | You pass `multipart()` a limit that is not a whole number of zero or more, its `file` callback returns something other than a writable stream, or a destination closes before the package has written the whole file. |
 | `INVALID_HEADER` | 500 | Your code sets a header name that is not an HTTP token, or a value with a control character. |
 | `INVALID_EVENT` | 500 | A server-sent event has a line break in its name or its ID, or a retry time that is not a whole number of zero or more. |

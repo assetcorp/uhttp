@@ -107,21 +107,21 @@ export const DEFAULT_MAX_BODY_BYTES = 1_048_576
 export const BODY_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH']
 
 /**
- * The package pauses the upload once this many bytes of the body wait unread, so that it holds
- * about one chunk of a large body at a time.
+ * The package pauses the socket once it holds this many bytes of the body that your code hasn't
+ * read, so that a slow reader keeps no more than this figure and one more chunk in memory.
  */
 export const BODY_HIGH_WATER_MARK_BYTES = 65_536
 
 /**
- * uWebSockets.js clears its 10-second idle timer while an upload is paused, so the package closes
- * the connection itself once an upload stays paused for this many milliseconds.
+ * uWebSockets.js clears its 10-second idle timer while a socket is paused, so the package closes
+ * the connection itself once the socket has been paused for this many milliseconds.
  */
 export const BODY_PAUSE_TIMEOUT_MS = 10_000
 
-/** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, which this 0 means. */
+/** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, because the package reads 0 as no limit. */
 export const DEFAULT_TIMEOUT_MS = 0
 
-/** `setTimeout` fires at once for a delay above this many milliseconds, so the package throws for a longer time limit. */
+/** Node sets a `setTimeout` delay above this many milliseconds to 1 millisecond, so the package throws for a longer time limit. */
 export const MAX_TIMEOUT_MS = 2_147_483_647
 
 /** `form()` throws once a URL-encoded body has more parameters than this. */
