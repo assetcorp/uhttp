@@ -140,8 +140,7 @@ describe('app.get()', () => {
     expect(() => createApp().get('hello', c => c.text('Hello'))).toThrow(UhttpError)
   })
 
-  it('throws for a path with a parameter or a wildcard', () => {
-    expect(() => createApp().get('/users/:id', c => c.text('user'))).toThrow(UhttpError)
+  it('throws for a path with a wildcard', () => {
     expect(() => createApp().get('/files/*', c => c.text('file'))).toThrow(UhttpError)
   })
 

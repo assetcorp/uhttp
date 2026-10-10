@@ -1,9 +1,10 @@
 import type { HttpRequest, HttpResponse, TemplatedApp, us_listen_socket } from 'uWebSockets.js'
 import { createRequire } from 'node:module'
-import { type App, routesOf } from './app.js'
-import { MAX_PORT, MIN_PORT, STATUS_TEXT } from './constants.js'
-import { Context, type Handler, notFound, Reply, respond, sendsBody } from './context.js'
+import { type App, compiledOf } from './app.js'
+import type { CompiledApp } from './compile.js'
+import { MAX_PORT, MIN_PORT } from './constants.js'
 import { UhttpError } from './errors.js'
+import { fallbackHandler, routeHandler } from './native/index.js'
 
 type Uws = typeof import('uWebSockets.js')
 
@@ -45,37 +46,38 @@ function loadUws(): Uws {
   return createRequire(import.meta.url)('uWebSockets.js') as Uws
 }
 
-function statusLine(status: number): string {
-  return `${status} ${STATUS_TEXT[status] ?? ''}`
+type Register = (pattern: string, handler: (res: HttpResponse, req: HttpRequest) => void) => TemplatedApp
+
+function registrarOf(native: TemplatedApp, method: string): Register {
+  switch (method) {
+    case 'GET':
+      return native.get.bind(native)
+    case 'HEAD':
+      return native.head.bind(native)
+    case 'POST':
+      return native.post.bind(native)
+    case 'PUT':
+      return native.put.bind(native)
+    case 'PATCH':
+      return native.patch.bind(native)
+    case 'DELETE':
+      return native.del.bind(native)
+    case 'OPTIONS':
+      return native.options.bind(native)
+    default:
+      throw new UhttpError(
+        'INVALID_ROUTE',
+        `The package can register no uWebSockets.js route for the method ${method}.`,
+      )
+  }
 }
 
-function writeReply(res: HttpResponse, reply: Reply): void {
-  if (reply.status !== 200) res.writeStatus(statusLine(reply.status))
-  res.writeHeader('content-type', reply.contentType)
-  if (sendsBody(reply)) {
-    res.end(reply.body)
-    return
+function registerRoutes(native: TemplatedApp, app: CompiledApp): void {
+  for (const route of app.routes) {
+    registrarOf(native, route.method)(route.path, routeHandler(app, route, route.method))
+    if (route.method === 'GET') registrarOf(native, 'HEAD')(route.path, routeHandler(app, route, 'HEAD'))
   }
-  res.endWithoutBody()
-}
-
-function nativeHandler(handler: Handler): (res: HttpResponse, req: HttpRequest) => void {
-  return (res, req) => {
-    const exchange = { closed: false }
-    res.onAborted(() => {
-      exchange.closed = true
-    })
-    const query: string | undefined = req.getQuery()
-    const reply = respond(handler, new Context(req.getCaseSensitiveMethod(), req.getUrl(), query ?? ''))
-    if (reply instanceof Reply) {
-      writeReply(res, reply)
-      return
-    }
-    reply.then(settled => {
-      if (exchange.closed) return
-      res.cork(() => writeReply(res, settled))
-    })
-  }
+  native.any('/*', fallbackHandler(app))
 }
 
 function listen(native: TemplatedApp, port: number, host: string | undefined): Promise<us_listen_socket> {
@@ -124,12 +126,10 @@ export async function serve(options: ServeOptions): Promise<Server> {
       `The port must be a whole number from ${MIN_PORT} to ${MAX_PORT}, and you passed ${port}.`,
     )
   }
+  const compiled = compiledOf(app)
   const uws = loadUws()
   const native = uws.App()
-  for (const [path, handler] of routesOf(app)) {
-    native.get(path, nativeHandler(handler))
-  }
-  native.any('/*', nativeHandler(notFound))
+  registerRoutes(native, compiled)
   const listenSocket = await listen(native, port, host)
   let closing: Promise<void> | undefined
   return {
