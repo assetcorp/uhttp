@@ -81,7 +81,8 @@ export async function startServer(spec: ServerSpec): Promise<RunningServer> {
   try {
     const port = await readPort(child, spec.label)
     const url = `http://127.0.0.1:${port}${ROUTE_PATH}`
-    const body = await (await fetch(url)).text()
+    const response = await fetch(url, { signal: AbortSignal.timeout(SERVER_START_TIMEOUT_MS) })
+    const body = await response.text()
     if (body !== ROUTE_BODY) {
       throw new Error(`The ${spec.label} server sent the body '${body}' in place of '${ROUTE_BODY}'.`)
     }
@@ -98,8 +99,9 @@ export async function measure(server: RunningServer, durationMs: number): Promis
     connections: CONNECTIONS,
     duration: durationMs / 1_000,
     workers: LOAD_WORKERS,
+    expectBody: ROUTE_BODY,
   })
-  const failures = result.errors + result.timeouts + result.non2xx
+  const failures = result.errors + result.timeouts + result.non2xx + result.mismatches
   if (failures > 0 || result.requests.total === 0) {
     throw new Error(`${failures} of ${result.requests.total} requests to the ${server.label} server failed.`)
   }
