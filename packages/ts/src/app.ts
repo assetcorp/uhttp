@@ -1,101 +1,99 @@
-import { Context, type Handler, notFound, type Reply, respond, sendsBody } from './context.js'
+import { type CompiledApp, compileApp } from './compile.js'
 import { UhttpError } from './errors.js'
+import type { AppRuntime } from './exchange.js'
+import { attachGroup, Group, Registry, registryOf } from './group.js'
+import type { TestRequestInit } from './testing/index.js'
+import type { AppOptions } from './types.js'
 
-const STATIC_PATH = /^\/[^:*?#]*$/
+let construct: (runtime: AppRuntime) => App
+let compile: (app: App) => CompiledApp
 
-/**
- * You pass these settings to {@link App.request}, which sends a request through the app without
- * a network.
- */
-export interface TestRequestInit {
-  /** When you leave out the method, {@link App.request} sends a `GET`. */
-  method?: string
+function checkedRuntime(options: AppOptions): AppRuntime {
+  const { logger, notFound, onError } = options
+  if (logger !== undefined) {
+    for (const level of ['info', 'warn', 'error'] as const) {
+      if (typeof logger[level] !== 'function') {
+        throw new UhttpError('INVALID_APP_OPTIONS', `Pass a logger with an ${level} method.`)
+      }
+    }
+  }
+  if (notFound !== undefined && typeof notFound !== 'function') {
+    throw new UhttpError('INVALID_APP_OPTIONS', 'Pass a handler function as the notFound option.')
+  }
+  if (onError !== undefined && typeof onError !== 'function') {
+    throw new UhttpError('INVALID_APP_OPTIONS', 'Pass an error handler function as the onError option.')
+  }
+  return { logger, notFound, onError }
 }
 
-let readRoutes: (app: App) => ReadonlyMap<string, Handler>
-
 /**
- * You get an `App` from {@link createApp} and add routes to it. You can then pass the app to
- * {@link serve} to put it on the network, or you can call {@link App.request} to test it without
- * a network.
+ * You get an `App` from {@link createApp}, and you add middleware, groups, and routes to it. You
+ * can then pass the app to {@link serve} to put it on the network, or call {@link App.request} to
+ * test it without a network.
  */
-export class App {
-  readonly #routes = new Map<string, Handler>()
+export class App extends Group {
+  readonly #runtime: AppRuntime
+  #compiled: CompiledApp | undefined
+  #compiledVersion = -1
 
   static {
-    readRoutes = app => app.#routes
+    construct = runtime => new App(runtime)
+    compile = app => app.#compile()
   }
 
-  /**
-   * Adds a route for GET requests to one path and returns the app, so that you can chain another
-   * route.
-   *
-   * @param path - The path must start with `/`, and it must contain none of `:`, `*`, `?`, and
-   * `#`. The router matches the path exactly, including its case.
-   * @param handler - The package calls this handler for every GET request to the path.
-   * @returns The method returns the app, so that you can chain another route.
-   * @throws {@link UhttpError} with the code `INVALID_ROUTE` when the path starts with a character
-   * other than `/` or contains one of those four characters, and when you have already added a
-   * GET route for the path.
-   */
-  get(path: string, handler: Handler): this {
-    if (!STATIC_PATH.test(path)) {
-      throw new UhttpError(
-        'INVALID_ROUTE',
-        `The route path '${path}' must start with '/', and it must contain none of ':', '*', '?', and '#'.`,
-      )
-    }
-    if (this.#routes.has(path)) {
-      throw new UhttpError('INVALID_ROUTE', `You have already added a GET route for '${path}'.`)
-    }
-    this.#routes.set(path, handler)
-    return this
+  private constructor(runtime: AppRuntime) {
+    super()
+    this.#runtime = runtime
+    attachGroup(this, new Registry(), '/', undefined)
   }
 
   /**
    * Returns the response that a client on the network receives for the same request, without
-   * opening a port, so that your test can check a route with no network.
+   * opening a port. The request passes through the same matcher, middleware chain, and request
+   * context. The method lowercases header names, and it sends `host: localhost` when your headers
+   * include no `Host`, as `fetch` does. It returns the same 400 as uWebSockets.js for more than 98
+   * header lines, for a request line and headers above 4,096 bytes, and for an empty, repeated, or
+   * invalid `Host`.
    *
-   * @param target - The target is the path with an optional query string, such as
-   * `/search?q=uhttp`.
-   * @param init - You can set the method of the request here.
-   * @returns The promise resolves to a response with the status, the headers that the app sets,
-   * and the body.
+   * @param target - You pass the path with an optional query string, such as `/search?q=uhttp`.
+   * @param init - You can set the method, the headers, the client address, and an abort signal here.
+   * @returns The promise resolves to a response with the status, the headers, and the body.
    */
   async request(target: string, init: TestRequestInit = {}): Promise<Response> {
-    const queryStart = target.indexOf('?')
-    const path = queryStart === -1 ? target : target.slice(0, queryStart)
-    const query = queryStart === -1 ? '' : target.slice(queryStart + 1)
-    const method = init.method ?? 'GET'
-    const handler = method === 'GET' ? this.#routes.get(path) : undefined
-    const reply = await respond(handler ?? notFound, new Context(method, path, query))
-    return toResponse(reply)
+    const { requestApp } = await import('./testing/index.js')
+    return requestApp(this.#compile(), target, init)
+  }
+
+  #compile(): CompiledApp {
+    const registry = registryOf(this)
+    if (this.#compiled !== undefined && this.#compiledVersion === registry.version) return this.#compiled
+    this.#compiled = compileApp(this.#runtime, registry)
+    this.#compiledVersion = registry.version
+    return this.#compiled
   }
 }
 
-function toResponse(reply: Reply): Response {
-  const body = sendsBody(reply) ? reply.body : null
-  return new Response(body, { status: reply.status, headers: { 'content-type': reply.contentType } })
-}
-
 /**
- * Returns the handler of every GET route in an app, keyed by path, in the order that you added
- * the routes.
+ * Returns the startup form of an app. The package builds that form again after you add a route, a
+ * group, or a middleware.
  *
- * @param app - The function lists the routes of this app.
- * @returns The function returns a map from each path to its handler.
+ * @param app - The package passes the app to compile.
+ * @returns The function returns every route with its middleware chain, together with the
+ * JavaScript matcher.
  * @internal
  */
-export function routesOf(app: App): ReadonlyMap<string, Handler> {
-  return readRoutes(app)
+export function compiledOf(app: App): CompiledApp {
+  return compile(app)
 }
 
 /**
  * Returns a new app with no routes, so that you can add routes before you pass the app to
  * {@link serve}.
  *
+ * @param options - You can pass a logger, a not-found handler, and an error handler here.
  * @returns The function returns the new app.
+ * @throws {@link UhttpError} with the code `INVALID_APP_OPTIONS` when an option has the wrong type.
  */
-export function createApp(): App {
-  return new App()
+export function createApp(options: AppOptions = {}): App {
+  return construct(checkedRuntime(options))
 }
