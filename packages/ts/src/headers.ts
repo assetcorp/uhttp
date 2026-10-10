@@ -114,8 +114,22 @@ export function checkedHeaderValue(name: string, value: string): string {
   return value
 }
 
-function isFramingHeader(lowerName: string): boolean {
-  return FRAMING_HEADER_NAMES.includes(lowerName)
+/**
+ * Returns the lowercase name of a response header after checking its name and its value, or
+ * `undefined` for a header that frames the response, which the package alone sets.
+ *
+ * @param name - The function checks this name.
+ * @param value - The function checks this value.
+ * @returns The function returns the name in lowercase, or `undefined` for `content-length`,
+ * `transfer-encoding`, `connection`, and `date`.
+ * @throws {@link UhttpError} with the code `INVALID_HEADER` when the name or the value fails its
+ * check.
+ * @internal
+ */
+export function settableHeaderName(name: string, value: string): string | undefined {
+  const lowerName = checkedHeaderName(name)
+  checkedHeaderValue(lowerName, value)
+  return FRAMING_HEADER_NAMES.includes(lowerName) ? undefined : lowerName
 }
 
 /**
@@ -131,9 +145,8 @@ function isFramingHeader(lowerName: string): boolean {
  * @internal
  */
 export function putHeader(lines: HeaderLines, name: string, value: string, append: boolean): void {
-  const lowerName = checkedHeaderName(name)
-  checkedHeaderValue(lowerName, value)
-  if (isFramingHeader(lowerName)) return
+  const lowerName = settableHeaderName(name, value)
+  if (lowerName === undefined) return
   const existing = lines.get(lowerName)
   if (append && existing !== undefined) {
     existing.push(value)

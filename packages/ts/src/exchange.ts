@@ -1,6 +1,14 @@
-import { type HeaderLines, putHeader } from './headers.js'
+import { settableHeaderName } from './headers.js'
 import type { Reply } from './reply.js'
 import type { ErrorHandler, Handler, Logger } from './types.js'
+
+const CONTENT_TYPE = 'content-type'
+
+interface ContextHeader {
+  readonly lines: string[]
+  readonly appends: boolean
+  setAt: number
+}
 
 /**
  * The package shares these settings of one app with every request to that app.
@@ -32,10 +40,10 @@ export class Exchange {
   closed = false
   /** This is `true` when the client went before the response ended. */
   aborted = false
-  /** The chain has produced this reply so far, and it is `undefined` before any reply exists. */
-  reply: Reply | undefined
-  /** Your code set these response headers through the context, and the package keys them by lowercase name. */
-  headers: HeaderLines | undefined
+  #reply: Reply | undefined
+  #replySetAt = 0
+  #headers: Map<string, ContextHeader> | undefined
+  #clock = 0
   #controller: AbortController | undefined
   #listeners: (() => void)[] | undefined
 
@@ -97,43 +105,83 @@ export class Exchange {
     this.#listeners.push(listener)
   }
 
+  /** The chain has produced this reply so far, and it is `undefined` before any reply exists. */
+  get reply(): Reply | undefined {
+    return this.#reply
+  }
+
   /**
-   * Makes a reply the current reply of the request. The headers of the reply replace any header of
-   * the same name that your code set earlier, and the package keeps every other header.
+   * Makes a reply the current reply of the request. The headers of a reply that this one replaces
+   * no longer go out, while the headers that your code set through the context stay.
    *
    * @param reply - The package makes this reply the current one.
    */
   assign(reply: Reply): void {
-    if (reply === this.reply) return
-    if (reply.contentType !== undefined) this.headers?.delete('content-type')
-    if (reply.headers !== undefined) {
-      this.headers ??= new Map()
-      for (const [name, lines] of reply.headers) this.headers.set(name, [...lines])
-    }
-    this.reply = reply
+    if (reply === this.#reply) return
+    this.#reply = reply
+    this.#replySetAt = ++this.#clock
   }
 
   /**
-   * Returns the content type that the package sends with a reply. A `content-type` header that your
-   * code set after the reply arrived replaces the content type of the reply.
-   *
-   * @param reply - The package passes the reply that it writes.
-   * @returns The method returns the content type, or `undefined` when the reply has none.
-   */
-  contentTypeOf(reply: Reply): string | undefined {
-    return this.headers?.get('content-type')?.at(-1) ?? reply.contentType
-  }
-
-  /**
-   * Sets a response header after checking its name and its value.
+   * Sets a response header after checking its name and its value. The header goes out with
+   * whatever reply the request ends with, unless that reply arrived later with a header of the
+   * same name.
    *
    * @param name - The package stores this header name in lowercase.
    * @param value - The package sends this value.
    * @param append - When this is `true`, the package keeps the earlier lines of the header.
    */
   setHeader(name: string, value: string, append: boolean): void {
-    this.headers ??= new Map()
-    putHeader(this.headers, name, value, append)
+    const lowerName = settableHeaderName(name, value)
+    if (lowerName === undefined) return
+    this.#headers ??= new Map()
+    const setAt = ++this.#clock
+    const existing = this.#headers.get(lowerName)
+    if (append && existing !== undefined) {
+      existing.lines.push(value)
+      existing.setAt = setAt
+      return
+    }
+    this.#headers.set(lowerName, { lines: [value], appends: append, setAt })
+  }
+
+  /**
+   * Returns the content type that the package sends with the current reply. A `content-type`
+   * header that your code set after the reply arrived replaces the content type of the reply.
+   *
+   * @returns The method returns the content type, or `undefined` when neither the reply nor your
+   * code set one.
+   */
+  responseContentType(): string | undefined {
+    const set = this.#headers?.get(CONTENT_TYPE)
+    const replyType = this.#reply?.contentType
+    if (set !== undefined && (replyType === undefined || set.setAt > this.#replySetAt)) return set.lines.at(-1)
+    return replyType
+  }
+
+  /**
+   * Calls a function for each line of every response header that goes out with the current reply,
+   * apart from `content-type`. For a header that both the reply and your code set, the one that
+   * your code or the reply set later goes out, and an appended line follows the lines of the reply.
+   *
+   * @param emit - The package calls this function with the lowercase name and the value of each line.
+   */
+  forEachResponseHeader(emit: (name: string, value: string) => void): void {
+    const replyHeaders = this.#reply?.headers
+    const setHeaders = this.#headers
+    if (replyHeaders !== undefined) {
+      for (const [name, lines] of replyHeaders) {
+        const set = setHeaders?.get(name)
+        if (set !== undefined && set.setAt > this.#replySetAt && !set.appends) continue
+        for (const line of lines) emit(name, line)
+      }
+    }
+    if (setHeaders === undefined) return
+    for (const [name, set] of setHeaders) {
+      if (name === CONTENT_TYPE) continue
+      if (replyHeaders?.has(name) === true && set.setAt < this.#replySetAt) continue
+      for (const line of set.lines) emit(name, line)
+    }
   }
 
   #notify(): void {

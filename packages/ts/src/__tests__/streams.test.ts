@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createApp } from '../index.js'
+import { createApp, type ResponseStream } from '../index.js'
 import { memoryLogger, pause } from './helpers/server.js'
 
 describe('streamed replies through app.request()', () => {
@@ -136,6 +136,30 @@ describe('streamed replies through app.request()', () => {
 
     expect(writtenBeforeCancel).toBeLessThan(5)
     expect(results.at(-1)).toBe(false)
+  })
+
+  it('settles every pending write, whether the test reads the body or cancels it', async () => {
+    const settled: Promise<boolean[]>[] = []
+    const writeThree = (stream: ResponseStream): Promise<boolean[]> => {
+      const all = Promise.all([stream.write('a'), stream.write('b'), stream.write('c')])
+      settled.push(all)
+      return all
+    }
+    const app = createApp()
+      .get('/read', c => c.stream(stream => writeThree(stream).then(() => undefined)))
+      .get('/cancel', c =>
+        c.stream(stream => {
+          void writeThree(stream)
+          return new Promise(() => undefined)
+        }),
+      )
+
+    expect(await (await app.request('/read')).text()).toBe('abc')
+    const cancelled = await app.request('/cancel')
+    await cancelled.body?.cancel()
+
+    expect(await settled[0]).toEqual([true, true, true])
+    expect(await settled[1]).toEqual([false, false, false])
   })
 
   it('throws INVALID_STREAM for a length that is not a whole number of zero or more', async () => {

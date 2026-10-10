@@ -36,7 +36,7 @@ app.use(async (c, next) => {
 })
 ```
 
-The package adds a header that a middleware sets before `await next()` to the handler's reply, although the handler's own headers replace a header of the same name. When a middleware sets a header after `await next()`, the package replaces the reply's header of the same name. With `{ append: true }`, the package adds a line and keeps the earlier lines.
+The package adds a header that a middleware sets before `await next()` to the handler's reply, although the handler's own headers replace a header of the same name. When a middleware sets a header after `await next()`, the package replaces the reply's header of the same name. With `{ append: true }`, the package adds a line and keeps the earlier lines, including the lines of the reply. When a later reply replaces a reply, as an error reply does after a throw, the headers of the replaced reply don't go out, so a `location`, a `set-cookie`, or a `cache-control` from a handler never reaches a 500. The headers that your code set with `c.header()` stay on the new reply.
 
 One header writer checks every name and value that the package or your code sets. Each name must be an HTTP token. A value must contain no line break, NUL, or other control character apart from a tab, so a value built from user input can never start a second header. `c.header()` and the helpers throw a `UhttpError` with the code `INVALID_HEADER` when a check fails, so the client receives a 500. The package drops `content-length`, `transfer-encoding`, `connection`, and `date` from your headers, because it alone sets the framing of a response.
 
