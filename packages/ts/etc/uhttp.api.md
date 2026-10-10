@@ -5,41 +5,147 @@
 ```ts
 
 // @public
-export class App {
-    get(path: string, handler: Handler): this;
+export class App extends Group {
     request(target: string, init?: TestRequestInit): Promise<Response>;
 }
 
 // @public
-export class Context {
-    constructor(method: string, path: string, query: string);
-    json(value: unknown, status?: number): Reply;
-    readonly req: RequestInfo;
-    text(body: string, status?: number): Reply;
+export interface AppOptions {
+    readonly logger?: Logger;
+    readonly notFound?: Handler;
+    readonly onError?: ErrorHandler;
 }
 
 // @public
-export function createApp(): App;
+export class Context {
+    bytes(data: Uint8Array | ArrayBuffer, status?: number, headers?: HeaderRecord): Reply;
+    header(name: string, value: string, options?: HeaderOptions): void;
+    json(value: unknown, status?: number, headers?: HeaderRecord): Reply;
+    redirect(location: string, status?: number, headers?: HeaderRecord): Reply;
+    get reply(): Reply | undefined;
+    readonly req: RequestInfo;
+    sse(produce: EventStreamProducer, options?: EventStreamOptions): Reply;
+    stream(produce: StreamProducer, options?: StreamOptions): Reply;
+    text(body: string, status?: number, headers?: HeaderRecord): Reply;
+}
 
 // @public
-export type ErrorCode = 'NOT_FOUND' | 'INTERNAL_ERROR' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED';
+export function createApp(options?: AppOptions): App;
+
+// @public
+export type ErrorCode = 'INVALID_PATH_PARAMETER' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED' | 'INTERNAL_ERROR' | 'MISSING_REPLY' | 'NEXT_CALLED_TWICE' | 'UNDECLARED_HEADER' | 'UNDECLARED_CLIENT_ADDRESS' | 'INVALID_HEADER' | 'INVALID_EVENT' | 'INVALID_STREAM' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_APP_OPTIONS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED';
+
+// @public
+export type ErrorHandler = (error: unknown, context: Context) => Reply | Promise<Reply>;
+
+// @public
+export interface EventStream {
+    readonly closed: boolean;
+    onClose(listener: () => void): void;
+    send(event: ServerSentEvent): Promise<boolean>;
+}
+
+// @public
+export interface EventStreamOptions {
+    readonly headers?: HeaderRecord;
+    readonly heartbeatMs?: number;
+    readonly status?: number;
+}
+
+// @public
+export type EventStreamProducer = (events: EventStream) => void | Promise<void>;
+
+// @public
+export class Group {
+    protected constructor();
+    delete(path: string, ...args: RouteArguments): this;
+    get(path: string, ...args: RouteArguments): this;
+    group(prefix: string, ...middleware: Middleware[]): Group;
+    options(path: string, ...args: RouteArguments): this;
+    patch(path: string, ...args: RouteArguments): this;
+    post(path: string, ...args: RouteArguments): this;
+    put(path: string, ...args: RouteArguments): this;
+    use(...middleware: Middleware[]): this;
+}
 
 // @public
 export type Handler = (context: Context) => Reply | Promise<Reply>;
 
 // @public
+export interface HeaderOptions {
+    readonly append?: boolean;
+}
+
+// @public
+export type HeaderRecord = Readonly<Record<string, string | readonly string[]>>;
+
+// @public
+export interface Logger {
+    error(details: object, message: string): void;
+    info(details: object, message: string): void;
+    warn(details: object, message: string): void;
+}
+
+// @public
+export type Middleware = MiddlewareHandler | MiddlewareDefinition;
+
+// @public
+export interface MiddlewareDefinition {
+    readonly clientAddress?: boolean;
+    readonly handle: MiddlewareHandler;
+    readonly headers?: readonly string[];
+}
+
+// @public
+export type MiddlewareHandler = (context: Context, next: Next) => Reply | void | Promise<Reply | undefined> | Promise<void>;
+
+// @public
+export type Next = () => Promise<void>;
+
+// @public
 export class Reply {
-    constructor(status: number, contentType: string, body: string);
-    readonly body: string;
-    readonly contentType: string;
+    readonly body: string | Uint8Array | null;
+    readonly contentType: string | undefined;
+    readonly headers: ReadonlyMap<string, readonly string[]> | undefined;
     readonly status: number;
+    readonly stream: ReplyStream | undefined;
+}
+
+// @public
+export interface ReplyStream {
+    readonly length: number | undefined;
+    readonly produce: StreamProducer;
 }
 
 // @public
 export interface RequestInfo {
+    readonly clientAddress: string;
+    readonly contentLength: number | undefined;
+    readonly contentType: string | undefined;
+    header(name: string): string | undefined;
+    headers(): Record<string, string>;
     readonly method: string;
+    param(name: string): string | undefined;
+    params(): Record<string, string>;
     readonly path: string;
     readonly query: string;
+    readonly signal: AbortSignal;
+}
+
+// @public
+export interface ResponseStream {
+    readonly closed: boolean;
+    onClose(listener: () => void): void;
+    write(chunk: string | Uint8Array): Promise<boolean>;
+}
+
+// @public
+export type RouteArguments = readonly [...stack: (Middleware | RouteOptions)[], handler: Handler];
+
+// @public
+export interface RouteOptions {
+    readonly clientAddress?: boolean;
+    readonly headers?: readonly string[] | 'all';
 }
 
 // @public
@@ -59,8 +165,33 @@ export interface Server {
 }
 
 // @public
+export interface ServerSentEvent {
+    readonly data?: string;
+    readonly event?: string;
+    readonly id?: string;
+    readonly retry?: number;
+}
+
+// @public
+export interface StreamOptions {
+    readonly contentType?: string;
+    readonly headers?: HeaderRecord;
+    readonly length?: number;
+    readonly status?: number;
+}
+
+// @public
+export type StreamProducer = (stream: ResponseStream) => void | Promise<void>;
+
+// @public
+export type TestHeaders = Readonly<Record<string, string | readonly string[]>> | readonly (readonly [string, string])[];
+
+// @public
 export interface TestRequestInit {
-    method?: string;
+    readonly clientAddress?: string;
+    readonly headers?: TestHeaders;
+    readonly method?: string;
+    readonly signal?: AbortSignal;
 }
 
 // @public

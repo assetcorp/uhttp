@@ -50,11 +50,12 @@ jobs:
       - name: Check that main has a uhttp package to compare
         id: main
         run: |
+          mkdir -p speed-report
           if [ -f .speed/main/packages/ts/package.json ] && grep -q '"compile"' .speed/main/packages/ts/package.json; then
             echo "comparable=true" >> "$GITHUB_OUTPUT"
           else
             echo "comparable=false" >> "$GITHUB_OUTPUT"
-            printf '## Speed compared with main\n\nMain has no uhttp package for this job to compile, so the job measured nothing.\n' >> "$GITHUB_STEP_SUMMARY"
+            printf '## Speed compared with main\n\nMain has no uhttp package for this job to compile, so the job measured nothing.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Install and compile main
@@ -71,9 +72,24 @@ jobs:
         env:
           BASE_ENTRY: .speed/main/packages/ts/dist/index.js
           CHANGE_ENTRY: packages/ts/dist/index.js
-        run: node packages/ts/benchmarks/speed-guard/compare.ts
+        run: node packages/ts/benchmarks/speed-guard/compare.ts | tee speed-report/report.md
 
       - name: Report a comparison that ended before it wrote a table
         if: steps.compare.outcome == 'failure'
         run: |
-          printf '## Speed compared with main\n\nThe comparison script exited before it wrote a table, so open the log of the comparison step to find the error.\n' >> "$GITHUB_STEP_SUMMARY"
+          printf '## Speed compared with main\n\nThe comparison script exited before it wrote a table, so open the log of the comparison step to find the error.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the pull request that the comment workflow posts the table on
+        if: always() && hashFiles('speed-report/report.md') != ''
+        env:
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: printf '%s\n' "$PULL_REQUEST_NUMBER" > speed-report/pull-request-number
+
+      - name: Upload the speed report with actions/upload-artifact v7.0.1
+        if: always() && hashFiles('speed-report/report.md') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: speed-report
+          path: speed-report/
+          if-no-files-found: error
+          retention-days: 7
