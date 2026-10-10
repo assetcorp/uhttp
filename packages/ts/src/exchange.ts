@@ -37,11 +37,10 @@ export interface AppRuntime {
  */
 export interface BodyState {
   /**
-   * Returns `true` when the package must close the connection after the response, because the
-   * reader stopped reading the body before its end. Otherwise, the reader discards the rest of the
-   * body as uWebSockets.js delivers it.
+   * Makes the reader discard the rest of the body as it arrives, and resumes a paused source, so
+   * that the connection can serve the next request once the body ends.
    */
-  settle(): boolean
+  settle(): void
   /**
    * Stops pausing the source for the rest of the request. uWebSockets.js stops writing to a paused
    * socket as well as reading from it, so the package calls this method when a streamed reply
@@ -69,10 +68,20 @@ export class Exchange {
   aborted = false
   /** This is `true` once the handler has passed its time limit, from which point the package discards the reply of the chain. */
   timedOut = false
-  /** When this is `true`, the package closes the connection after the response. */
+  /**
+   * When this is `true`, the package closes the connection after the response, which it does for a
+   * request whose `transfer-encoding` it rejects.
+   */
   closeConnection = false
+  /**
+   * This is `true` when the client sent `connection: close`, after which uWebSockets.js closes the
+   * connection as soon as the response ends.
+   */
+  clientCloses = false
   /** This is the body reader of the request, or `undefined` on a route without one. */
   body: BodyState | undefined
+  #bodyArriving = false
+  #bodyListeners: (() => void)[] | undefined
   #reply: Reply | undefined
   #final = false
   #replySetAt = 0
@@ -132,9 +141,52 @@ export class Exchange {
   expire(error: UhttpError): void {
     if (this.closed || this.timedOut) return
     this.timedOut = true
-    this.closeConnection = true
     this.#fireSignal(error)
     this.release(error)
+  }
+
+  /**
+   * Records that the package follows the body of the request until its last byte arrives.
+   */
+  expectBody(): void {
+    this.#bodyArriving = true
+  }
+
+  /**
+   * Records that the last byte of the body arrived, and then calls every listener that waits for
+   * it. Without an earlier call to {@link Exchange.expectBody}, the method does nothing.
+   */
+  bodyEnded(): void {
+    if (!this.#bodyArriving) return
+    this.#bodyArriving = false
+    const listeners = this.#bodyListeners
+    this.#bodyListeners = undefined
+    for (const listener of listeners ?? []) listener()
+  }
+
+  /**
+   * Adds a listener that the package calls once the last byte of the body arrives, or at once when
+   * no more of the body is on its way.
+   *
+   * @param listener - The package calls this function once.
+   */
+  onBodyEnd(listener: () => void): void {
+    if (!this.#bodyArriving) {
+      listener()
+      return
+    }
+    this.#bodyListeners ??= []
+    this.#bodyListeners.push(listener)
+  }
+
+  /**
+   * Returns `true` when the response has to wait for the rest of the body, because the connection
+   * closes after the response and more of the body is on its way.
+   *
+   * @returns The method returns `false` when the response can end at once.
+   */
+  holdsReplyForBody(): boolean {
+    return this.#bodyArriving && (this.closeConnection || this.clientCloses)
   }
 
   /**
@@ -166,15 +218,11 @@ export class Exchange {
   }
 
   /**
-   * Returns `true` when the package must close the connection after the response, because the
-   * package rejected the request early or stopped reading its body, or because the handler passed
-   * its time limit.
-   *
-   * @returns The method returns `false` when the connection can serve another request.
+   * Makes the body reader discard whatever of the body your code left unread, so that the
+   * connection can serve the next request once the body ends.
    */
-  shouldCloseConnection(): boolean {
-    if (this.body?.settle() === true) this.closeConnection = true
-    return this.closeConnection
+  settleBody(): void {
+    this.body?.settle()
   }
 
   #fireSignal(reason: unknown): void {

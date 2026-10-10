@@ -45,6 +45,18 @@ export const MAX_REQUEST_HEADER_COUNT = 98
  */
 export const DEFAULT_MAX_REQUEST_HEAD_BYTES = 4096
 
+/**
+ * uWebSockets.js v20.71.0 sends a 400 for a `content-length` value with more characters than
+ * this, and the package checks the same rule before any handler runs.
+ */
+export const MAX_CONTENT_LENGTH_DIGITS = 18
+
+/**
+ * uWebSockets.js v20.71.0 closes the connection after the response when the `connection` header of
+ * the request has this many characters, as `close` does, and the package applies the same rule.
+ */
+export const CONNECTION_CLOSE_VALUE_LENGTH = 5
+
 /** When a test sets no `Host` header, `app.request()` sends this one, as `fetch` does. */
 export const TEST_REQUEST_HOST = 'localhost'
 
@@ -117,6 +129,14 @@ export const BODY_HIGH_WATER_MARK_BYTES = 65_536
  * the connection itself once the socket has been paused for this many milliseconds.
  */
 export const BODY_PAUSE_TIMEOUT_MS = 10_000
+
+/**
+ * When a reply has to close the connection while the request body is still arriving, the package
+ * reads and discards the body first, so that the client can read the reply before the close. It
+ * closes the connection without the reply once it has waited this many milliseconds, as nginx does
+ * with its default `lingering_time`.
+ */
+export const CLOSING_BODY_DRAIN_MS = 30_000
 
 /** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, because the package reads 0 as no limit. */
 export const DEFAULT_TIMEOUT_MS = 0

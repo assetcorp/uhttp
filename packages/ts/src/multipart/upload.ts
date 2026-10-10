@@ -230,8 +230,7 @@ class Upload {
 
 /**
  * Returns the fields and the files of a multipart body. On any failure, the function destroys every
- * destination, discards every file that it wrote, and marks the connection for closing before it
- * throws.
+ * destination and discards every file that it wrote before it throws.
  *
  * @param body - The package passes the stream of the request body.
  * @param mediaType - The package passes the parsed content type, with the boundary among its parameters.
@@ -259,7 +258,6 @@ export async function readMultipart(
     await upload.run(body, new MultipartParser(boundary))
     upload.finish()
   } catch (error) {
-    exchange.closeConnection = true
     await upload.destroyAll(error)
     throw error
   }

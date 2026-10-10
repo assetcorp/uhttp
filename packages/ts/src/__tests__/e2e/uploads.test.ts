@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../../index.js'
 import { BOUNDARY, multipartBody, multipartType } from '../helpers/body.js'
 import { chunkedRequest, openConnection, requestHead, requestWithBody, send } from '../helpers/http-client.js'
-import { expectHello, piecesOf, tooLarge } from '../helpers/replies.js'
+import { CONNECTION_CHOICES, expectConnectionAfterReply, expectHello, piecesOf, tooLarge } from '../helpers/replies.js'
 import { pause, start } from '../helpers/server.js'
 
 const MIB = 1_048_576
@@ -138,30 +138,35 @@ describe('uploads over the network', () => {
     await expectHello(connection)
   })
 
-  it('answers 413 after the client sends a chunked upload above the limit, deletes the partial file, and then closes the connection', async () => {
-    const opened = Promise.withResolvers<void>()
-    const server = await start(
-      createApp().post('/upload', { maxBodyBytes: MIB }, async c => {
-        await c.req.body.multipart({
-          file: file => {
-            opened.resolve()
-            return createWriteStream(join(directory, file.filename))
-          },
-        })
-        return c.text('stored')
-      }),
-    )
-    const body = multipartBody([{ name: 'file', filename: 'large.bin', content: Buffer.alloc(4 * MIB, 7) }])
+  it.each(CONNECTION_CHOICES)(
+    'answers 413 after the client sends a chunked upload above the limit, deletes the partial file, and %s',
+    async (_choice, lines) => {
+      const opened = Promise.withResolvers<void>()
+      const server = await start(
+        createApp()
+          .post('/upload', { maxBodyBytes: MIB }, async c => {
+            await c.req.body.multipart({
+              file: file => {
+                opened.resolve()
+                return createWriteStream(join(directory, file.filename))
+              },
+            })
+            return c.text('stored')
+          })
+          .get('/hello', c => c.text('Hello')),
+      )
+      const body = multipartBody([{ name: 'file', filename: 'large.bin', content: Buffer.alloc(4 * MIB, 7) }])
 
-    const { connection, response } = await send(
-      server.port,
-      chunkedRequest('POST', '/upload', [`Content-Type: ${multipartType()}`], piecesOf(body, 64)),
-    )
-    await opened.promise
+      const { connection, response } = await send(
+        server.port,
+        chunkedRequest('POST', '/upload', [`Content-Type: ${multipartType()}`, ...lines], piecesOf(body, 64)),
+      )
+      await opened.promise
 
-    expect(response.status).toBe(413)
-    expect(response.body.toString()).toBe(tooLarge(MIB))
-    expect(await connection.waitForClose()).toBe('closed')
-    expect(readdirSync(directory)).toEqual([])
-  })
+      expect(response.status).toBe(413)
+      expect(response.body.toString()).toBe(tooLarge(MIB))
+      expect(readdirSync(directory)).toEqual([])
+      await expectConnectionAfterReply(connection, lines)
+    },
+  )
 })

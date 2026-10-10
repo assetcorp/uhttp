@@ -142,7 +142,7 @@ describe('the Content-Encoding check', () => {
     expect(response.status).toBe(415)
     expect(await errorCodeOf(response)).toBe('UNSUPPORTED_MEDIA_TYPE')
     expect(response.headers.get('accept-encoding')).toBe('identity')
-    expect(response.headers.get('connection')).toBe('close')
+    expect(response.headers.get('connection')).toBeNull()
     expect(handled).toBe(false)
   })
 

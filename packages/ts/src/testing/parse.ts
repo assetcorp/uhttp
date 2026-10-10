@@ -1,5 +1,6 @@
 import { DEFAULT_MAX_REQUEST_HEAD_BYTES, MAX_REQUEST_HEADER_COUNT, TEST_REQUEST_HOST } from '../constants.js'
-import { containsControlCharacter, containsSpaceOrControl, isDecimalDigits, isToken } from '../headers.js'
+import { parserRejectsFraming } from '../framing.js'
+import { containsControlCharacter, containsSpaceOrControl, isToken } from '../headers.js'
 
 const HOST_FORBIDDEN_PUNCTUATION = /[,@]/
 const EDGE_WHITESPACE = /^[ \t]+|[ \t]+$/g
@@ -89,13 +90,16 @@ function headBytes(method: string, target: string, lines: Lines): number {
   return bytes
 }
 
-function framingIsValid(lines: Lines): boolean {
-  const lengths = lines.filter(([name]) => name === 'content-length').map(([, value]) => value)
-  const [encoding] = lines.filter(([name]) => name === 'transfer-encoding').map(([, value]) => value)
-  if (encoding !== undefined) return lengths.length === 0 && encoding.toLowerCase().endsWith(CHUNKED)
-  const [first] = lengths
-  if (first === undefined) return true
-  return isDecimalDigits(first) && lengths.every(length => length === first)
+/**
+ * Returns the value of every line of one header in a test request.
+ *
+ * @param lines - The package passes the header lines of the test request.
+ * @param name - The package passes the lowercase name of the header.
+ * @returns The function returns the values in the order of the lines.
+ * @internal
+ */
+export function valuesOf(lines: Lines, name: string): string[] {
+  return lines.filter(([lineName]) => lineName === name).map(([, value]) => value)
 }
 
 /**
@@ -136,7 +140,9 @@ function hostIsValid(lines: Lines): boolean {
  * - It returns `undefined` when the request line and the headers take more than 4,096 bytes, or
  *   more than `UWS_HTTP_MAX_HEADERS_SIZE` where the host set it.
  * - It returns `undefined` for an empty, repeated, or invalid `Host`.
- * - It returns `undefined` for conflicting `content-length` and `transfer-encoding` headers.
+ * - It returns `undefined` for a request with both `content-length` and `transfer-encoding`, for
+ *   a first `transfer-encoding` line that does not end with `chunked`, and for `content-length`
+ *   lines that differ, that hold anything but digits, or whose value has more than 18 characters.
  *
  * @param target - The test passes the path with an optional query string.
  * @param init - The test passes the method, the headers, the client address, and the signal.
@@ -156,7 +162,8 @@ export function parseTestRequest(target: string, init: TestRequestInit): ParsedT
   addFraming(lines, init.body)
   if (lines.length > MAX_REQUEST_HEADER_COUNT) return undefined
   if (headBytes(method, target, lines) > maxHeadBytes()) return undefined
-  if (!hostIsValid(lines) || !framingIsValid(lines)) return undefined
+  if (!hostIsValid(lines)) return undefined
+  if (parserRejectsFraming(valuesOf(lines, 'content-length'), valuesOf(lines, 'transfer-encoding'))) return undefined
   const queryStart = target.indexOf('?')
   return {
     method,

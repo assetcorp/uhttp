@@ -3,6 +3,7 @@ import { logServerError } from '../chain.js'
 import type { Context } from '../context.js'
 import type { Exchange } from '../exchange.js'
 import { type ResponseStream, type StreamProducer, streamShortfallError, streamWriteError } from '../reply.js'
+import { holdForBody } from './hold.js'
 
 interface QueuedChunk {
   readonly bytes: Uint8Array
@@ -21,7 +22,8 @@ function toBytes(chunk: string | Uint8Array): Uint8Array {
 /**
  * The package writes a streamed body to uWebSockets.js through this object. It writes a body of
  * unknown length with `write()` and a body of known length with `tryEnd()`. Whenever the client
- * reads slowly, it waits for `onWritable` before it writes more.
+ * reads slowly, it waits for `onWritable` before it writes more. When the connection closes after
+ * the response, the stream holds the end of the response until the request body has arrived.
  *
  * @internal
  */
@@ -34,6 +36,7 @@ export class NativeStream implements ResponseStream {
   #accepted = 0
   #blocked = false
   #partial: PartialChunk | undefined
+  #held: QueuedChunk | undefined
   #waiter: ((written: boolean) => void) | undefined
   #returned = false
   #finishing = false
@@ -68,6 +71,7 @@ export class NativeStream implements ResponseStream {
     const error = streamWriteError(this.#returned, this.#accepted, bytes.byteLength, this.#length)
     if (error !== undefined) return Promise.reject(error)
     this.#accepted += bytes.byteLength
+    if (this.#accepted === this.#length && this.#exchange.holdsReplyForBody()) return this.#hold(bytes)
     if (this.#blocked) {
       return new Promise(resolve => {
         this.#queue.push({ bytes, resolve })
@@ -168,6 +172,9 @@ export class NativeStream implements ResponseStream {
   #release(): void {
     this.#resolveWaiter(false)
     for (const queued of this.#queue.splice(0)) queued.resolve(false)
+    const held = this.#held
+    this.#held = undefined
+    held?.resolve(false)
   }
 
   #producerReturned(): void {
@@ -179,18 +186,38 @@ export class NativeStream implements ResponseStream {
 
   #complete(): void {
     this.#finishing = false
-    if (this.#exchange.closed) return
+    if (this.#exchange.closed || this.#held !== undefined) return
     const shortfall = streamShortfallError(this.#accepted, this.#length)
     if (shortfall !== undefined) {
       this.#fail(shortfall)
       return
     }
+    this.#exchange.settleBody()
     const res = this.#res
-    const close = this.#exchange.shouldCloseConnection()
+    if (holdForBody(res, this.#exchange, () => this.#complete())) return
     res.cork(() => {
-      res.end(undefined, close)
+      res.end()
     })
     this.#exchange.end()
+  }
+
+  #hold(bytes: Uint8Array): Promise<boolean> {
+    return new Promise(resolve => {
+      this.#held = { bytes, resolve }
+      holdForBody(this.#res, this.#exchange, () => this.#releaseHeld())
+    })
+  }
+
+  #releaseHeld(): void {
+    const held = this.#held
+    this.#held = undefined
+    if (held === undefined || this.#exchange.closed) return
+    if (this.#blocked) {
+      this.#queue.push(held)
+      return
+    }
+    if (this.#send(held.bytes)) held.resolve(true)
+    else this.#waiter = held.resolve
   }
 
   #fail(error: unknown): void {

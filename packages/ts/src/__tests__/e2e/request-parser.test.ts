@@ -185,11 +185,39 @@ describe('the parser of uWebSockets.js', () => {
     )
 
     expect(response.status).toBe(501)
+    expect(response.headers.get('connection')).toEqual(['close'])
+    expect(response.body.toString()).toBe(
+      JSON.stringify({
+        error: {
+          code: 'UNSUPPORTED_TRANSFER_CODING',
+          message: 'Send the request body with the chunked transfer coding alone, because the server decodes no other.',
+        },
+      }),
+    )
     expect(await connection.waitForClose()).toBe('closed')
     expect(handled).toEqual([])
   })
 
-  it('answers 400 to a bare CR inside a header value, and closes the connection', async () => {
+  it('answers 400 with INVALID_TRANSFER_ENCODING to a Transfer-Encoding of xchunked, and sends nothing else on the connection', async () => {
+    const server = await start(echoApp([]))
+
+    const { connection, response } = await send(
+      server.port,
+      `${echoRequest(['Transfer-Encoding: xchunked'], HELLO_CHUNKS)}GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n`,
+    )
+
+    expect(response.status).toBe(400)
+    expect(response.headers.get('connection')).toEqual(['close'])
+    expect(JSON.parse(response.body.toString())).toEqual({
+      error: {
+        code: 'INVALID_TRANSFER_ENCODING',
+        message: 'The transfer-encoding of a request must end with chunked and apply it once.',
+      },
+    })
+    expect(await connection.waitForClose()).toBe('closed')
+  })
+
+  it.fails('answers 400 to a bare CR inside a header value, which uWebSockets.js v20.71.0 leaves unanswered until its idle timeout', async () => {
     const server = await start(echoApp([]))
 
     const { connection, response } = await send(
@@ -205,11 +233,6 @@ describe('the parser of uWebSockets.js', () => {
     ['a Transfer-Encoding of Chunked in another case', ['Transfer-Encoding: Chunked'], HELLO_CHUNKS],
     ['a Transfer-Encoding of chunked with trailing whitespace', ['Transfer-Encoding: chunked '], HELLO_CHUNKS],
     ['a chunk extension', ['Transfer-Encoding: chunked'], '5;name=value\r\nhello\r\n0\r\n\r\n'],
-    [
-      'a trailer field after the last chunk',
-      ['Transfer-Encoding: chunked'],
-      '5\r\nhello\r\n0\r\nX-Checksum: 1\r\n\r\n',
-    ],
     ['a Content-Length with whitespace before it', ['Content-Length:  5'], 'hello'],
     ['a Content-Length with a leading zero', ['Content-Length: 05'], 'hello'],
     ['two identical Content-Length lines', ['Content-Length: 5', 'Content-Length: 5'], 'hello'],
@@ -224,7 +247,18 @@ describe('the parser of uWebSockets.js', () => {
     expect([next.status, next.body.toString()]).toEqual([200, 'Hello'])
   })
 
-  it('serves a request whose target is in absolute form', async () => {
+  it.fails('reads the body of a request with a trailer field after the last chunk, which uWebSockets.js v20.71.0 answers with a 400', async () => {
+    const server = await start(echoApp([]))
+
+    const { response } = await send(
+      server.port,
+      echoRequest(['Transfer-Encoding: chunked'], '5\r\nhello\r\n0\r\nX-Checksum: 1\r\n\r\n'),
+    )
+
+    expect([response.status, response.body.toString()]).toEqual([200, '[hello]'])
+  })
+
+  it.fails('serves a request whose target is in absolute form, which uWebSockets.js v20.71.0 answers with a 400', async () => {
     const server = await start(echoApp([]))
 
     const { response } = await send(server.port, 'GET http://localhost/hello HTTP/1.1\r\nHost: localhost\r\n\r\n')
