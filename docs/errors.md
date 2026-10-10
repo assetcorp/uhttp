@@ -33,7 +33,7 @@ Match on the code, because the message can change between releases.
 | `VALIDATION_FAILED` | 400 | A schema rejects a JSON body. The package lists the first 10 problems under `issues`. |
 | `INVALID_MULTIPART` | 400 | A multipart body has an invalid boundary, a part without a name, a control character in a name or a filename, or no closing boundary. |
 | `REQUEST_ABORTED` | 400 | The client disconnects before the body ends, so a pending read of the body rejects with this code. The package passes this error to your code alone, because the client has gone or the response has ended. |
-| `HANDLER_TIMEOUT` | 503 | A handler passes the time limit of its route. |
+| `HANDLER_TIMEOUT` | 503 | A handler passes the time limit of its route. The package closes the connection after the reply. |
 | `INVALID_TRANSFER_ENCODING` | 400 | A client lists `chunked` more than once in the `Transfer-Encoding` lines of a request, or ends those lines with a coding other than `chunked`, such as `xchunked`. The package sends this reply before it calls any middleware, and it closes the connection after the reply. |
 | `UNSUPPORTED_TRANSFER_CODING` | 501 | A client applies a transfer coding such as `gzip` before `chunked`, while the package decodes `chunked` alone. The package sends this reply before it calls any middleware, and it closes the connection after the reply. |
 | `INTERNAL_ERROR` | 500 | The package sends this code to the client for every error that maps to 500. |

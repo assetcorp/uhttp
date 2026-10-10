@@ -25,7 +25,8 @@
  *   without a name, a control character in a name or a filename, or no closing boundary.
  * - The package throws `REQUEST_ABORTED` from a read of the body when the client disconnects before
  *   the body ends.
- * - The package throws `HANDLER_TIMEOUT` when a handler passes the time limit of its route.
+ * - The package throws `HANDLER_TIMEOUT` when a handler passes the time limit of its route, and it
+ *   closes the connection after the reply.
  * - The package sends `INVALID_TRANSFER_ENCODING` when a client lists `chunked` more than once in
  *   the `transfer-encoding` lines of a request, or ends those lines with a coding other than
  *   `chunked`.

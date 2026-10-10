@@ -9,7 +9,9 @@ import { lineSeparatorOf } from '../headers.js'
 import { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type PreparedRequest, type RequestChain, resolveChain } from '../resolve.js'
 import { attachBody } from './body.js'
-import { type RequestFraming, readFraming, refusedRequest, refuseLaterRequests } from './framing.js'
+import { remoteAddressOf } from './close.js'
+import { type RequestFraming, readFraming } from './framing.js'
+import { refusedRequest } from './refuse.js'
 import { writeCrash, writeFramingRejection, writeReply } from './write.js'
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
@@ -65,8 +67,8 @@ function copyRequest(
   const plan = chain.copyPlan
   const all = plan.allHeaders ? copyAllHeaders(req) : undefined
   const values = plan.allHeaders || plan.headerNames.length === 0 ? NO_VALUES : copyDeclaredHeaders(req, plan)
-  const address = plan.clientAddress ? Buffer.from(res.getRemoteAddressAsText()).toString() : undefined
-  const body = attachBody(res, req, exchange, chain, framing)
+  const address = plan.clientAddress ? remoteAddressOf(res) : undefined
+  const body = attachBody(res, exchange, chain, framing)
   const request = new CopiedRequest(
     exchange,
     method,
@@ -90,8 +92,7 @@ function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange
   const framing = readFraming(req)
   if (framing.parserRejects) return undefined
   if (framing.rejection !== undefined) {
-    refuseLaterRequests(res, exchange)
-    writeFramingRejection(res, exchange, framing.rejection)
+    writeFramingRejection(res, exchange, framing, framing.rejection, req.getCaseSensitiveMethod() === 'HEAD')
     return undefined
   }
   exchange.clientCloses = framing.clientCloses
@@ -121,8 +122,7 @@ function finish(res: HttpResponse, exchange: Exchange, context: Context, cork: b
     if (cork) res.cork(() => writeReply(res, exchange, context, reply))
     else writeReply(res, exchange, context, reply)
   } catch (error) {
-    logServerError(exchange.runtime.logger, error, context.req.method, context.req.path)
-    writeCrash(res, exchange)
+    crash(res, exchange, error, context.req.method, context.req.path)
   }
 }
 

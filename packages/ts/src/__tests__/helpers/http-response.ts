@@ -99,28 +99,47 @@ function framingOf(status: number, headers: Map<string, string[]>, method: strin
   return lengths === undefined ? 'close' : 'length'
 }
 
+type Chunk = { last: false; bytes: Buffer; next: number } | { last: true; next: number }
+
+function readChunk(data: Buffer, offset: number): Chunk | undefined {
+  const read = readLine(data, offset)
+  if (read === undefined) return undefined
+  const match = CHUNK_SIZE_LINE.exec(read.line)
+  if (match === null) throw new Error(`The server sent '${read.line}' where a chunk size belongs.`)
+  const size = Number.parseInt(match[1] ?? '', 16)
+  if (size === 0) return { last: true, next: read.next }
+  const end = read.next + size
+  if (data.length < end + CRLF.length) return undefined
+  if (!data.subarray(end, end + CRLF.length).equals(CRLF)) {
+    throw new Error(`The server sent more than the ${size} bytes that its chunk size declares.`)
+  }
+  return { last: false, bytes: data.subarray(read.next, end), next: end + CRLF.length }
+}
+
 function readChunked(data: Buffer, offset: number): Content | undefined {
   const parts: Buffer[] = []
   let cursor = offset
   while (true) {
-    const read = readLine(data, cursor)
-    if (read === undefined) return undefined
-    const match = CHUNK_SIZE_LINE.exec(read.line)
-    if (match === null) throw new Error(`The server sent '${read.line}' where a chunk size belongs.`)
-    const size = Number.parseInt(match[1] ?? '', 16)
-    if (size === 0) {
-      const trailer = readFields(data, read.next)
+    const chunk = readChunk(data, cursor)
+    if (chunk === undefined) return undefined
+    if (chunk.last) {
+      const trailer = readFields(data, chunk.next)
       if (trailer === undefined) return undefined
       return { body: Buffer.concat(parts), trailers: trailer.fields, next: trailer.next }
     }
-    const end = read.next + size
-    if (data.length < end + CRLF.length) return undefined
-    if (!data.subarray(end, end + CRLF.length).equals(CRLF)) {
-      throw new Error(`The server sent more than the ${size} bytes that its chunk size declares.`)
-    }
-    parts.push(data.subarray(read.next, end))
-    cursor = end + CRLF.length
+    parts.push(chunk.bytes)
+    cursor = chunk.next
   }
+}
+
+export function chunksSoFar(data: Buffer, offset: number): Buffer {
+  const parts: Buffer[] = []
+  let cursor = offset
+  for (let chunk = readChunk(data, cursor); chunk !== undefined && !chunk.last; chunk = readChunk(data, cursor)) {
+    parts.push(chunk.bytes)
+    cursor = chunk.next
+  }
+  return Buffer.concat(parts)
 }
 
 function readContent(

@@ -103,6 +103,22 @@ export function valuesOf(lines: Lines, name: string): string[] {
 }
 
 /**
+ * Returns the value of the first line of one header in a test request, as uWebSockets.js returns
+ * it from `getHeader()`.
+ *
+ * @param lines - The package passes the header lines of the test request.
+ * @param name - The package passes the lowercase name of the header.
+ * @returns The function returns the value, or `undefined` when the header is missing or empty.
+ * @internal
+ */
+export function firstValue(lines: Lines, name: string): string | undefined {
+  for (const [lineName, value] of lines) {
+    if (lineName === name) return value === '' ? undefined : value
+  }
+  return undefined
+}
+
+/**
  * Returns the length of a body that a test passed whole, or `undefined` for a body in chunks.
  *
  * @param body - The test passed this body.
@@ -136,13 +152,13 @@ function hostIsValid(lines: Lines): boolean {
  * - The function returns `undefined` for a method with a space or a control character, and for a
  *   target that does not start with `/` or that contains a space or a control character.
  * - It returns `undefined` for an invalid header name or a control character in a header value.
- * - It returns `undefined` for more than 98 header lines.
- * - It returns `undefined` when the request line and the headers take more than 4,096 bytes, or
- *   more than `UWS_HTTP_MAX_HEADERS_SIZE` where the host set it.
+ * - It returns `undefined` for more than {@link MAX_REQUEST_HEADER_COUNT} header lines.
+ * - It returns `undefined` when the request line and the headers take more than
+ *   {@link DEFAULT_MAX_REQUEST_HEAD_BYTES} bytes, or more than `UWS_HTTP_MAX_HEADERS_SIZE` where the
+ *   host set it.
  * - It returns `undefined` for an empty, repeated, or invalid `Host`.
- * - It returns `undefined` for a request with both `content-length` and `transfer-encoding`, for
- *   a first `transfer-encoding` line that does not end with `chunked`, and for `content-length`
- *   lines that differ, that hold anything but digits, or whose value has more than 18 characters.
+ * - It returns `undefined` for the `content-length` and `transfer-encoding` lines that
+ *   {@link parserRejectsFraming} rejects.
  *
  * @param target - The test passes the path with an optional query string.
  * @param init - The test passes the method, the headers, the client address, and the signal.

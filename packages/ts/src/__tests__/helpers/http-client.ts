@@ -1,6 +1,6 @@
 import { connect, type Socket } from 'node:net'
 import { afterEach } from 'vitest'
-import { parseResponse, type ReceivedResponse, readHead } from './http-response.js'
+import { chunksSoFar, parseResponse, type ReceivedResponse, readHead } from './http-response.js'
 
 const LOOPBACK = '127.0.0.1'
 const DEFAULT_WAIT_MS = 2_000
@@ -124,6 +124,21 @@ export class HttpConnection {
     )
   }
 
+  chunkedUntil(text: string, waitMs = DEFAULT_WAIT_MS): Promise<{ headers: Map<string, string[]>; body: string }> {
+    return this.#waitFor(
+      waitMs,
+      () => {
+        const head = readHead(this.#received, 0)
+        if (head === undefined) return undefined
+        const body = chunksSoFar(this.#received, head.next).toString()
+        return body.includes(text) ? { headers: head.headers, body } : undefined
+      },
+      () => {
+        throw new Error(`The server sent no chunk with ${JSON.stringify(text)} for ${waitMs} ms. ${this.#unread()}`)
+      },
+    )
+  }
+
   exchange(request: string | Uint8Array, options: ResponseOptions = {}): Promise<ReceivedResponse> {
     void this.write(request)
     return this.response(options)
@@ -151,6 +166,21 @@ export class HttpConnection {
       },
     )
     return this.state
+  }
+
+  async finish(waitMs = DEFAULT_WAIT_MS): Promise<ConnectionState> {
+    if (this.#received.length > 0) {
+      throw new Error(`The server sent bytes after the last response. ${this.#unread()}`)
+    }
+    await Promise.all(this.#writes)
+    this.#socket.end()
+    return this.#waitFor<ConnectionState>(
+      waitMs,
+      () => (this.#socketClosed ? this.state : undefined),
+      () => {
+        throw new Error(`The server kept the connection open for ${waitMs} ms after the client closed its side.`)
+      },
+    )
   }
 
   destroy(): void {

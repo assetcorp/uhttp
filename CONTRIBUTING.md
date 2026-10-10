@@ -35,7 +35,7 @@ On every pull request, the `Speed` workflow compares the speed of the change wit
 The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups. Vitest treats each group as a project of the same name and prints that name beside every test in its output.
 
 - `integration/` holds the tests that send requests through `app.request()`. Those requests go through the real router, middleware, request context, and body parsers, without a socket or uWebSockets.js. Mirror the source directory that a test covers, as `integration/body/parsers.test.ts` does for `src/body/`.
-- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1. Most of these tests use the client in `helpers/http-client.ts`, while the rest use `fetch`. That client rejects any response that breaks HTTP/1.1. It also reports whether the server kept the connection open, closed it cleanly, or reset it. Name each file after the behaviour that a client sees, as `e2e/request-bodies.test.ts` does.
+- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1. Most of these tests use the client in `helpers/http-client.ts`, while a few use `fetch` or the HTTP client of Node.js through `helpers/node-client.ts`. That client rejects any response that breaks HTTP/1.1. It also reports whether the server kept the connection open, closed it cleanly, or reset it. Name each file after the behaviour that a client sees, as `e2e/request-bodies.test.ts` does.
 - `package/` holds the tests of the built files and of the manifest that npm publishes.
 - `helpers/` holds the helpers that the three groups share.
 

@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../../index.js'
-import { bodyApp } from '../helpers/apps.js'
+import { bodyApp, KIB, MIB } from '../helpers/apps.js'
 import { chunkedRequest, openConnection, requestHead, requestWithBody, send } from '../helpers/http-client.js'
-import { expectHello, piecesOf, SMUGGLED_REQUEST } from '../helpers/replies.js'
+import {
+  expectClosedAfterReply,
+  expectHello,
+  piecesOf,
+  SMUGGLED_REQUEST,
+  withEveryConnectionChoice,
+} from '../helpers/replies.js'
 import { pause, start } from '../helpers/server.js'
-
-const MIB = 1_048_576
 
 describe('request bodies over the network', () => {
   it('reads a JSON body that arrives in pieces while middleware awaits, and keeps the connection open', async () => {
@@ -75,60 +79,84 @@ describe('request bodies over the network', () => {
     await expectHello(connection)
   })
 
-  it.each([
-    ['a few bytes', 0],
-    ['1 MiB', MIB],
-  ])(
-    'answers a handler that leaves a body of %s unread, and runs no request hidden in that body',
-    async (_name, padding) => {
-      const handled: string[] = []
-      const server = await start(bodyApp(handled))
-      const body = Buffer.concat([Buffer.from(SMUGGLED_REQUEST), Buffer.alloc(padding, 97)])
-      const connection = await openConnection(server.port)
+  it('discards a body of a few bytes that a handler leaves unread, runs no request hidden in it, and answers the next request', async () => {
+    const handled: string[] = []
+    const server = await start(bodyApp(handled))
+    const body = Buffer.from(SMUGGLED_REQUEST)
+    const connection = await openConnection(server.port)
 
-      void connection.write(
-        Buffer.concat([requestWithBody('POST', '/ignore', [], body), Buffer.from(requestHead('GET', '/hello'))]),
-      )
-      const ignored = await connection.response()
-      const next = await connection.response()
+    void connection.write(
+      Buffer.concat([requestWithBody('POST', '/ignore', [], body), Buffer.from(requestHead('GET', '/hello'))]),
+    )
+    const ignored = await connection.response()
+    const next = await connection.response()
 
-      expect([ignored.status, ignored.body.toString()]).toEqual([200, 'ok'])
-      expect([next.status, next.body.toString()]).toEqual([200, 'Hello'])
-      expect(handled).toEqual(['ignore'])
-    },
-  )
+    expect([ignored.status, ignored.body.toString()]).toEqual([200, 'ok'])
+    expect(ignored.headers.has('connection')).toBe(false)
+    expect([next.status, next.body.toString()]).toEqual([200, 'Hello'])
+    expect(handled).toEqual(['ignore'])
+  })
 
-  it('answers a handler that replies while the client still uploads, and keeps the connection open', async () => {
+  it('closes the connection after a reply that leaves 1 MiB unread, and runs no request hidden in that body or sent after it', async () => {
+    const handled: string[] = []
+    const server = await start(bodyApp(handled))
+    const body = Buffer.concat([Buffer.from(SMUGGLED_REQUEST), Buffer.alloc(MIB, 97)])
+    const connection = await openConnection(server.port)
+
+    void connection.write(
+      Buffer.concat([requestWithBody('POST', '/ignore', [], body), Buffer.from(requestHead('GET', '/hello'))]),
+    )
+    const ignored = await connection.response()
+
+    expect([ignored.status, ignored.body.toString()]).toEqual([200, 'ok'])
+    expect(ignored.headers.get('connection')).toEqual(['close'])
+    expect(await connection.waitForClose()).toBe('closed')
+    expect(handled).toEqual(['ignore'])
+  })
+
+  it('answers a handler that replies while the client still uploads 200 KiB, and keeps the connection open', async () => {
     const server = await start(bodyApp([]))
-    const body = Buffer.alloc(40 * 64 * 1024, 97)
+    const body = Buffer.alloc(200 * 1024, 97)
     const connection = await openConnection(server.port)
 
     void connection.write(requestHead('POST', '/ignore', [`Content-Length: ${body.byteLength}`]))
-    for (const piece of piecesOf(body, 40)) {
+    for (const piece of piecesOf(body, 20)) {
       await connection.write(piece)
       await pause(5)
     }
     const response = await connection.response()
 
     expect([response.status, response.body.toString()]).toEqual([200, 'ok'])
+    expect(response.headers.has('connection')).toBe(false)
     await expectHello(connection)
-    expect(connection.state).toBe('open')
   })
 
-  it('answers a handler that leaves a 2 MiB body unread after the whole body, and then closes cleanly, when the client sent Connection: close', async () => {
-    const server = await start(bodyApp([]))
-    const body = Buffer.alloc(2 * MIB, 97)
+  it.each(
+    withEveryConnectionChoice([
+      { size: '2.5 MiB', bytes: 40 * 64 * KIB },
+      { size: '300 KiB', bytes: 300 * 1024 },
+    ]),
+  )(
+    'answers a handler that replies while $client still uploads $size, and closes the connection without a reset',
+    async ({ bytes, lines }) => {
+      const server = await start(bodyApp([]))
+      const body = Buffer.alloc(bytes, 97)
+      const connection = await openConnection(server.port)
 
-    const { connection, response } = await send(
-      server.port,
-      requestWithBody('POST', '/ignore', ['Connection: close'], body),
-    )
+      void connection.write(requestHead('POST', '/ignore', [`Content-Length: ${body.byteLength}`, ...lines]))
+      const response = await connection.response()
+      for (const piece of piecesOf(body, 20)) {
+        await connection.write(piece)
+        await pause(5)
+      }
 
-    expect([response.status, response.body.toString()]).toEqual([200, 'ok'])
-    expect(await connection.waitForClose()).toBe('closed')
-  })
+      expect([response.status, response.body.toString()]).toEqual([200, 'ok'])
+      expect(response.framing).toBe('chunked')
+      await expectClosedAfterReply(connection, response, lines)
+    },
+  )
 
-  it('sends a large streamed reply to a POST whose handler leaves a large body unread, and keeps the connection open', async () => {
+  it('sends a large streamed reply with Connection: close to a POST whose handler leaves 4 MiB unread, and closes the connection without a reset', async () => {
     const replyBytes = 8 * MIB
     const server = await start(
       createApp()
@@ -152,6 +180,29 @@ describe('request bodies over the network', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('content-length')).toEqual([String(replyBytes)])
     expect(response.body.equals(Buffer.alloc(replyBytes, 65))).toBe(true)
-    await expectHello(connection)
+    await expectClosedAfterReply(connection, response)
   }, 15_000)
+
+  it.each([
+    { size: '200 KiB', bytes: 200 * KIB, connection: undefined },
+    { size: '1 MiB', bytes: MIB, connection: ['close'] },
+  ])(
+    'discards a body of $size sent to a route without a body reader, and closes the connection only above 256 KiB',
+    async ({ bytes, connection: expected }) => {
+      const handled: string[] = []
+      const server = await start(bodyApp(handled))
+      const connection = await openConnection(server.port)
+
+      void connection.write(requestHead('DELETE', '/missing', [`Content-Length: ${bytes}`]))
+      const response = await connection.response()
+      for (const piece of piecesOf(Buffer.alloc(bytes, 97), 20)) {
+        await connection.write(piece)
+        await pause(5)
+      }
+
+      expect([response.status, response.headers.get('connection')]).toEqual([404, expected])
+      if (expected === undefined) await expectHello(connection)
+      else await expectClosedAfterReply(connection, response)
+    },
+  )
 })
