@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, type MultipartOptions } from '../../index.js'
-import { BOUNDARY, errorCodeOf, forEverySplit, multipartBody, multipartType, splitAt } from '../helpers/body.js'
+import { createApp, type MultipartOptions } from '../../../index.js'
+import { BOUNDARY, errorCodeOf, forEverySplit, multipartBody, multipartType, splitAt } from '../../helpers/body.js'
 
 interface Summary {
   fields: Record<string, string | string[]>

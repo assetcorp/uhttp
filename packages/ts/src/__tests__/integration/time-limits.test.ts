@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApp } from '../index.js'
-import { errorCodeOf } from './helpers/body.js'
-import { memoryLogger } from './helpers/server.js'
+import { createApp } from '../../index.js'
+import { errorCodeOf } from '../helpers/body.js'
+import { memoryLogger } from '../helpers/server.js'
 
 function hanging(signals: AbortSignal[]) {
   return (c: { req: { signal: AbortSignal } }) => {

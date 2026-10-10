@@ -21,6 +21,7 @@ Continuous integration applies the same checks, so apply them yourself before yo
 
 - `pnpm build` builds every package.
 - `pnpm test` tests every package.
+- `pnpm test:integration`, `pnpm test:e2e`, and `pnpm test:package` each run one group of the tests that the Tests section describes.
 - `pnpm lint` checks the code with Biome.
 - `pnpm typecheck` type-checks the TypeScript.
 - `pnpm format` applies Biome formatting.
@@ -28,6 +29,17 @@ Continuous integration applies the same checks, so apply them yourself before yo
 - `pnpm nx run uhttp:speed` measures one route on bare uWebSockets.js and on uhttp for 10 seconds each at 100 connections, and it fails when uhttp is more than 10% slower. Close other busy programs first, because on a busy machine the result can vary by more than 10% in either direction.
 
 On every pull request, the `Speed` workflow compares the speed of the change with main and writes a table to its summary. The `Speed comment` workflow then posts that table as a comment on the pull request, and it updates the same comment after each push. The workflow passes whatever the table contains.
+
+## Tests
+
+The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups. Vitest runs each group as a project of the same name, so every line of its output shows which group the test belongs to.
+
+- `integration/` holds the tests that send requests through `app.request()`. Those requests go through the real router, middleware, request context, and body parsers, but no socket and no uWebSockets.js take part. Mirror the source directory that a test covers, as `integration/body/parsers.test.ts` does for `src/body/`.
+- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1, with `fetch` or a raw `net` socket as the client. Name each file after the behaviour that a client sees, as `e2e/bodies-and-uploads.test.ts` does.
+- `package/` holds the tests of the built files and of the manifest that npm publishes.
+- `helpers/` holds the helpers that the three groups share.
+
+Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never runs the code that writes to the socket, so a fault in that code shows up only in an end-to-end test.
 
 ## Repository layout
 
@@ -40,7 +52,7 @@ On every pull request, the `Speed` workflow compares the speed of the change wit
 - Keep each source file under 400 lines. When you split a module across several files, put them in a directory with an `index.ts` that re-exports the module.
 - Let Biome format the code, and keep the layout that it writes.
 - Write a TSDoc comment on every published export, and write no other comment anywhere.
-- Put every test under `packages/ts/src/__tests__/`, mirroring the directory that it covers.
+- Put every test in one of the three groups that the Tests section describes.
 
 ## Propose a change
 

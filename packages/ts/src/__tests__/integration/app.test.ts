@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, UhttpError } from '../index.js'
+import { createApp, UhttpError } from '../../index.js'
 
 const TEXT_CONTENT_TYPE = 'text/plain; charset=UTF-8'
 const JSON_CONTENT_TYPE = 'application/json'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createApp, type ServerSentEvent } from '../index.js'
-import { memoryLogger, pause } from './helpers/server.js'
+import { createApp, type ServerSentEvent } from '../../index.js'
+import { memoryLogger, pause } from '../helpers/server.js'
 
 async function eventsOf(event: ServerSentEvent): Promise<string> {
   const app = createApp().get('/events', c =>

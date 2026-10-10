@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createApp, type Server, serve, UhttpError } from '../index.js'
+import { createApp, type Server, serve, UhttpError } from '../../index.js'
 
 const HOST = '127.0.0.1'
 

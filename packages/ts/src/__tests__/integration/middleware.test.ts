@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, type Middleware, UhttpError } from '../index.js'
+import { createApp, type Middleware, UhttpError } from '../../index.js'
 
 function tracer(trace: string[], name: string): Middleware {
   return async (_c, next) => {

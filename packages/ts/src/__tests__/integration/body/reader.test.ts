@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createApp } from '../../index.js'
-import { errorCodeOf } from '../helpers/body.js'
+import { createApp } from '../../../index.js'
+import { errorCodeOf } from '../../helpers/body.js'
 
 const MIB = 1_048_576
 

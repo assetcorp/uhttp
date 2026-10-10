@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, UhttpError } from '../index.js'
+import { createApp, UhttpError } from '../../index.js'
 
 const NOT_FOUND_BODY = { error: { code: 'NOT_FOUND', message: 'The app has no route for this path.' } }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type App, createApp, UhttpError } from '../index.js'
-import { memoryLogger } from './helpers/server.js'
+import { type App, createApp, UhttpError } from '../../index.js'
+import { memoryLogger } from '../helpers/server.js'
 
 const FAILED_BODY = { error: { code: 'INTERNAL_ERROR', message: 'The request failed.' } }
 
