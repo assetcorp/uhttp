@@ -66,14 +66,14 @@ export interface RouteOptions {
   /** When this is `true`, the package copies the client address for the route. */
   readonly clientAddress?: boolean
   /**
-   * When this is `true`, the package attaches a body reader for the route. It attaches one on
-   * POST, PUT, and PATCH routes unless you set `false`, and on no other route unless you set `true`,
-   * because the package does more work on every request of a route with a reader.
+   * When this is `true`, the package attaches a body reader for the route, and when it is `false`,
+   * the package attaches none. By default, the package attaches a reader on POST, PUT, and PATCH
+   * routes alone, because it does more work on every request of a route with a reader.
    */
   readonly body?: boolean
   /** The package applies this limit in bytes to the body of each request of the route, in place of the limit of the app. */
   readonly maxBodyBytes?: number
-  /** The package applies this time limit in milliseconds to the route in place of the one of the app, and 0 switches it off. */
+  /** The package applies this time limit in milliseconds to the route in place of the time limit of the app, and 0 switches the limit off for the route. */
   readonly timeoutMs?: number
 }
 

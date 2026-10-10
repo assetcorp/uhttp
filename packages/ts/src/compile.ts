@@ -86,7 +86,7 @@ export interface CompiledRoute {
   readonly handler: Handler
   /** The package copies the request for the route by this plan. */
   readonly copyPlan: CopyPlan
-  /** The limits and the body reader of the route. */
+  /** The package reads the body reader, the body limit, and the time limit of the route from these limits. */
   readonly limits: RouteLimits
 }
 

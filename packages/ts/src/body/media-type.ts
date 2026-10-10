@@ -83,7 +83,7 @@ export function parseParameters(text: string, start: number, quotedPairs: boolea
 
 /**
  * Returns the media type of a `Content-Type` header under RFC 9110. Every body parser calls this
- * function, so that the parsers agree on every header, and a CSRF middleware can call it too.
+ * function, so that all of them parse a header the same way.
  *
  * @param header - The function parses this header value, which is `undefined` when the request has none.
  * @returns The function returns the media type, or `undefined` for a missing or malformed header.

@@ -12,9 +12,10 @@ export type UploadStream = Writable | WritableStream<Uint8Array>
 
 /**
  * Your `file` callback returns a stream for each file, or the stream together with a `discard`
- * function. When the upload fails, the package destroys every stream and then calls its `discard`
- * function, such as one that aborts a multipart upload to object storage. For a stream from
- * `fs.createWriteStream()` with a path, the package deletes the file itself.
+ * function. When the upload fails, the package destroys every stream and then calls the `discard`
+ * function of each destination that has one, such as a function that aborts a multipart upload to
+ * object storage. For a stream from `fs.createWriteStream()` with a path and no `discard`
+ * function, the package deletes the file itself.
  */
 export type UploadDestination =
   | UploadStream
@@ -26,14 +27,14 @@ export type UploadDestination =
     }
 
 /**
- * The upload writes one file through this handle, whatever the kind of its destination.
+ * The package writes one file through this handle, whatever the kind of its destination.
  *
  * @internal
  */
 export interface DestinationHandle {
   /** Writes a chunk, and the promise settles once the destination has drained. */
   write(bytes: Uint8Array): Promise<void>
-  /** Ends the stream, and settles once the destination has flushed every byte. */
+  /** Ends the stream, and the promise settles once the destination has flushed every byte. */
   close(): Promise<void>
   /** Destroys the stream, waits for it to close, and then discards what it wrote. The promise never rejects. */
   destroy(error: Error): Promise<void>

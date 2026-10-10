@@ -9,7 +9,7 @@ const DOT_SEGMENTS: readonly string[] = ['.', '..']
 const decoder = new TextDecoder()
 
 /**
- * The multipart parser reads these parts of the headers of each part.
+ * The multipart parser takes these values from the headers of each part.
  *
  * @internal
  */
@@ -18,7 +18,7 @@ export interface PartHeaders {
   readonly name: string
   /** A file part has this basename, and a field part has `undefined`. */
   readonly filename: string | undefined
-  /** The part sent this `Content-Type`, which is `undefined` when it sent none. */
+  /** The part has this `Content-Type` header, which is `undefined` when the client sent none. */
   readonly contentType: string | undefined
 }
 
@@ -53,9 +53,9 @@ function basename(filename: string): string {
 
 /**
  * Returns the field name, the filename, and the content type of one part. The function keeps the
- * headers in a store with no prototype, keeps the basename of a filename alone, turns a basename
- * of `.` or `..` into an empty name as busboy does, and decodes the headers as UTF-8, which is
- * what browsers send.
+ * headers in a store with no prototype and decodes them as UTF-8, which is what browsers usually
+ * send. Of a filename, it keeps only the basename, and it turns a basename of `.` or `..` into an
+ * empty name, as busboy does.
  *
  * @param bytes - The parser passes the header block of the part without its blank line.
  * @returns The function returns the headers that the upload needs.

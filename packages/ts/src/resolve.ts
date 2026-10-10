@@ -29,7 +29,7 @@ export interface RequestChain {
   readonly rawParameters: readonly string[]
   /** This is `true` when the chain ends in the handler of a route. */
   readonly matchedRoute: boolean
-  /** The package applies these limits and attaches a body reader by them. */
+  /** The package reads the body reader, the body limit, and the time limit of the request from these limits. */
   readonly limits: RouteLimits
 }
 
@@ -128,8 +128,8 @@ export function resolveChain(app: CompiledApp, method: string, path: string): Re
 
 /**
  * Returns the chain of a request that the package rejects before it reads any of the body. The
- * middleware of the route still wraps the 413 or the 415, while the handler of the route never
- * runs. With a 415, the package sends `Accept-Encoding: identity`.
+ * package runs the middleware of the route around the 413 or the 415 and skips the handler of the
+ * route. With a 415, the package sends `Accept-Encoding: identity`.
  *
  * @param chain - The package passes the chain of the route.
  * @param rejection - The package passes the error of the early rejection.

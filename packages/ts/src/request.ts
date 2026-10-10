@@ -31,7 +31,7 @@ export interface RequestInfo {
   readonly clientAddress: string
   /**
    * The package creates this signal the first time that your code asks for it, and the signal fires
-   * when the client goes before the response ends, or with a `HANDLER_TIMEOUT` error as its reason
+   * when the client disconnects before the response ends, or with a `HANDLER_TIMEOUT` error as its reason
    * when the handler passes the time limit of its route.
    */
   readonly signal: AbortSignal

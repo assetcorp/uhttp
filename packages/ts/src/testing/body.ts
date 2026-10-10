@@ -78,9 +78,9 @@ async function pump(
 }
 
 /**
- * Attaches the body reader of a test request, as uWebSockets.js does for a request from the
- * network. The function feeds the chunks of the test body into the reader, stops pulling them
- * while the reader is paused, and ends a body at its declared length.
+ * Attaches the body reader of a test request, as the package does over uWebSockets.js for a request
+ * from the network. The function feeds the chunks of the test body into the reader, stops pulling
+ * them while the reader has paused the source, and ends a body at its declared length.
  *
  * @param exchange - The package passes the state of the request.
  * @param chain - The package passes the chain of the request, with the limits of the route.
