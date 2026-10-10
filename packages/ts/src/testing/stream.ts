@@ -26,11 +26,11 @@ export function testStreamBody(
 ): ReadableStream<Uint8Array> {
   let accepted = 0
   let returned = false
-  let waiter: ((written: boolean) => void) | undefined
+  let waiters: ((written: boolean) => void)[] = []
   const release = (written: boolean): void => {
-    const pending = waiter
-    waiter = undefined
-    pending?.(written)
+    const pending = waiters
+    waiters = []
+    for (const resolve of pending) resolve(written)
   }
   exchange.onClose(() => release(false))
   return new ReadableStream<Uint8Array>({
@@ -56,7 +56,7 @@ export function testStreamBody(
           controller.enqueue(bytes)
           if ((controller.desiredSize ?? 0) > 0) return Promise.resolve(true)
           return new Promise(resolve => {
-            waiter = resolve
+            waiters.push(resolve)
           })
         },
       }

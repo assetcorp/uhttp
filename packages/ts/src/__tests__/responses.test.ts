@@ -106,6 +106,50 @@ describe('response headers from the context', () => {
     expect((await app.request('/users')).headers.get('cache-control')).toBe('max-age=60')
   })
 
+  it('drops the headers of a reply that a later error reply replaces', async () => {
+    const app = createApp()
+      .use(async (_c, next) => {
+        await next()
+        throw new Error('the audit log is down')
+      })
+      .get('/account', c =>
+        c.redirect('/login', 302, { 'set-cookie': 'session=abc', 'cache-control': 'public, max-age=3600' }),
+      )
+
+    const response = await app.request('/account')
+
+    expect(response.status).toBe(500)
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.get('set-cookie')).toBeNull()
+    expect(response.headers.get('cache-control')).toBeNull()
+  })
+
+  it('keeps a header that middleware set before next() when an error reply replaces the reply that replaced it', async () => {
+    const app = createApp()
+      .use(async (c, next) => {
+        c.header('cache-control', 'no-store')
+        await next()
+        throw new Error('the audit log is down')
+      })
+      .get('/users', c => c.text('list', 200, { 'cache-control': 'max-age=60' }))
+
+    const response = await app.request('/users')
+
+    expect(response.status).toBe(500)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('appends a line after next() to the header of the reply', async () => {
+    const app = createApp()
+      .use(async (c, next) => {
+        await next()
+        c.header('vary', 'Origin', { append: true })
+      })
+      .get('/users', c => c.text('list', 200, { vary: 'Accept-Encoding' }))
+
+    expect((await app.request('/users')).headers.get('vary')).toBe('Accept-Encoding, Origin')
+  })
+
   it('appends a line when you ask for it', async () => {
     const app = createApp().get('/users', c => {
       c.header('vary', 'Origin')

@@ -12,14 +12,11 @@ function statusLine(status: number): string {
 
 function writeHead(res: HttpResponse, exchange: Exchange, reply: Reply): void {
   if (reply.status !== 200) res.writeStatus(statusLine(reply.status))
-  const lines = exchange.headers
-  const contentType = exchange.contentTypeOf(reply)
+  const contentType = exchange.responseContentType()
   if (contentType !== undefined) res.writeHeader('content-type', contentType)
-  if (lines === undefined) return
-  for (const [name, values] of lines) {
-    if (name === 'content-type') continue
-    for (const value of values) res.writeHeader(name, value)
-  }
+  exchange.forEachResponseHeader((name, value) => {
+    res.writeHeader(name, value)
+  })
 }
 
 function endWithoutBody(res: HttpResponse, length: number | undefined): void {

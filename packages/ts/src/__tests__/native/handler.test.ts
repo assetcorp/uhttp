@@ -201,4 +201,20 @@ describe('the header writer over the network', () => {
     expect(response.status).toBe(500)
     expect(response.headers.has('set-cookie')).toBe(false)
   })
+
+  it('sends none of the headers of a reply that a later error reply replaces', async () => {
+    const app = createApp()
+      .use(async (_c, next) => {
+        await next()
+        throw new Error('the audit log is down')
+      })
+      .get('/account', c => c.redirect('/login', 302, { 'set-cookie': 'session=abc' }))
+    const server = await start(app)
+
+    const response = await rawRequest(server.port, requestHead('GET', '/account'))
+
+    expect(response.status).toBe(500)
+    expect(response.headers.has('location')).toBe(false)
+    expect(response.headers.has('set-cookie')).toBe(false)
+  })
 })

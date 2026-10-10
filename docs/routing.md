@@ -22,7 +22,7 @@ A path starts with `/` and contains two kinds of segment:
 - A static segment, such as `users`, matches the same text in the raw request path.
 - A parameter segment, such as `:id`, matches any segment of the raw path that is not empty.
 
-The router matches a path exactly and with its case, so `/users`, `/users/`, and `/Users` are three separate paths. A path can contain no regular expression and no wildcard, because a regular expression can take exponential time on a path that an attacker crafts, as [OWASP's page on ReDoS](https://community.owasp.org/attacks/Regular_expression_Denial_of_Service_-_ReDoS) explains. When you add a path that breaks these rules, or a second route with the same method and the same shape, the method throws a `UhttpError` with the code `INVALID_ROUTE`.
+The router matches a path exactly and with its case, so `/users`, `/users/`, and `/Users` are three separate paths. A path can contain no regular expression and no wildcard, because a regular expression can take exponential time on a path that an attacker crafts, as [OWASP's page on ReDoS](https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS) explains. When you add a path that breaks these rules, or a second route with the same method and the same shape, the method throws a `UhttpError` with the code `INVALID_ROUTE`.
 
 Where a static route and a parameter route could both match, the router compares the static segment first. When that branch fails further along the path, the router backtracks to the parameter, so `/pages/about/edit` reaches `/pages/:slug/edit` even though the app also has `/pages/about/team`.
 

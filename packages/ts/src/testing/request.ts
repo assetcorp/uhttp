@@ -46,19 +46,18 @@ function parserErrorResponse(): Response {
   return new Response(PARSER_ERROR_BODY, { status: 400, headers: { connection: 'close' } })
 }
 
-function responseHeaders(exchange: Exchange, reply: Reply): Headers {
+function responseHeaders(exchange: Exchange): Headers {
   const headers = new Headers()
-  const contentType = exchange.contentTypeOf(reply)
+  const contentType = exchange.responseContentType()
   if (contentType !== undefined) headers.set('content-type', contentType)
-  for (const [name, values] of exchange.headers ?? []) {
-    if (name === 'content-type') continue
-    for (const value of values) headers.append(name, value)
-  }
+  exchange.forEachResponseHeader((name, value) => {
+    headers.append(name, value)
+  })
   return headers
 }
 
 function toResponse(exchange: Exchange, context: Context, reply: Reply): Response {
-  const headers = responseHeaders(exchange, reply)
+  const headers = responseHeaders(exchange)
   const { status, stream } = reply
   const head = context.req.method === 'HEAD'
   if (!statusHasBody(status)) {
