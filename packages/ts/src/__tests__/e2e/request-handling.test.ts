@@ -218,7 +218,7 @@ describe('HEAD over the network', () => {
     expect([next.status, next.body.toString()]).toEqual([200, 'Hello'])
   })
 
-  it('runs the middleware of the GET route for HEAD, so that HEAD reaches no handler that the middleware denies', async () => {
+  it('calls the middleware of the GET route for HEAD, so that HEAD reaches no handler that the middleware denies', async () => {
     const handled: string[] = []
     const app = createApp().get(
       '/account',

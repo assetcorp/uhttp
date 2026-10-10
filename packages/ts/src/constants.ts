@@ -47,7 +47,7 @@ export const DEFAULT_MAX_REQUEST_HEAD_BYTES = 4096
 
 /**
  * uWebSockets.js v20.71.0 sends a 400 for a `content-length` value with more characters than
- * this, and the package checks the same rule before any handler runs.
+ * this, and the package checks the same rule before it calls any handler.
  */
 export const MAX_CONTENT_LENGTH_DIGITS = 18
 
@@ -120,25 +120,25 @@ export const BODY_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH']
 
 /**
  * The package pauses the socket once it holds this many bytes of the body that your code hasn't
- * read, so that a slow reader keeps no more than this figure and one more chunk in memory.
+ * read, so that it holds no more than this figure and one more chunk in memory for a slow reader.
  */
 export const BODY_HIGH_WATER_MARK_BYTES = 65_536
 
 /**
- * uWebSockets.js clears its 10-second idle timer while a socket is paused, so the package closes
- * the connection itself once the socket has been paused for this many milliseconds.
+ * uWebSockets.js clears its 10-second idle timer while the package keeps a socket paused, so the
+ * package closes the connection itself once the socket stays paused for this many milliseconds.
  */
 export const BODY_PAUSE_TIMEOUT_MS = 10_000
 
 /**
- * When a reply has to close the connection while the request body is still arriving, the package
- * reads and discards the body first, so that the client can read the reply before the close. It
- * closes the connection without the reply once it has waited this many milliseconds, as nginx does
- * with its default `lingering_time`.
+ * When the package has to close the connection after a reply while the request body is still
+ * arriving, it reads and discards the body first, so that the client can read the reply before the
+ * close. It closes the connection without the reply once it has waited this many milliseconds,
+ * which matches the default `lingering_time` of nginx.
  */
 export const CLOSING_BODY_DRAIN_MS = 30_000
 
-/** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, because the package reads 0 as no limit. */
+/** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, since 0 means no limit. */
 export const DEFAULT_TIMEOUT_MS = 0
 
 /** Node sets a `setTimeout` delay above this many milliseconds to 1 millisecond, so the package throws for a longer time limit. */
@@ -147,7 +147,7 @@ export const MAX_TIMEOUT_MS = 2_147_483_647
 /** `form()` throws once a URL-encoded body has more parameters than this. */
 export const MAX_FORM_FIELDS = 1_000
 
-/** The package sends no more than this many problems in the reply to a body that fails validation. */
+/** The package sends no more than this many problems in the reply to a body that a schema rejects. */
 export const VALIDATION_ISSUE_COUNT = 10
 
 /** The package cuts the message of each validation problem to this many characters. */

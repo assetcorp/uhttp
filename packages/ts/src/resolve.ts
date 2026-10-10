@@ -128,7 +128,7 @@ export function resolveChain(app: CompiledApp, method: string, path: string): Re
 
 /**
  * Returns the chain of a request that the package rejects before it reads any of the body. The
- * package runs the middleware of the route around the 413 or the 415 and skips the handler of the
+ * package calls the middleware of the route around the 413 or the 415 and skips the handler of the
  * route. With a 415, the package sends `Accept-Encoding: identity`.
  *
  * @param chain - The package passes the chain of the route.

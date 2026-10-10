@@ -35,15 +35,15 @@ export declare namespace StandardSchemaV1 {
   /** A validation either succeeds with a value or fails with a list of problems. */
   export type Result<Output> = SuccessResult<Output> | FailureResult
 
-  /** The validator returns this shape when the value passes the schema. */
+  /** The validator returns this shape when the schema accepts the value. */
   export interface SuccessResult<Output> {
     /** The validator returns this value, which can differ from the input when the schema transforms it. */
     readonly value: Output
-    /** The validator leaves this `undefined` for a value that passes. */
+    /** The validator leaves this `undefined` for a value that the schema accepts. */
     readonly issues?: undefined
   }
 
-  /** The validator returns this shape when the value fails the schema. */
+  /** The validator returns this shape when the schema rejects the value. */
   export interface FailureResult {
     /** The validator lists the problems here. */
     readonly issues: ReadonlyArray<Issue>
@@ -101,14 +101,14 @@ function issueOf(issue: unknown): ValidationIssue {
 }
 
 /**
- * Returns the output of a Standard Schema for a value. The function awaits the validator inside a
- * guard, so that it can throw a typed error when the validator throws or rejects.
+ * Returns the output of a Standard Schema for a value. The function catches whatever the validator
+ * throws or rejects with, so that it can throw a typed error in its place.
  *
  * @param schema - The handler passes the schema.
  * @param value - The package passes the parsed body.
  * @returns The promise resolves to the output of the schema.
  * @throws {@link UhttpError} with the code `VALIDATION_FAILED` and the first 10 problems when the
- * value fails the schema, or with the code `INVALID_SCHEMA` when the schema lacks the Standard
+ * schema rejects the value, or with the code `INVALID_SCHEMA` when the schema lacks the Standard
  * Schema interface or when its validator throws, rejects, or returns something else.
  * @internal
  */

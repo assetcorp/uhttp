@@ -145,7 +145,7 @@ describe('the parser of uWebSockets.js', () => {
   })
 
   it.each(MALFORMED_HEADS)(
-    'answers 400 to %s before any handler runs, closes the connection, and runs no request hidden behind it',
+    'answers 400 to %s before it calls any handler, closes the connection, and serves no request hidden behind it',
     async (_name, request) => {
       const handled: string[] = []
       const server = await start(echoApp(handled))
@@ -159,7 +159,7 @@ describe('the parser of uWebSockets.js', () => {
   )
 
   it.each(MALFORMED_CHUNKS)(
-    'answers 400 to a chunked body with %s, fails the read in the handler, and runs no request hidden behind it',
+    'answers 400 to a chunked body with %s, fails the read in the handler, and serves no request hidden behind it',
     async (_name, body) => {
       const handled: string[] = []
       const server = await start(echoApp(handled))
@@ -175,7 +175,7 @@ describe('the parser of uWebSockets.js', () => {
     },
   )
 
-  it('answers 501 to a Transfer-Encoding of gzip before chunked, which the package cannot decode, before any handler runs', async () => {
+  it('answers 501 to a Transfer-Encoding of gzip before chunked, which the package cannot decode, before it calls any handler', async () => {
     const handled: string[] = []
     const server = await start(echoApp(handled))
 
@@ -211,7 +211,7 @@ describe('the parser of uWebSockets.js', () => {
     expect(JSON.parse(response.body.toString())).toEqual({
       error: {
         code: 'INVALID_TRANSFER_ENCODING',
-        message: 'The transfer-encoding of a request must end with chunked and apply it once.',
+        message: 'The transfer-encoding of a request must list chunked once, as its last coding.',
       },
     })
     expect(await connection.waitForClose()).toBe('closed')

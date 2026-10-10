@@ -18,18 +18,19 @@
  *   its limits.
  * - The package throws `UNSUPPORTED_MEDIA_TYPE` when a body parser receives a content type or a
  *   charset that it can't parse, or when the client compresses a request body.
- * - The package throws `INVALID_JSON` when a JSON body fails to parse or contains a `__proto__` key
- *   or a `constructor` key with a `prototype` key.
- * - The package throws `VALIDATION_FAILED` when a JSON body fails its schema.
+ * - The package throws `INVALID_JSON` when `json()` can't parse a body, or when the body contains a
+ *   `__proto__` key or a `constructor` key with a `prototype` key.
+ * - The package throws `VALIDATION_FAILED` when a schema rejects a JSON body.
  * - The package throws `INVALID_MULTIPART` when a multipart body has an invalid boundary, a part
  *   without a name, a control character in a name or a filename, or no closing boundary.
  * - The package throws `REQUEST_ABORTED` from a read of the body when the client disconnects before
  *   the body ends.
  * - The package throws `HANDLER_TIMEOUT` when a handler passes the time limit of its route.
- * - The package sends `INVALID_TRANSFER_ENCODING` when the `transfer-encoding` lines of a request
- *   apply `chunked` more than once or end with a coding other than `chunked`.
- * - The package sends `UNSUPPORTED_TRANSFER_CODING` when a request applies a transfer coding
- *   before `chunked`, such as `gzip, chunked`, because the package decodes `chunked` alone.
+ * - The package sends `INVALID_TRANSFER_ENCODING` when a client lists `chunked` more than once in
+ *   the `transfer-encoding` lines of a request, or ends those lines with a coding other than
+ *   `chunked`.
+ * - The package sends `UNSUPPORTED_TRANSFER_CODING` when a client applies a transfer coding before
+ *   `chunked`, such as `gzip, chunked`, because the package decodes `chunked` alone.
  * - The package throws `UNDECLARED_HEADER` when your code asks for a header that neither the route
  *   nor its middleware declared.
  * - The package throws `UNDECLARED_CLIENT_ADDRESS` when your code asks for the client address and
@@ -60,8 +61,8 @@
  * - The package throws `LISTEN_FAILED` when the operating system can't bind the address that you
  *   chose.
  *
- * The package sends `INVALID_TRANSFER_ENCODING` and `UNSUPPORTED_TRANSFER_CODING` before any
- * middleware or handler runs, and it closes the connection after the reply. When your code throws
+ * The package sends `INVALID_TRANSFER_ENCODING` and `UNSUPPORTED_TRANSFER_CODING` before it calls
+ * any middleware or handler, and it closes the connection after the reply. When your code throws
  * any error apart from a `UhttpError` below 500 or a `HANDLER_TIMEOUT`, the client receives
  * `INTERNAL_ERROR`.
  */

@@ -21,7 +21,7 @@ Continuous integration applies the same checks, so apply them yourself before yo
 
 - `pnpm build` builds every package.
 - `pnpm test` tests every package.
-- `pnpm test:integration`, `pnpm test:e2e`, and `pnpm test:package` each run one group of the tests that the Tests section describes.
+- `pnpm test:integration`, `pnpm test:e2e`, and `pnpm test:package` each test one of the three groups that the Tests section describes.
 - `pnpm lint` checks the code with Biome.
 - `pnpm typecheck` type-checks the TypeScript.
 - `pnpm format` applies Biome formatting.
@@ -32,14 +32,14 @@ On every pull request, the `Speed` workflow compares the speed of the change wit
 
 ## Tests
 
-The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups. Vitest runs each group as a project of the same name, so every line of its output shows which group the test belongs to.
+The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups. Vitest treats each group as a project of the same name and prints that name beside every test in its output.
 
-- `integration/` holds the tests that send requests through `app.request()`. Those requests go through the real router, middleware, request context, and body parsers, but no socket and no uWebSockets.js take part. Mirror the source directory that a test covers, as `integration/body/parsers.test.ts` does for `src/body/`.
-- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1. Most of these tests use the client in `helpers/http-client.ts`, while the rest use `fetch`. That client rejects any response that breaks HTTP/1.1, and it reports whether the server kept the connection open, closed it cleanly, or reset it. Name each file after the behaviour that a client sees, as `e2e/request-bodies.test.ts` does.
+- `integration/` holds the tests that send requests through `app.request()`. Those requests go through the real router, middleware, request context, and body parsers, without a socket or uWebSockets.js. Mirror the source directory that a test covers, as `integration/body/parsers.test.ts` does for `src/body/`.
+- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1. Most of these tests use the client in `helpers/http-client.ts`, while the rest use `fetch`. That client rejects any response that breaks HTTP/1.1. It also reports whether the server kept the connection open, closed it cleanly, or reset it. Name each file after the behaviour that a client sees, as `e2e/request-bodies.test.ts` does.
 - `package/` holds the tests of the built files and of the manifest that npm publishes.
 - `helpers/` holds the helpers that the three groups share.
 
-Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never runs the code that writes to the socket, so a fault in that code shows up only in an end-to-end test. In each end-to-end test, send the whole request that a real client would send, including the body of a request that the server rejects. Then check what happened to the connection after the response, as well as the response itself.
+Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never calls the code that writes to the socket, so only an end-to-end test can catch a fault in that code. In each end-to-end test, send the whole request that a real client would send, including the body of a request that the server rejects. Then check what happened to the connection after the response, as well as the response itself.
 
 ## Repository layout
 

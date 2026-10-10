@@ -53,8 +53,8 @@ function missingReply(): UhttpError {
 
 /**
  * Returns the reply for an error: the reply of the app's error handler, or the default error reply
- * when the app has none or when that handler fails. The function logs every error for which the client receives a
- * 500.
+ * when the app has none or when that handler throws, rejects, or returns something other than a
+ * reply. The function logs every error for which the client receives a 500.
  *
  * @param context - The package passes the context of the request.
  * @param exchange - The package passes the state of the request, from which the function takes the error handler.
