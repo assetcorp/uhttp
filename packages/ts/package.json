@@ -1,0 +1,65 @@
+{
+  "name": "@delali/uhttp",
+  "version": "0.0.0",
+  "description": "An HTTP and WebSocket server for Node.js on uWebSockets.js.",
+  "author": "Delali (https://sondelali.com)",
+  "license": "MIT",
+  "homepage": "https://github.com/assetcorp/uhttp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/assetcorp/uhttp.git",
+    "directory": "packages/ts"
+  },
+  "bugs": {
+    "url": "https://github.com/assetcorp/uhttp/issues"
+  },
+  "keywords": [
+    "http",
+    "server",
+    "websocket",
+    "uwebsockets",
+    "framework",
+    "router",
+    "middleware",
+    "typescript"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.15 <23 || >=24 <25 || >=26 <27"
+  },
+  "scripts": {
+    "compile": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build": "pnpm run compile && pnpm run api",
+    "api": "node scripts/api-report.ts",
+    "api:write": "pnpm run compile && node scripts/api-report.ts --write",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome check --error-on-warnings .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "speed": "pnpm run compile && node benchmarks/speed-guard/local.ts"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "7.59.4",
+    "@types/autocannon": "7.12.7",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.0.3",
+    "autocannon": "8.0.0",
+    "typescript": "7.0.2",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#9ec36de7709996c58dce03d63796216c90a17136",
+    "vitest": "5.0.3"
+  },
+  "peerDependencies": {
+    "uWebSockets.js": ">=20.70.0 <21"
+  }
+}
