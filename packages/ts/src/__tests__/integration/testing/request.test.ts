@@ -129,7 +129,7 @@ describe('app.request()', () => {
     ['chunked, chunked', 400, 'INVALID_TRANSFER_ENCODING'],
     ['gzip, chunked', 501, 'UNSUPPORTED_TRANSFER_CODING'],
   ])(
-    'answers a Transfer-Encoding of %s with %i and %s before any handler runs, and closes the connection',
+    'answers a Transfer-Encoding of %s with %i and %s before it calls any handler, and closes the connection',
     async (encoding, status, code) => {
       let handled = false
       const app = createApp().post('/upload', c => {

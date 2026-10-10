@@ -31,11 +31,11 @@ export interface BodySource {
  * @internal
  */
 export interface BodyFraming {
-  /** The client sent this raw `content-length` header, and it is `undefined` when the request has none. */
+  /** This holds the raw `content-length` header, or `undefined` when the request has none. */
   readonly contentLength: string | undefined
-  /** The client sent this `transfer-encoding` header, and it is `undefined` when the request has none. */
+  /** This holds the `transfer-encoding` header, or `undefined` when the request has none. */
   readonly transferEncoding: string | undefined
-  /** The client sent this `content-encoding` header, and it is `undefined` when the request has none. */
+  /** This holds the `content-encoding` header, or `undefined` when the request has none. */
   readonly contentEncoding: string | undefined
 }
 
@@ -93,7 +93,7 @@ function tooLarge(limit: number): UhttpError {
 /**
  * The package queues the chunks of one request body in this reader. The reader counts the bytes as
  * the source delivers them, and it pauses the source once it holds 64 KiB that the handler hasn't
- * read. When the source has been paused for 10 seconds, the reader closes the connection, because
+ * read. When the source stays paused for 10 seconds, the reader closes the connection, because
  * uWebSockets.js clears its idle timer during a pause.
  *
  * @internal
@@ -132,16 +132,16 @@ export class BodyReader implements BodyState {
     exchange.onClose(() => this.#closed())
   }
 
-  /** This is `true` while the reader takes more chunks from the source. */
+  /** This is `true` while the reader queues the chunks that the source delivers. */
   get accepting(): boolean {
     return this.#error === undefined && !this.#ended && !this.#discarding
   }
 
   /**
    * Adds a copied chunk of the body. The reader fails with `PAYLOAD_TOO_LARGE` once the count passes
-   * the limit, and from then on it discards the rest of the body, so that the connection can serve
-   * the next request once the body ends. It pauses the source once it holds 64 KiB that the
-   * handler hasn't read.
+   * the limit, and from then on it discards the rest of the body, so that the client can send its
+   * next request on the same connection once the body ends. It pauses the source once it holds
+   * 64 KiB that the handler hasn't read.
    *
    * @param chunk - The source passes a copy of the bytes, which the reader keeps.
    * @param last - The source passes `true` with the last chunk of the body.
@@ -192,7 +192,8 @@ export class BodyReader implements BodyState {
 
   /**
    * Discards the chunks that the handler hasn't read and every chunk that arrives later, and
-   * resumes a paused source, so that the connection can serve the next request once the body ends.
+   * resumes a paused source, so that the client can send its next request on the same connection
+   * once the body ends.
    */
   settle(): void {
     if (this.#paused) this.#resume()

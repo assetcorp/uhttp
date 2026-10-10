@@ -12,11 +12,11 @@ function headerOf(req: HttpRequest, name: string): string | undefined {
 }
 
 /**
- * Follows a request body that no reader takes, so that the package learns when its last byte
- * arrives on a connection that closes after the response.
+ * Listens for the chunks of a request body without a reader, so that the package can hold the
+ * response until the last byte arrives on a connection that closes after the response.
  *
  * @param res - The package passes the response of uWebSockets.js.
- * @param exchange - The package passes the state of the request, which records the end of the body.
+ * @param exchange - The package passes the state of the request, which stores whether the body has ended.
  * @internal
  */
 export function followBody(res: HttpResponse, exchange: Exchange): void {
@@ -30,15 +30,15 @@ export function followBody(res: HttpResponse, exchange: Exchange): void {
  * Attaches the body reader of a request inside the synchronous handler of uWebSockets.js, after
  * the copy of the request. The function attaches an `onData` handler only to a request with a body
  * to read, and it copies each chunk before uWebSockets.js frees it. On a connection that closes
- * after the response, it also follows a body that no reader takes, so that the response can wait
- * for its last byte.
+ * after the response, it also listens for the chunks of a body without a reader, so that the
+ * package can hold the response until the last byte arrives.
  *
  * @param res - The package passes the response of uWebSockets.js.
  * @param req - The package passes the request of uWebSockets.js, which is valid until the handler returns.
  * @param exchange - The package passes the state of the request.
  * @param chain - The package passes the chain of the request, with the limits of the route.
  * @param framing - The package passes the framing headers that it read from the request.
- * @returns The function returns the reader and the chain to run.
+ * @returns The function returns the reader and the chain that the package then calls.
  * @internal
  */
 export function attachBody(

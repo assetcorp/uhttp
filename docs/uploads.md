@@ -55,11 +55,11 @@ The package also limits every part to 16 header lines and 16 KiB of headers, and
 
 While a destination has a full buffer, the package waits for it to drain before it parses more of the body. Once the package holds 64 KiB of the body that the parser hasn't read, it pauses the uWebSockets.js socket until the parser reads enough to bring that figure below 64 KiB. The kernel's receive buffer for the connection then fills, so TCP flow control slows the client down.
 
-uWebSockets.js clears its idle timer while a socket is paused, so the package keeps a timer of its own and closes the connection when the socket has been paused for 10 seconds.
+uWebSockets.js clears its idle timer while the package keeps a socket paused, so the package keeps a timer of its own and closes the connection once the socket stays paused for 10 seconds.
 
 ## What happens when an upload fails
 
-The package destroys every destination of the request when the client disconnects, when the upload passes a limit, when the body is not valid multipart, when a destination fails, or when the handler passes its time limit. For a stream from `fs.createWriteStream()` with a path, it waits for the stream to close and then deletes the file. For a destination with a `discard` function, it calls that function and deletes nothing itself. It does the same for the files that earlier parts of the request finished, so that every file on disk comes from an upload that succeeded. `multipart()` then rejects with the error, and after the reply the package discards the rest of the body, so that the connection can serve the next request.
+The package destroys every destination of the request when the client disconnects, when the upload passes a limit, when the body is not valid multipart, when a destination fails, or when the handler passes its time limit. For a stream from `fs.createWriteStream()` with a path, it waits for the stream to close and then deletes the file. For a destination with a `discard` function, it calls that function and deletes nothing itself. It does the same for the files from earlier parts of the request, so that every file on disk comes from an upload that succeeded. `multipart()` then rejects with the error. After the reply, the package discards the rest of the body, so that the client can send its next request on the same connection.
 
 However, when the time limit passes or the client disconnects after `multipart()` resolves, the package leaves the files in place.
 

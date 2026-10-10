@@ -145,8 +145,8 @@ function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
  * lines, and starts no chain for a request that uWebSockets.js answers with its own 400 or whose
  * transfer coding the package rejects. It then copies the path, the query string, the path
  * parameters, the content type, the content length, the declared headers, and, where the chain
- * declared it, the client address. Last, it attaches the body reader on a route that reads a
- * body. When that work throws, the client receives a 500.
+ * declared it, the client address. Last, it attaches the body reader on a route with a body
+ * reader. When that work throws, the client receives a 500.
  *
  * @param app - The package passes the compiled app.
  * @param route - The package passes the compiled route.

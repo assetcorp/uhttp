@@ -12,17 +12,17 @@ import { isDecimalDigits } from '../headers.js'
  * @internal
  */
 export interface RequestFraming {
-  /** The client sent this first `content-length` value, which is `undefined` when the request has none. */
+  /** This holds the value of the first `content-length` line, or `undefined` when the request has none. */
   readonly contentLength: string | undefined
-  /** The client sent this first `transfer-encoding` value, which is `undefined` when the request has none. */
+  /** This holds the value of the first `transfer-encoding` line, or `undefined` when the request has none. */
   readonly transferEncoding: string | undefined
   /** This is `true` when body bytes follow the head of the request. */
   readonly declaresBody: boolean
-  /** This is `true` when uWebSockets.js closes the connection after the response, as the client asked. */
+  /** This is `true` when uWebSockets.js closes the connection after the response, because the client sent `Connection: close`. */
   readonly clientCloses: boolean
   /** This is `true` when uWebSockets.js answers the request with its own 400 once the handler returns. */
   readonly parserRejects: boolean
-  /** The package answers the request with this error before any handler runs, and it is `undefined` otherwise. */
+  /** The package answers the request with this error before it calls any handler, and it is `undefined` otherwise. */
   readonly rejection: UhttpError | undefined
 }
 
@@ -34,10 +34,10 @@ function connectionKey(res: HttpResponse): string {
 
 /**
  * Marks the connection of a request whose framing the package rejects, so that the package refuses
- * every later request that uWebSockets.js parses on that connection. uWebSockets.js parses the
- * requests that a client pipelines behind such a body in the same pass, and it drops the close of
- * the connection when it does, so without the mark a request hidden behind the body would reach
- * its handler. The mark ends one turn of the event loop after the response ends.
+ * every later request that uWebSockets.js parses on that connection. uWebSockets.js parses any
+ * request that a client pipelines behind such a body in the same pass, which drops the close of the
+ * connection, so without the mark the package can call the handler of the hidden request. The
+ * package removes the mark one turn of the event loop after the response ends.
  *
  * @param res - The package passes the response of uWebSockets.js, inside the synchronous handler.
  * @param exchange - The package passes the state of the rejected request.
@@ -81,9 +81,9 @@ const NO_BODY: RequestFraming = {
 }
 
 /**
- * Returns the framing facts of a request. A request without `content-length` and without
- * `transfer-encoding` costs two header lookups, and only a request with either header costs a walk
- * over every header, which finds repeated lines.
+ * Returns the framing facts of a request. For a request without `content-length` and
+ * `transfer-encoding`, the function makes two header lookups. For a request with either header, it
+ * also walks every header, so that it finds repeated lines.
  *
  * @param req - The package passes the request of uWebSockets.js, which is valid until the handler returns.
  * @returns The function returns the framing facts.

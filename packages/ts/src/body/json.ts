@@ -39,8 +39,8 @@ function checkPrototypeKeys(root: unknown): void {
  *
  * @param text - The package passes the decoded body.
  * @returns The function returns the parsed value.
- * @throws {@link UhttpError} with the code `INVALID_JSON` when the text fails to parse or contains
- * one of those keys.
+ * @throws {@link UhttpError} with the code `INVALID_JSON` when `JSON.parse` can't parse the text, or
+ * when the text contains one of those keys.
  * @internal
  */
 export function parseJson(text: string): unknown {

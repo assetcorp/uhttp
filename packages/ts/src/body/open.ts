@@ -21,14 +21,15 @@ export interface OpenedBody {
  * Prepares the body of a request after the copy of the request. On a route without a body reader,
  * the function changes nothing. For a compressed body or a declared length above the limit of the
  * route, it fails the reader with the early rejection and replaces the handler with one that throws
- * it. The package then sends the rejection at once, and the rest of the body is discarded as it
+ * it. The package then sends the rejection at once, and it discards the rest of the body as it
  * arrives.
  *
  * @param exchange - The package passes the state of the request.
  * @param chain - The package passes the chain of the request, with the limits of the route.
  * @param framing - The package passes the framing headers of the request.
  * @param source - The package passes the source that the reader pauses, resumes, and closes.
- * @returns The function returns the reader, the chain to run, and whether the body flows.
+ * @returns The function returns the reader, the chain that the package then calls, and whether the
+ * source delivers the chunks of the body to the reader.
  * @internal
  */
 export function openBody(

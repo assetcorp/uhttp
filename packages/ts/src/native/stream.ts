@@ -22,8 +22,9 @@ function toBytes(chunk: string | Uint8Array): Uint8Array {
 /**
  * The package writes a streamed body to uWebSockets.js through this object. It writes a body of
  * unknown length with `write()` and a body of known length with `tryEnd()`. Whenever the client
- * reads slowly, it waits for `onWritable` before it writes more. When the connection closes after
- * the response, the stream holds the end of the response until the request body has arrived.
+ * reads slowly, the package waits for `onWritable` before it writes more. When the connection
+ * closes after the response, the object holds the end of the response until the last byte of the
+ * request body arrives.
  *
  * @internal
  */

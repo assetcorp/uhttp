@@ -86,7 +86,7 @@ async function pump(
  * @param chain - The package passes the chain of the request, with the limits of the route.
  * @param lines - The package passes the header lines of the test request.
  * @param body - The test passed this body, which is `undefined` for a request without one.
- * @returns The function returns the reader and the chain to run.
+ * @returns The function returns the reader and the chain that the package then calls.
  * @internal
  */
 export function attachTestBody(

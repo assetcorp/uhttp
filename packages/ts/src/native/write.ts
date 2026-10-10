@@ -31,10 +31,10 @@ function endWithoutBody(res: HttpResponse, length: number | undefined): void {
  * Writes the current reply of a request to uWebSockets.js. For a reply with a body, the function
  * writes the status, the headers, and the body in one cork. For a streamed reply, it writes the
  * headers and then starts the producer. For a HEAD request, it writes the headers with the length
- * of the body, and it never calls a stream producer. The package discards whatever of the request
- * body your code left unread, and the connection then serves the next request. When the client
- * asked to close the connection while more of the body is on its way, the function waits for the
- * last byte of the body before it ends the response.
+ * of the body, and it never calls a stream producer. The package discards the part of the request
+ * body that your code left unread, so that the client can send its next request on the same
+ * connection. When the client sent `Connection: close` and more of the body is still arriving, the
+ * function waits for the last byte of the body before it ends the response.
  *
  * @param res - The package passes the response of uWebSockets.js, which the caller has corked.
  * @param exchange - The package passes the state of the request, which stores the headers.
@@ -64,8 +64,8 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
 }
 
 /**
- * Answers a request whose `transfer-encoding` the package rejects, before any middleware or
- * handler runs, and closes the connection after the reply. uWebSockets.js parses such a body as
+ * Answers a request whose `transfer-encoding` the package rejects, before the package calls any
+ * middleware or handler, and closes the connection after the reply. uWebSockets.js parses such a body as
  * chunked, so the function waits for its last byte before it ends the response.
  *
  * @param res - The package passes the response of uWebSockets.js, inside the synchronous handler.

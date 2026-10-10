@@ -30,15 +30,15 @@ export interface AppRuntime {
 }
 
 /**
- * Through this interface, the package checks with the body reader of a request whether it can keep
- * the connection open after the response.
+ * Through this interface, the package controls the body reader of a request once the response
+ * starts.
  *
  * @internal
  */
 export interface BodyState {
   /**
    * Makes the reader discard the rest of the body as it arrives, and resumes a paused source, so
-   * that the connection can serve the next request once the body ends.
+   * that the client can send its next request on the same connection once the body ends.
    */
   settle(): void
   /**
@@ -146,7 +146,7 @@ export class Exchange {
   }
 
   /**
-   * Records that the package follows the body of the request until its last byte arrives.
+   * Records that the package listens for the body of the request until its last byte arrives.
    */
   expectBody(): void {
     this.#bodyArriving = true
@@ -218,8 +218,8 @@ export class Exchange {
   }
 
   /**
-   * Makes the body reader discard whatever of the body your code left unread, so that the
-   * connection can serve the next request once the body ends.
+   * Makes the body reader discard the part of the body that your code left unread, so that the
+   * client can send its next request on the same connection once the body ends.
    */
   settleBody(): void {
     this.body?.settle()

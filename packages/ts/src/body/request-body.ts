@@ -53,8 +53,8 @@ export interface RequestBody {
    *
    * @returns The promise resolves to the parsed value.
    * @throws {@link UhttpError} with the code `UNSUPPORTED_MEDIA_TYPE` for another content type or a
-   * charset other than UTF-8, or `INVALID_JSON` when the body fails to parse or contains a
-   * `__proto__` key or a `constructor` key with a `prototype` key.
+   * charset other than UTF-8, or `INVALID_JSON` when the method can't parse the body or the body
+   * contains a `__proto__` key or a `constructor` key with a `prototype` key.
    */
   json(): Promise<unknown>
   /**
@@ -64,7 +64,7 @@ export interface RequestBody {
    * @param schema - You pass the schema that the body must match.
    * @returns The promise resolves to the output of the schema.
    * @throws {@link UhttpError} with any code that `json()` throws without a schema, with
-   * `VALIDATION_FAILED` and the first 10 problems when the body fails the schema, or with
+   * `VALIDATION_FAILED` and the first 10 problems when the schema rejects the body, or with
    * `INVALID_SCHEMA` when the validator throws, rejects, or returns something other than a Standard
    * Schema result.
    */

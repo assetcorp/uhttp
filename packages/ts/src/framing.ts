@@ -10,8 +10,8 @@ function asciiLowerCase(text: string): string {
 }
 
 /**
- * Returns `true` when uWebSockets.js v20.71.0 answers a request with its own 400 because of its
- * framing lines. uWebSockets.js calls the handler of the route before it applies most of these
+ * Returns `true` when uWebSockets.js v20.71.0 answers a request with its own 400 because of the
+ * framing lines of that request. uWebSockets.js calls the handler of the route before it applies most of these
  * checks, so the package applies them first and starts no chain for such a request.
  *
  * @param lengths - The package passes the value of every `content-length` line of the request.
@@ -32,13 +32,13 @@ export function parserRejectsFraming(lengths: readonly string[], encodings: read
 
 /**
  * Returns the error with which the package rejects the `transfer-encoding` lines of a request that
- * uWebSockets.js accepts, because uWebSockets.js reads any value that ends with `chunked` as
- * `chunked` alone.
+ * uWebSockets.js accepts, because uWebSockets.js decodes the body as `chunked` alone whenever the
+ * value ends with `chunked`.
  *
  * @param encodings - The package passes the value of every `transfer-encoding` line of the request.
  * @returns The function returns `UNSUPPORTED_TRANSFER_CODING` when another coding comes before a
- * single `chunked`, `INVALID_TRANSFER_ENCODING` when the codings end with another coding or apply
- * `chunked` twice, and `undefined` for `chunked` alone or for a request without the header.
+ * single `chunked`, `INVALID_TRANSFER_ENCODING` when the last coding is another coding or `chunked`
+ * appears twice, and `undefined` for `chunked` alone or for a request without the header.
  * @internal
  */
 export function transferCodingError(encodings: readonly string[]): UhttpError | undefined {
@@ -57,6 +57,6 @@ export function transferCodingError(encodings: readonly string[]): UhttpError | 
   }
   return new UhttpError(
     'INVALID_TRANSFER_ENCODING',
-    'The transfer-encoding of a request must end with chunked and apply it once.',
+    'The transfer-encoding of a request must list chunked once, as its last coding.',
   )
 }

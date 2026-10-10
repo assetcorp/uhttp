@@ -29,13 +29,13 @@ Match on the code, because the message can change between releases.
 | `METHOD_NOT_ALLOWED` | 405 | A path has routes, but none for the method of the request. |
 | `PAYLOAD_TOO_LARGE` | 413 | A request body, a form, or an upload passes one of its limits. |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A body parser receives a content type or a charset that it can't parse, or the client compresses a request body. |
-| `INVALID_JSON` | 400 | A JSON body fails to parse, or it contains a `__proto__` key or a `constructor` key with a `prototype` key. |
-| `VALIDATION_FAILED` | 400 | A JSON body fails its schema. The package lists the first 10 problems under `issues`. |
+| `INVALID_JSON` | 400 | `json()` can't parse a body, or the body contains a `__proto__` key or a `constructor` key with a `prototype` key. |
+| `VALIDATION_FAILED` | 400 | A schema rejects a JSON body. The package lists the first 10 problems under `issues`. |
 | `INVALID_MULTIPART` | 400 | A multipart body has an invalid boundary, a part without a name, a control character in a name or a filename, or no closing boundary. |
-| `REQUEST_ABORTED` | 400 | The client disconnects before the body ends, so a pending read of the body rejects with this code. Only your code sees this error, because the client has gone or the response has ended. |
+| `REQUEST_ABORTED` | 400 | The client disconnects before the body ends, so a pending read of the body rejects with this code. The package passes this error to your code alone, because the client has gone or the response has ended. |
 | `HANDLER_TIMEOUT` | 503 | A handler passes the time limit of its route. |
-| `INVALID_TRANSFER_ENCODING` | 400 | The `Transfer-Encoding` lines of a request apply `chunked` more than once or end with a coding other than `chunked`, such as `xchunked`. The package sends this reply before any middleware runs, and it closes the connection after the reply. |
-| `UNSUPPORTED_TRANSFER_CODING` | 501 | A request applies a transfer coding such as `gzip` before `chunked`, while the package decodes `chunked` alone. The package sends this reply before any middleware runs, and it closes the connection after the reply. |
+| `INVALID_TRANSFER_ENCODING` | 400 | A client lists `chunked` more than once in the `Transfer-Encoding` lines of a request, or ends those lines with a coding other than `chunked`, such as `xchunked`. The package sends this reply before it calls any middleware, and it closes the connection after the reply. |
+| `UNSUPPORTED_TRANSFER_CODING` | 501 | A client applies a transfer coding such as `gzip` before `chunked`, while the package decodes `chunked` alone. The package sends this reply before it calls any middleware, and it closes the connection after the reply. |
 | `INTERNAL_ERROR` | 500 | The package sends this code to the client for every error that maps to 500. |
 | `MISSING_REPLY` | 500 | The middleware chain ends without a reply, or an error handler returns something other than a reply. |
 | `NEXT_CALLED_TWICE` | 500 | A middleware calls `next()` a second time. |
@@ -100,10 +100,12 @@ When uWebSockets.js matches no route for a request and the JavaScript matcher ma
 
 ## Errors that uWebSockets.js sends itself
 
-For some malformed requests, uWebSockets.js sends a 400 itself, before it calls the package. That 400 has an HTML body, outside the JSON contract of the package. uWebSockets.js v20.71.0 sends this 400 with `Connection: close` for a request with no `Host` header, an empty or repeated `Host`, more than 98 header lines, a request line and headers above 4,096 bytes, both `Content-Length` and `Transfer-Encoding`, or an HTTP/1.0 request line. It sends the same 400 for `Content-Length` lines that differ or that hold anything other than up to 18 digits, and for a first `Transfer-Encoding` line that does not end with `chunked`. uWebSockets.js calls the route handler before it applies those last checks, so the package applies them first and runs no middleware or handler for such a request:
+For some malformed requests, uWebSockets.js sends a 400 itself, before it calls the package. That 400 has an HTML body, outside the JSON contract of the package:
 
 ```html
 <h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>
 ```
+
+uWebSockets.js v20.71.0 sends this 400 with `Connection: close` for a request with no `Host` header, an empty or repeated `Host`, more than 98 header lines, a request line and headers above 4,096 bytes, both `Content-Length` and `Transfer-Encoding`, or an HTTP/1.0 request line. It sends the same 400 for `Content-Length` lines that differ or that hold anything other than up to 18 digits, and for a first `Transfer-Encoding` line that does not end with `chunked`. Because uWebSockets.js calls the route handler before it applies those last checks, the package applies them first and calls no middleware or handler for such a request.
 
 For headers that are too large, uWebSockets.js v20.71.0 sends that 400 in place of the 431 that [RFC 6585](https://www.rfc-editor.org/rfc/rfc6585.html#section-5) defines, because its maintainers commented out the 431 in [the parser source](https://github.com/uNetworking/uWebSockets/blob/1d80f7a53816ef2433e89793b285b827f3efb2b2/src/HttpParser.h). Set `UWS_HTTP_MAX_HEADERS_SIZE` before uWebSockets.js loads to raise the limit of 4,096 bytes. A proxy in front of the server can replace these HTML bodies with JSON when your clients need one error format for every response.

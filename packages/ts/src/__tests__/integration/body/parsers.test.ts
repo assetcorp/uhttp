@@ -53,7 +53,7 @@ describe('json()', () => {
     }
   })
 
-  it('refuses a constructor key whose value has a prototype key, as Fastify does by default', async () => {
+  it('refuses a constructor key whose value has a prototype key', async () => {
     const poisoned = await app.request('/json', post('{"a":{"constructor":{"prototype":{"x":1}}}}', 'application/json'))
 
     expect(poisoned.status).toBe(400)
@@ -130,7 +130,7 @@ describe('text() and bytes()', () => {
 })
 
 describe('the Content-Encoding check', () => {
-  it('answers 415 with Accept-Encoding: identity and closes the connection for a compressed body', async () => {
+  it('answers 415 with Accept-Encoding: identity and keeps the connection open for a compressed body', async () => {
     let handled = false
     const app = createApp().post('/upload', c => {
       handled = true
