@@ -7,7 +7,7 @@ const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const REPORT_DIR = join(PACKAGE_DIR, 'etc')
 const DIST_DIR = join(PACKAGE_DIR, 'dist')
 const EXPORTED_DECLARATION =
-  /^\s*export (?:declare )?(?:default )?(?:abstract )?(?:class|function|const|let|var|interface|type|enum|namespace) /
+  /^\s*export (?:declare )?(?:default )?(?:abstract )?(?:class|function|const|let|var|interface|type|enum|namespace) [A-Za-z_$]/
 const WORK_DIR = join(PACKAGE_DIR, '.cache', 'api-extractor')
 const CONFIG_DIR = join(WORK_DIR, 'config')
 const GENERATED_DIR = join(WORK_DIR, 'reports')
