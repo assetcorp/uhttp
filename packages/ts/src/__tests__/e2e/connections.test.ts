@@ -6,7 +6,7 @@ import { memoryLogger, pause, start } from '../helpers/server.js'
 
 const INTERNAL_ERROR = errorBody('INTERNAL_ERROR', 'The request failed.')
 
-describe('serve()', () => {
+describe('connections to a server from serve()', () => {
   it('serves a GET route on the port that the operating system assigns for port 0, over a connection that it keeps open', async () => {
     const server = await start(createApp().get('/hello', c => c.text('Hello, World!')))
     const connection = await openConnection(server.port)
@@ -27,6 +27,7 @@ describe('serve()', () => {
       .get('/first', c => c.text('first'))
       .get('/second', c => c.json({ order: 2 }))
       .get('/third', c => c.text('third', 201))
+      .get('/hello', c => c.text('Hello'))
     const server = await start(app)
     const connection = await openConnection(server.port)
 
@@ -38,9 +39,10 @@ describe('serve()', () => {
       [200, '{"order":2}'],
       [201, 'third'],
     ])
+    await expectHello(connection)
   })
 
-  it('never answers pipelined requests out of order or mixes their replies when the first reply is still pending', async () => {
+  it('closes the connection in place of answering pipelined requests out of order while the first reply is still pending', async () => {
     const handled: string[] = []
     const app = createApp()
       .get('/slow', async c => {
@@ -66,6 +68,7 @@ describe('serve()', () => {
 
     expect(['slow', 'fast'].slice(0, bodies.length)).toEqual(bodies)
     expect(['slow', 'fast'].slice(0, handled.length)).toEqual(handled)
+    expect(connection.state).not.toBe('open')
   })
 
   it('closes the connection after the reply when the client sends Connection: close', async () => {
@@ -95,8 +98,12 @@ describe('serve()', () => {
     await expectHello(connection)
   })
 
-  it('passes the method, the path, and the query string from the network to the handler', async () => {
-    const server = await start(createApp().get('/search', c => c.json({ ...c.req })))
+  it('passes the method, the path, and the query string from the network to the handler, over a connection that it keeps open', async () => {
+    const server = await start(
+      createApp()
+        .get('/search', c => c.json({ ...c.req }))
+        .get('/hello', c => c.text('Hello')),
+    )
     const connection = await openConnection(server.port)
 
     const bodies: unknown[] = []
@@ -109,18 +116,20 @@ describe('serve()', () => {
       { method: 'GET', path: '/search', query: '' },
       { method: 'GET', path: '/search', query: '' },
     ])
+    await expectHello(connection)
   })
 
-  it('returns the same JSON 404 as app.request() for a path that has no route', async () => {
+  it('returns the same JSON 404 as app.request() for a path that has no route, and keeps the connection open', async () => {
     const app = createApp().get('/hello', c => c.text('Hello'))
     const server = await start(app)
 
-    const { response } = await send(server.port, requestHead('GET', '/missing'))
+    const { connection, response } = await send(server.port, requestHead('GET', '/missing'))
     const tested = await app.request('/missing')
 
     expect(response.status).toBe(404)
     expect(response.headers.get('content-type')).toEqual(['application/json'])
     expect(response.body.toString()).toBe(await tested.text())
+    await expectHello(connection)
   })
 
   it('sends a 204 with no body and no length, so that the next response on the connection parses', async () => {

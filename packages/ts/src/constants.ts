@@ -49,7 +49,7 @@ export const DEFAULT_MAX_REQUEST_HEAD_BYTES = 4096
  * uWebSockets.js v20.71.0 sends a 400 for a `content-length` value with more characters than
  * this, and the package checks the same rule before it calls any handler.
  */
-export const MAX_CONTENT_LENGTH_DIGITS = 18
+export const LONGEST_CONTENT_LENGTH_DIGITS = 18
 
 /**
  * uWebSockets.js v20.71.0 closes the connection after the response when the `connection` header of
@@ -131,12 +131,19 @@ export const BODY_HIGH_WATER_MARK_BYTES = 65_536
 export const BODY_PAUSE_TIMEOUT_MS = 10_000
 
 /**
- * When the package has to close the connection after a reply while the request body is still
- * arriving, it reads and discards the body first, so that the client can read the reply before the
- * close. It closes the connection without the reply once it has waited this many milliseconds,
- * which matches the default `lingering_time` of nginx.
+ * When more of the request body than this is still on its way after the reply, the package closes
+ * the connection, because reading the rest would cost more than a new connection. A chunked body of
+ * unknown length counts as more. Go's HTTP server applies the same 256 KiB limit to the part of a
+ * body that a handler leaves unread.
  */
-export const CLOSING_BODY_DRAIN_MS = 30_000
+export const DISCARDABLE_BODY_BYTES = 262_144
+
+/**
+ * When the package closes a connection while the request body is still arriving, it keeps reading
+ * and discarding the body for up to this many milliseconds, so that the client can read the reply
+ * before the close. The figure matches the default `lingering_time` of nginx.
+ */
+export const LINGERING_CLOSE_MS = 30_000
 
 /** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, since 0 means no limit. */
 export const DEFAULT_TIMEOUT_MS = 0

@@ -112,13 +112,19 @@ Because a chunked body declares no length, the package counts the bytes of the b
 
 When the client declares a `Content-Length` above the limit, the package answers 413 before it reads any of the body. It skips the handler of the route for that request, but it still calls the middleware of the route around the 413, so a CORS middleware can add its headers to it.
 
-The package sends the 413 straight away, while the client may still be sending the body. It then discards the rest of the body as it arrives, so that the client can send its next request on the same connection once the body ends. When a client sends `Expect: 100-continue`, uWebSockets.js writes `100 Continue` before it calls the package, so that client sends its body as well, which the package discards in the same way.
+The package sends the 413 straight away, while the client may still be sending the body, and it closes the connection after the reply. When a client sends `Expect: 100-continue`, uWebSockets.js writes `100 Continue` before it calls the package, so that client sends its body as well.
 
-When the client sends `Connection: close`, the package waits for the last byte of the body before it sends the 413 and closes the connection. When a server closes a socket that still holds unread bytes, the operating system resets the connection, which can discard the 413 before the client reads it. The package waits up to 30 seconds for the body, after which it closes the connection without sending the 413.
+## How the connection ends after a body
+
+When a server closes a socket that still holds unread bytes, the operating system resets the connection, which can discard the reply before the client reads it. While the body is still arriving, the package therefore keeps reading and discarding it after a reply with `Connection: close`. A client closes the connection once it has read such a reply. When the client keeps the connection open, the package closes it after 30 seconds, which matches the default `lingering_time` of nginx. Because the package delivers the whole reply first, a client that keeps sending for those 30 seconds has had time to read it.
+
+When a handler replies without reading the whole body, the package discards the rest. When up to 256 KiB of a body with a `Content-Length` is still on its way, the client can send its next request on the same connection once the body ends. When more is on its way, or when a chunked body has not ended, reading the rest would cost more than a new connection, so the package closes the connection as it does after a 413. Go's HTTP server applies the same 256 KiB limit. The package follows the same rules for a route without a body reader.
+
+A streamed reply carries `Connection: close` in its head when the package will close the connection, and the package holds the end of that reply until the last byte of the body arrives. When the body is still arriving 30 seconds later, the package waits for the reply to drain, stops reading the body, and ends the reply. uWebSockets.js then closes the idle connection about 10 seconds later, or at once when the client sent `Connection: close`.
 
 ## Compressed request bodies
 
-The package accepts only uncompressed request bodies, because a small compressed body can expand to many times its size. On a route with a body reader, the package answers a request whose `Content-Encoding` is anything other than `identity` with a 415 and the code `UNSUPPORTED_MEDIA_TYPE`, before it reads any of the body. It adds the header `Accept-Encoding: identity` to that 415, so that the client can send the body again without compression. As after a 413, it then discards the rest of the body and keeps the connection open.
+The package accepts only uncompressed request bodies, because a small compressed body can expand to many times its size. On a route with a body reader, the package answers a request whose `Content-Encoding` is anything other than `identity` with a 415 and the code `UNSUPPORTED_MEDIA_TYPE`, before it reads any of the body. It adds the header `Accept-Encoding: identity` to that 415, so that the client can send the body again without compression. As after a 413, it then closes the connection.
 
 ## Set a time limit on a handler
 
@@ -130,7 +136,7 @@ const app = createApp({ timeoutMs: 5_000 })
   .post('/exports', { timeoutMs: 0 }, async c => c.json(await runExport(c.req.signal)))
 ```
 
-When a handler passes its time limit, the package aborts `c.req.signal` with a `UhttpError` whose code is `HANDLER_TIMEOUT` as the reason, and every pending read of the body rejects with that error. The package then sends the reply that your error handler returns for that error, which is a 503 with the code `HANDLER_TIMEOUT` when the app has no error handler. It discards the part of the body that the handler left unread, so that the client can send its next request on the same connection. The package sends the headers that a middleware set before the limit, such as CORS headers, with that reply. It also passes a warning with the method, the path, and the limit to `logger.warn`.
+When a handler passes its time limit, the package aborts `c.req.signal` with a `UhttpError` whose code is `HANDLER_TIMEOUT` as the reason, and every pending read of the body rejects with that error. The package then sends the reply that your error handler returns for that error, which is a 503 with the code `HANDLER_TIMEOUT` when the app has no error handler, and it closes the connection after that reply. The package sends the headers that a middleware set before the limit, such as CORS headers, with that reply. It also passes a warning with the method, the path, and the limit to `logger.warn`.
 
 The handler goes on executing after its limit, because JavaScript has no way to stop a function from outside. The package discards whatever reply the handler returns afterwards, so a client that retries after a 503 can make the handler repeat its work. Pass `c.req.signal` to every call that accepts one, so that those calls stop at the limit. Make each handler that changes data safe to repeat as well, for example with an idempotency key that your client sends with each request.
 

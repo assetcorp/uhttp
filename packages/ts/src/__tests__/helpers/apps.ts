@@ -1,6 +1,8 @@
 import { createApp } from '../../index.js'
 
-const MIB = 1_048_576
+export const KIB = 1024
+export const MIB = 1024 * KIB
+export const GIB = 1024 * MIB
 
 export function bodyApp(handled: string[], maxBodyBytes = 100) {
   return createApp({ maxBodyBytes })

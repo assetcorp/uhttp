@@ -1,5 +1,7 @@
+import { BodyArrival } from './arrival.js'
 import { UhttpError } from './errors.js'
 import { settableHeaderName } from './headers.js'
+import { addListener, type OnceListeners } from './listeners.js'
 import type { Reply } from './reply.js'
 import type { ErrorHandler, Handler, Logger } from './types.js'
 
@@ -38,7 +40,7 @@ export interface AppRuntime {
 export interface BodyState {
   /**
    * Makes the reader discard the rest of the body as it arrives, and resumes a paused source, so
-   * that the client can send its next request on the same connection once the body ends.
+   * that the rest of the body keeps arriving after the response starts.
    */
   settle(): void
   /**
@@ -69,10 +71,10 @@ export class Exchange {
   /** This is `true` once the handler has passed its time limit, from which point the package discards the reply of the chain. */
   timedOut = false
   /**
-   * When this is `true`, the package closes the connection after the response, which it does for a
-   * request whose `transfer-encoding` it rejects.
+   * When this is `true`, the package closes the connection after the response, which it does after
+   * an early rejection, after a time limit, and for a request whose `transfer-encoding` it rejects.
    */
-  closeConnection = false
+  closeAfterReply = false
   /**
    * This is `true` when the client sent `connection: close`, after which uWebSockets.js closes the
    * connection as soon as the response ends.
@@ -80,8 +82,9 @@ export class Exchange {
   clientCloses = false
   /** This is the body reader of the request, or `undefined` on a route without one. */
   body: BodyState | undefined
-  #bodyArriving = false
-  #bodyListeners: (() => void)[] | undefined
+  /** This is `true` once the connection of the request has closed, even after the response ended. */
+  disconnected = false
+  #arrival: BodyArrival | undefined
   #reply: Reply | undefined
   #final = false
   #replySetAt = 0
@@ -90,9 +93,10 @@ export class Exchange {
   #controller: AbortController | undefined
   #signalFired = false
   #signalReason: unknown
-  #listeners: (() => void)[] | undefined
   #released: UhttpError | undefined
-  #releaseListeners: ((error: UhttpError) => void)[] | undefined
+  #closing: OnceListeners<void> | undefined
+  #disconnection: OnceListeners<void> | undefined
+  #release: OnceListeners<UhttpError> | undefined
 
   /**
    * Creates the state of one request.
@@ -119,74 +123,98 @@ export class Exchange {
   }
 
   /**
-   * Records that the client disconnected before the response ended. The method then fires the abort signal,
-   * releases the body reader and the upload destinations, and calls every close listener.
+   * The package follows the arrival of the request body through this object, which it creates on
+   * the first access.
+   */
+  get arrival(): BodyArrival {
+    this.#arrival ??= new BodyArrival()
+    return this.#arrival
+  }
+
+  /**
+   * Records that the connection closed. Before the end of the response, the method also fires the
+   * abort signal, releases the body reader and the upload destinations, and calls every close
+   * listener.
    */
   abort(): void {
+    this.disconnected = true
+    this.#disconnection?.fire(undefined)
     if (this.closed) return
     this.aborted = true
     this.closed = true
     this.#fireSignal(undefined)
     this.release(new UhttpError('REQUEST_ABORTED', 'The client disconnected before the request body ended.'))
-    this.#notify()
+    this.#closing?.fire(undefined)
+  }
+
+  /**
+   * Adds a listener that the package calls once the connection of the request closes, even when
+   * that happens after the response ended.
+   *
+   * @param listener - The package calls this function once.
+   */
+  onDisconnect(listener: () => void): void {
+    if (this.disconnected) listener()
+    else this.#disconnection = addListener(this.#disconnection, listener)
   }
 
   /**
    * Records that the handler passed its time limit. The method fires the abort signal with the
-   * error as its reason and then releases the body reader and the upload destinations, but it
-   * leaves the connection open for the 503.
+   * error as its reason and then releases the body reader and the upload destinations. The package
+   * then sends the 503 and closes the connection after it.
    *
    * @param error - The package passes the `HANDLER_TIMEOUT` error.
    */
   expire(error: UhttpError): void {
     if (this.closed || this.timedOut) return
     this.timedOut = true
+    this.closeAfterReply = true
     this.#fireSignal(error)
     this.release(error)
   }
 
   /**
-   * Records that the package listens for the body of the request until its last byte arrives.
-   */
-  expectBody(): void {
-    this.#bodyArriving = true
-  }
-
-  /**
-   * Records that the last byte of the body arrived, and then calls every listener that waits for
-   * it. Without an earlier call to {@link Exchange.expectBody}, the method does nothing.
-   */
-  bodyEnded(): void {
-    if (!this.#bodyArriving) return
-    this.#bodyArriving = false
-    const listeners = this.#bodyListeners
-    this.#bodyListeners = undefined
-    for (const listener of listeners ?? []) listener()
-  }
-
-  /**
-   * Adds a listener that the package calls once the last byte of the body arrives, or at once when
-   * no more of the body is on its way.
+   * Returns `true` when the package closes the connection after the response for a reason of its
+   * own, which the reply then announces with `Connection: close`. The reason is an early rejection,
+   * a time limit, a rejected `transfer-encoding`, or more of the body on its way than the package
+   * discards to keep the connection open.
    *
-   * @param listener - The package calls this function once.
+   * @returns The method returns `false` when only the client can ask for the close.
    */
-  onBodyEnd(listener: () => void): void {
-    if (!this.#bodyArriving) {
-      listener()
-      return
-    }
-    this.#bodyListeners ??= []
-    this.#bodyListeners.push(listener)
+  serverCloses(): boolean {
+    return this.closeAfterReply || this.#arrival?.unbounded === true
   }
 
   /**
-   * Returns `true` when the response has to wait for the rest of the body, because the connection
-   * closes after the response and more of the body is on its way.
+   * Returns `true` when the connection closes after the response, because the client or the
+   * package asked for the close.
    *
-   * @returns The method returns `false` when the response can end at once.
+   * @returns The method returns `false` when the connection can serve another request.
    */
-  holdsReplyForBody(): boolean {
-    return this.#bodyArriving && (this.closeConnection || this.clientCloses)
+  closesConnection(): boolean {
+    return this.clientCloses || this.serverCloses()
+  }
+
+  /**
+   * Returns `true` when the package closes the connection after the response while more of the
+   * body is on its way, which means that the package has to keep reading the body after the reply.
+   *
+   * @returns The method returns `false` when the response can end in the usual way.
+   */
+  closesBeforeBodyEnds(): boolean {
+    return this.#arrival?.arriving === true && this.closesConnection()
+  }
+
+  /**
+   * Returns `true` when the package sends the reply with `Connection: close` and closes the
+   * connection itself later. It does so when it closes while more of the body is on its way, and
+   * when it closes after a reply without a length, which uWebSockets.js can't end with a close.
+   *
+   * @param lengthless - The caller passes `true` for a reply that carries neither a body nor a length.
+   * @returns The method returns `false` when the reply can end with or without a close in the usual way.
+   */
+  lingersAfterReply(lengthless: boolean): boolean {
+    return this.closesBeforeBodyEnds() || (lengthless && this.serverCloses())
   }
 
   /**
@@ -196,12 +224,8 @@ export class Exchange {
    * @param listener - The package calls this function once.
    */
   onRelease(listener: (error: UhttpError) => void): void {
-    if (this.#released !== undefined) {
-      listener(this.#released)
-      return
-    }
-    this.#releaseListeners ??= []
-    this.#releaseListeners.push(listener)
+    if (this.#released !== undefined) listener(this.#released)
+    else this.#release = addListener(this.#release, listener)
   }
 
   /**
@@ -212,14 +236,12 @@ export class Exchange {
   release(error: UhttpError): void {
     if (this.#released !== undefined) return
     this.#released = error
-    const listeners = this.#releaseListeners
-    this.#releaseListeners = undefined
-    for (const listener of listeners ?? []) listener(error)
+    this.#release?.fire(error)
   }
 
   /**
    * Makes the body reader discard the part of the body that your code left unread, so that the
-   * client can send its next request on the same connection once the body ends.
+   * rest of the body keeps arriving after the response starts.
    */
   settleBody(): void {
     this.body?.settle()
@@ -237,7 +259,7 @@ export class Exchange {
   end(): void {
     if (this.closed) return
     this.closed = true
-    this.#notify()
+    this.#closing?.fire(undefined)
   }
 
   /**
@@ -246,12 +268,8 @@ export class Exchange {
    * @param listener - The package calls this function once.
    */
   onClose(listener: () => void): void {
-    if (this.closed) {
-      listener()
-      return
-    }
-    this.#listeners ??= []
-    this.#listeners.push(listener)
+    if (this.closed) listener()
+    else this.#closing = addListener(this.#closing, listener)
   }
 
   /** The chain has produced this reply so far, and it is `undefined` before any reply exists. */
@@ -343,12 +361,5 @@ export class Exchange {
       if (replyHeaders?.has(name) === true && set.setAt < this.#replySetAt) continue
       for (const line of set.lines) emit(name, line)
     }
-  }
-
-  #notify(): void {
-    const listeners = this.#listeners
-    if (listeners === undefined) return
-    this.#listeners = undefined
-    for (const listener of listeners) listener()
   }
 }

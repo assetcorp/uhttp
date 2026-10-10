@@ -130,7 +130,7 @@ describe('text() and bytes()', () => {
 })
 
 describe('the Content-Encoding check', () => {
-  it('answers 415 with Accept-Encoding: identity and keeps the connection open for a compressed body', async () => {
+  it('answers 415 with Accept-Encoding: identity and closes the connection for a compressed body', async () => {
     let handled = false
     const app = createApp().post('/upload', c => {
       handled = true
@@ -142,7 +142,7 @@ describe('the Content-Encoding check', () => {
     expect(response.status).toBe(415)
     expect(await errorCodeOf(response)).toBe('UNSUPPORTED_MEDIA_TYPE')
     expect(response.headers.get('accept-encoding')).toBe('identity')
-    expect(response.headers.get('connection')).toBeNull()
+    expect(response.headers.get('connection')).toBe('close')
     expect(handled).toBe(false)
   })
 
@@ -152,6 +152,34 @@ describe('the Content-Encoding check', () => {
     const response = await app.request('/upload', post('abc', 'text/plain', { 'content-encoding': 'Identity' }))
 
     expect(await response.text()).toBe('abc')
+  })
+
+  it('answers 415 to a compressed body of length 0, as the network does', async () => {
+    const app = createApp().post('/upload', async c => c.text(await c.req.body.text()))
+
+    const response = await app.request('/upload', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', 'content-length': '0', 'content-encoding': 'gzip' },
+    })
+
+    expect(response.status).toBe(415)
+  })
+
+  it('answers 415 when a second Content-Encoding line names a compression after identity', async () => {
+    const app = createApp().post('/upload', async c => c.text(await c.req.body.text()))
+
+    const response = await app.request('/upload', {
+      method: 'POST',
+      headers: [
+        ['content-type', 'text/plain'],
+        ['content-encoding', 'identity'],
+        ['content-encoding', 'gzip'],
+      ],
+      body: 'abc',
+    })
+
+    expect(response.status).toBe(415)
+    expect(await errorCodeOf(response)).toBe('UNSUPPORTED_MEDIA_TYPE')
   })
 })
 

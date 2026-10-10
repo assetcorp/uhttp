@@ -251,7 +251,10 @@ export async function readMultipart(
 ): Promise<MultipartResult> {
   const boundary = mediaType.parameters.boundary
   if (boundary === undefined || !BOUNDARY.test(boundary)) {
-    throw new UhttpError('INVALID_MULTIPART', 'Send a boundary of 1 to 70 characters from the RFC 2046 alphabet.')
+    throw new UhttpError(
+      'INVALID_MULTIPART',
+      `Send a boundary of 1 to ${MAX_MULTIPART_BOUNDARY_LENGTH} characters from the RFC 2046 alphabet.`,
+    )
   }
   const upload = new Upload(options, limitsOf(options, maxBodyBytes), exchange)
   try {

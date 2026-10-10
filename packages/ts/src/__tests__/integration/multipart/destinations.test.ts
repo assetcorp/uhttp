@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, type TestRequestInit, type UploadDestination } from '../../../index.js'
+import { MIB } from '../../helpers/apps.js'
 import { BOUNDARY, errorCodeOf, forEverySplit, multipartBody, multipartType } from '../../helpers/body.js'
 
 const CHUNK_BYTES = 16_384
@@ -98,7 +99,7 @@ describe('multipart() with a destination for each file', () => {
         releases.push(() => done())
       },
     })
-    const app = createApp().post('/upload', { maxBodyBytes: 4 * 1_048_576 }, async c => {
+    const app = createApp().post('/upload', { maxBodyBytes: 4 * MIB }, async c => {
       await c.req.body.multipart({ file: () => slow })
       return c.text(String(stored))
     })
@@ -150,7 +151,7 @@ describe('multipart() with a destination for each file', () => {
   })
 
   it('destroys the destination and deletes the partial file when the handler passes its time limit', async () => {
-    const app = createApp({ timeoutMs: 50 }).post('/upload', { maxBodyBytes: 4 * 1_048_576 }, async c => {
+    const app = createApp({ timeoutMs: 50 }).post('/upload', { maxBodyBytes: 4 * MIB }, async c => {
       await c.req.body.multipart({ file: file => createWriteStream(join(directory, file.filename)) })
       return c.text('stored')
     })
@@ -232,7 +233,7 @@ describe('the pause timer of an upload', () => {
 
   it('treats the client as gone once the upload stays paused for 10 seconds', async () => {
     const signals: AbortSignal[] = []
-    const app = createApp().post('/upload', { maxBodyBytes: 4 * 1_048_576 }, async c => {
+    const app = createApp().post('/upload', { maxBodyBytes: 4 * MIB }, async c => {
       signals.push(c.req.signal)
       await c.req.body.multipart({ file: () => new Writable({ highWaterMark: 1, write: () => undefined }) })
       return c.text('stored')

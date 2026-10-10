@@ -1,5 +1,6 @@
 import { expect } from 'vitest'
 import { type HttpConnection, requestHead } from './http-client.js'
+import type { ReceivedResponse } from './http-response.js'
 
 export const SMUGGLED_REQUEST = 'GET /admin HTTP/1.1\r\nHost: localhost\r\n\r\n'
 
@@ -22,17 +23,21 @@ export async function expectHello(connection: HttpConnection): Promise<void> {
 }
 
 export const CONNECTION_CHOICES = [
-  ['keeps the connection open for the next request', []],
-  ['closes the connection cleanly once the body ends, as the client asked', ['Connection: close']],
+  ['a client that keeps its connection', []],
+  ['a client that sent Connection: close', ['Connection: close']],
 ] as const
 
 export function withEveryConnectionChoice<T extends object>(
   cases: readonly T[],
-): (T & { choice: string; lines: readonly string[] })[] {
-  return cases.flatMap(entry => CONNECTION_CHOICES.map(([choice, lines]) => ({ ...entry, choice, lines })))
+): (T & { client: string; lines: readonly string[] })[] {
+  return cases.flatMap(entry => CONNECTION_CHOICES.map(([client, lines]) => ({ ...entry, client, lines })))
 }
 
-export async function expectConnectionAfterReply(connection: HttpConnection, lines: readonly string[]): Promise<void> {
-  if (lines.includes('Connection: close')) expect(await connection.waitForClose()).toBe('closed')
-  else await expectHello(connection)
+export async function expectClosedAfterReply(
+  connection: HttpConnection,
+  response: ReceivedResponse,
+  requestLines: readonly string[] = [],
+): Promise<void> {
+  if (!requestLines.includes('Connection: close')) expect(response.headers.get('connection')).toEqual(['close'])
+  expect(await connection.finish()).toBe('closed')
 }

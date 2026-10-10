@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, type TestHeaders, UhttpError } from '../../index.js'
 import { openConnection, send } from '../helpers/http-client.js'
-import { SMUGGLED_REQUEST } from '../helpers/replies.js'
+import { expectClosedAfterReply, expectHello, SMUGGLED_REQUEST } from '../helpers/replies.js'
 import { start } from '../helpers/server.js'
 
 const PARSER_ERROR_BODY = '<h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>'
@@ -122,7 +122,7 @@ describe('app.request() and uWebSockets.js', () => {
 
     for (const { name, lines } of CASES) {
       const head = ['GET /headers HTTP/1.1', ...lines.map(([key, value]) => `${key}: ${value}`), '', ''].join('\r\n')
-      const { response } = await send(server.port, head)
+      const { connection, response } = await send(server.port, head)
       const headers: TestHeaders = lines
       const tested = await app.request('/headers', { headers })
 
@@ -130,6 +130,9 @@ describe('app.request() and uWebSockets.js', () => {
         status: response.status,
         body: response.body.toString(),
       })
+      expect(await connection.waitForClose(response.status === 400 ? 2_000 : 100), name).toBe(
+        response.status === 400 ? 'closed' : 'open',
+      )
     }
   })
 })
@@ -198,6 +201,38 @@ describe('the parser of uWebSockets.js', () => {
     expect(handled).toEqual([])
   })
 
+  it('answers 501 at once to a Transfer-Encoding of gzip before chunked while the body is still arriving, and closes the connection without a reset', async () => {
+    const handled: string[] = []
+    const server = await start(echoApp(handled))
+    const connection = await openConnection(server.port)
+
+    void connection.write(echoRequest(['Transfer-Encoding: gzip, chunked'], '5\r\nhello\r\n'))
+    const response = await connection.response()
+    void connection.write('5\r\nworld\r\n0\r\n\r\n')
+
+    expect(response.status).toBe(501)
+    expect(handled).toEqual([])
+    await expectClosedAfterReply(connection, response)
+  })
+
+  it('answers a HEAD request with a Transfer-Encoding of xchunked with a 400 head and no body, as app.request() does', async () => {
+    const app = echoApp([])
+    const server = await start(app)
+    const head = 'HEAD /hello HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: xchunked\r\n\r\n'
+
+    const { connection, response } = await send(server.port, `${head}${HELLO_CHUNKS}`, { method: 'HEAD' })
+    const tested = await app.request('/hello', {
+      method: 'HEAD',
+      headers: { 'transfer-encoding': 'xchunked' },
+      body: 'hello',
+    })
+
+    expect([response.status, response.body.length]).toEqual([400, 0])
+    expect([tested.status, await tested.text()]).toEqual([400, ''])
+    expect(response.headers.get('content-length')).toEqual([tested.headers.get('content-length')])
+    expect(await connection.waitForClose()).toBe('closed')
+  })
+
   it('answers 400 with INVALID_TRANSFER_ENCODING to a Transfer-Encoding of xchunked, and sends nothing else on the connection', async () => {
     const server = await start(echoApp([]))
 
@@ -250,19 +285,24 @@ describe('the parser of uWebSockets.js', () => {
   it.fails('reads the body of a request with a trailer field after the last chunk, which uWebSockets.js v20.71.0 answers with a 400', async () => {
     const server = await start(echoApp([]))
 
-    const { response } = await send(
+    const { connection, response } = await send(
       server.port,
       echoRequest(['Transfer-Encoding: chunked'], '5\r\nhello\r\n0\r\nX-Checksum: 1\r\n\r\n'),
     )
 
     expect([response.status, response.body.toString()]).toEqual([200, '[hello]'])
+    await expectHello(connection)
   })
 
   it.fails('serves a request whose target is in absolute form, which uWebSockets.js v20.71.0 answers with a 400', async () => {
     const server = await start(echoApp([]))
 
-    const { response } = await send(server.port, 'GET http://localhost/hello HTTP/1.1\r\nHost: localhost\r\n\r\n')
+    const { connection, response } = await send(
+      server.port,
+      'GET http://localhost/hello HTTP/1.1\r\nHost: localhost\r\n\r\n',
+    )
 
     expect([response.status, response.body.toString()]).toEqual([200, 'Hello'])
+    await expectHello(connection)
   })
 })

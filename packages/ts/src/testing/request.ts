@@ -1,6 +1,6 @@
 import { runChain } from '../chain.js'
 import type { CompiledApp, CopyPlan } from '../compile.js'
-import { LIST_HEADER_NAMES, TEST_CLIENT_ADDRESS } from '../constants.js'
+import { CONNECTION_CLOSE_VALUE_LENGTH, LIST_HEADER_NAMES, TEST_CLIENT_ADDRESS } from '../constants.js'
 import { type Context, createContext } from '../context.js'
 import { startDeadline } from '../deadline.js'
 import { UhttpError } from '../errors.js'
@@ -11,19 +11,12 @@ import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.
 import { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type PreparedRequest, resolveChain } from '../resolve.js'
 import { attachTestBody } from './body.js'
-import { type ParsedTestRequest, parseTestRequest, type TestRequestInit, valuesOf } from './parse.js'
+import { firstValue, type ParsedTestRequest, parseTestRequest, type TestRequestInit, valuesOf } from './parse.js'
 import { testStreamBody } from './stream.js'
 
 const PARSER_ERROR_BODY = '<h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>'
 
 type Lines = readonly (readonly [string, string])[]
-
-function firstValue(lines: Lines, name: string): string | undefined {
-  for (const [lineName, value] of lines) {
-    if (lineName === name) return value === '' ? undefined : value
-  }
-  return undefined
-}
 
 function joinedValue(lines: Lines, name: string): string | undefined {
   const values = lines.filter(([lineName, value]) => lineName === name && value !== '').map(([, value]) => value)
@@ -49,11 +42,11 @@ function parserErrorResponse(): Response {
   return new Response(PARSER_ERROR_BODY, { status: 400, headers: { connection: 'close' } })
 }
 
-function framingRejectionResponse(error: UhttpError): Response {
+function framingRejectionResponse(error: UhttpError, head: boolean): Response {
   const reply = errorReply(error)
   const headers = new Headers({ connection: 'close', 'content-length': String(bodyByteLength(reply.body)) })
   if (reply.contentType !== undefined) headers.set('content-type', reply.contentType)
-  return new Response(reply.body, { status: reply.status, headers })
+  return new Response(head ? null : reply.body, { status: reply.status, headers })
 }
 
 function responseHeaders(exchange: Exchange): Headers {
@@ -70,22 +63,24 @@ function toResponse(exchange: Exchange, context: Context, reply: Reply): Respons
   const headers = responseHeaders(exchange)
   const { status, stream } = reply
   const head = context.req.method === 'HEAD'
-  const streams = stream !== undefined && !head && statusHasBody(status)
-  if (!streams) exchange.settleBody()
-  if (!statusHasBody(status)) {
-    exchange.end()
-    return new Response(null, { status, headers })
-  }
-  if (stream !== undefined) {
+  if (stream !== undefined && !head && statusHasBody(status)) {
+    if (exchange.serverCloses()) headers.set('connection', 'close')
     if (stream.length !== undefined) headers.set('content-length', String(stream.length))
-    if (head) {
-      exchange.end()
-      return new Response(null, { status, headers })
-    }
     return new Response(testStreamBody(exchange, context, stream.produce, stream.length), { status, headers })
   }
-  headers.set('content-length', String(bodyByteLength(reply.body)))
+  exchange.settleBody()
+  const lengthless = !statusHasBody(status) || (stream !== undefined && stream.length === undefined)
+  const lingers = exchange.lingersAfterReply(lengthless)
+  if (lingers || (exchange.serverCloses() && !exchange.clientCloses)) headers.set('connection', 'close')
   exchange.end()
+  if (!statusHasBody(status)) return new Response(null, { status, headers })
+  if (stream !== undefined) {
+    if (stream.length !== undefined) headers.set('content-length', String(stream.length))
+    return new Response(null, { status, headers })
+  }
+  const length = bodyByteLength(reply.body)
+  if (lingers && !head && length > 0) headers.set('transfer-encoding', 'chunked')
+  else headers.set('content-length', String(length))
   return new Response(head ? null : reply.body, { status, headers })
 }
 
@@ -160,8 +155,9 @@ export async function requestApp(app: CompiledApp, target: string, init: TestReq
   const parsed = parseTestRequest(target, init)
   if (parsed === undefined) return parserErrorResponse()
   const framingError = transferCodingError(valuesOf(parsed.lines, 'transfer-encoding'))
-  if (framingError !== undefined) return framingRejectionResponse(framingError)
+  if (framingError !== undefined) return framingRejectionResponse(framingError, parsed.method === 'HEAD')
   const exchange = new Exchange(app.runtime)
+  exchange.clientCloses = (firstValue(parsed.lines, 'connection') ?? '').length === CONNECTION_CLOSE_VALUE_LENGTH
   watchSignal(exchange, init.signal)
   const decoded = decodeChain(app, resolveChain(app, parsed.method, parsed.path))
   const { context, chain } = copyTestRequest(exchange, parsed, decoded, init)

@@ -1,4 +1,4 @@
-import { MAX_CONTENT_LENGTH_DIGITS } from './constants.js'
+import { LONGEST_CONTENT_LENGTH_DIGITS } from './constants.js'
 import { UhttpError } from './errors.js'
 import { isDecimalDigits } from './headers.js'
 
@@ -18,7 +18,8 @@ function asciiLowerCase(text: string): string {
  * @param encodings - The package passes the value of every `transfer-encoding` line of the request.
  * @returns The function returns `true` for a request with both headers, for a first
  * `transfer-encoding` line that does not end with `chunked`, and for `content-length` lines that
- * differ, that hold anything but digits, or whose value has more than 18 characters.
+ * differ, that hold anything but digits, or whose value has more than
+ * {@link LONGEST_CONTENT_LENGTH_DIGITS} characters.
  * @internal
  */
 export function parserRejectsFraming(lengths: readonly string[], encodings: readonly string[]): boolean {
@@ -26,7 +27,7 @@ export function parserRejectsFraming(lengths: readonly string[], encodings: read
   const [length] = lengths
   if (encoding !== undefined) return length !== undefined || !asciiLowerCase(encoding).endsWith(CHUNKED)
   if (length === undefined) return false
-  if (length.length > MAX_CONTENT_LENGTH_DIGITS || !isDecimalDigits(length)) return true
+  if (length.length > LONGEST_CONTENT_LENGTH_DIGITS || !isDecimalDigits(length)) return true
   return lengths.some(other => other !== length)
 }
 

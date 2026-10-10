@@ -59,7 +59,7 @@ uWebSockets.js clears its idle timer while the package keeps a socket paused, so
 
 ## What happens when an upload fails
 
-The package destroys every destination of the request when the client disconnects, when the upload passes a limit, when the body is not valid multipart, when a destination fails, or when the handler passes its time limit. For a stream from `fs.createWriteStream()` with a path, it waits for the stream to close and then deletes the file. For a destination with a `discard` function, it calls that function and deletes nothing itself. It does the same for the files from earlier parts of the request, so that every file on disk comes from an upload that succeeded. `multipart()` then rejects with the error. After the reply, the package discards the rest of the body, so that the client can send its next request on the same connection.
+The package destroys every destination of the request when the client disconnects, when the upload passes a limit, when the body is not valid multipart, when a destination fails, or when the handler passes its time limit. For a stream from `fs.createWriteStream()` with a path, it waits for the stream to close and then deletes the file. For a destination with a `discard` function, it calls that function and deletes nothing itself. It does the same for the files from earlier parts of the request, so that every file on disk comes from an upload that succeeded. `multipart()` then rejects with the error. After the reply, the package discards the rest of the body and ends the connection as [Request bodies and validation](bodies.md#how-the-connection-ends-after-a-body) describes.
 
 However, when the time limit passes or the client disconnects after `multipart()` resolves, the package leaves the files in place.
 

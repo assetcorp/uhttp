@@ -9,14 +9,16 @@ const NOT_FOUND = errorBody('NOT_FOUND', 'The app has no route for this path.')
 
 describe('the copy from uWebSockets.js', () => {
   it('copies the method, the path, the query, the parameters, the content type, and the length before any await', async () => {
-    const app = createApp().post('/users/:id/files/:name', async c => {
-      await pause(5)
-      const { method, path, query, contentType, contentLength } = c.req
-      return c.json({ method, path, query, contentType, contentLength, params: c.req.params() })
-    })
+    const app = createApp()
+      .post('/users/:id/files/:name', async c => {
+        await pause(5)
+        const { method, path, query, contentType, contentLength } = c.req
+        return c.json({ method, path, query, contentType, contentLength, params: c.req.params() })
+      })
+      .get('/hello', c => c.text('Hello'))
     const server = await start(app)
 
-    const { response } = await send(
+    const { connection, response } = await send(
       server.port,
       requestWithBody('POST', '/users/42/files/a%2Fb?draft=1', ['Content-Type: text/plain'], 'hello'),
     )
@@ -29,16 +31,19 @@ describe('the copy from uWebSockets.js', () => {
       contentLength: 5,
       params: { id: '42', name: 'a/b' },
     })
+    await expectHello(connection)
   })
 
   it('collects every line of a list header and the first line of any other header', async () => {
-    const app = createApp().get('/hops', { headers: ['x-forwarded-for', 'cookie', 'x-tenant'] }, async c => {
-      await pause(1)
-      return c.json(c.req.headers())
-    })
+    const app = createApp()
+      .get('/hops', { headers: ['x-forwarded-for', 'cookie', 'x-tenant'] }, async c => {
+        await pause(1)
+        return c.json(c.req.headers())
+      })
+      .get('/hello', c => c.text('Hello'))
     const server = await start(app)
 
-    const { response } = await send(
+    const { connection, response } = await send(
       server.port,
       requestHead('GET', '/hops', [
         'X-Forwarded-For: 203.0.113.1',
@@ -55,17 +60,23 @@ describe('the copy from uWebSockets.js', () => {
       cookie: 'a=1; b=2',
       'x-tenant': 'first',
     })
+    await expectHello(connection)
   })
 
   it('copies every header for a route that declares all of them', async () => {
-    const server = await start(createApp().get('/proxy', { headers: 'all' }, c => c.json(c.req.headers())))
+    const server = await start(
+      createApp()
+        .get('/proxy', { headers: 'all' }, c => c.json(c.req.headers()))
+        .get('/hello', c => c.text('Hello')),
+    )
 
-    const { response } = await send(
+    const { connection, response } = await send(
       server.port,
       requestHead('GET', '/proxy', ['X-Custom: yes', 'Accept: a', 'accept: b']),
     )
 
     expect(JSON.parse(response.body.toString())).toEqual({ host: 'localhost', 'x-custom': 'yes', accept: 'a, b' })
+    await expectHello(connection)
   })
 
   it('copies the client address when a middleware declares it', async () => {
@@ -75,11 +86,13 @@ describe('the copy from uWebSockets.js', () => {
         await pause(1)
         return c.text(c.req.clientAddress)
       })
+      .get('/hello', c => c.text('Hello'))
     const server = await start(app)
 
-    const { response } = await send(server.port, requestHead('GET', '/where'))
+    const { connection, response } = await send(server.port, requestHead('GET', '/where'))
 
     expect(response.body.toString()).toBe('127.0.0.1')
+    await expectHello(connection)
   })
 
   it('sends a 500 and logs when the copy inside the synchronous handler throws, and keeps the connection open', async () => {
@@ -161,42 +174,52 @@ describe('the fallback replies over the network', () => {
   it('takes the method with its case, so that a lowercase get gets a 405 and never reaches the GET handler', async () => {
     const handled: string[] = []
     const server = await start(
-      createApp().get('/users', c => {
-        handled.push('users')
-        return c.text('list')
-      }),
+      createApp()
+        .get('/users', c => {
+          handled.push('users')
+          return c.text('list')
+        })
+        .get('/hello', c => c.text('Hello')),
     )
 
-    const { response } = await send(server.port, requestHead('get', '/users'))
+    const { connection, response } = await send(server.port, requestHead('get', '/users'))
 
     expect(response.status).toBe(405)
     expect(handled).toEqual([])
+    await expectHello(connection)
   })
 
-  it('wraps the 404 with the app middleware', async () => {
+  it('wraps the 404 with the app middleware, and keeps the connection open', async () => {
     const app = createApp()
       .use(async (c, next) => {
         c.header('x-request-seen', 'yes')
         await next()
       })
       .get('/users', c => c.text('list'))
+      .get('/hello', c => c.text('Hello'))
     const server = await start(app)
 
-    const { response } = await send(server.port, requestHead('GET', '/missing'))
+    const { connection, response } = await send(server.port, requestHead('GET', '/missing'))
 
     expect(response.headers.get('x-request-seen')).toEqual(['yes'])
     expect(response.body.toString()).toBe(NOT_FOUND)
+    await expectHello(connection)
   })
 
-  it('sends a 400 when a parameter fails to decode', async () => {
-    const server = await start(createApp().get('/users/:id', c => c.text('never')))
+  it('sends a 400 when a parameter fails to decode, and keeps the connection open', async () => {
+    const server = await start(
+      createApp()
+        .get('/users/:id', c => c.text('never'))
+        .get('/hello', c => c.text('Hello')),
+    )
 
-    const { response } = await send(server.port, requestHead('GET', '/users/%E0%A4%A'))
+    const { connection, response } = await send(server.port, requestHead('GET', '/users/%E0%A4%A'))
 
     expect(response.status).toBe(400)
     expect(response.body.toString()).toBe(
       errorBody('INVALID_PATH_PARAMETER', 'A path parameter contains a percent sequence that fails to decode.'),
     )
+    await expectHello(connection)
   })
 })
 
@@ -298,11 +321,12 @@ describe('the header writer over the network', () => {
       .get('/account', c => c.redirect('/login', 302, { 'set-cookie': 'session=abc' }))
     const server = await start(app)
 
-    const { response } = await send(server.port, requestHead('GET', '/account'))
+    const { connection, response } = await send(server.port, requestHead('GET', '/account'))
 
     expect([response.status, response.body.toString()]).toEqual([500, INTERNAL_ERROR])
     expect(response.headers.has('location')).toBe(false)
     expect(response.headers.has('set-cookie')).toBe(false)
+    expect(await connection.waitForClose(200)).toBe('open')
   })
 })
 

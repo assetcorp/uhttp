@@ -147,5 +147,6 @@ describe('the native router and the JavaScript matcher', () => {
     for (const path of ['/admin', ...TRAVERSAL_PATHS]) await connection.exchange(requestHead('GET', path))
 
     expect(reached).toEqual(['/admin?', '/admin?x=1'])
+    expect(await connection.waitForClose(200)).toBe('open')
   })
 })

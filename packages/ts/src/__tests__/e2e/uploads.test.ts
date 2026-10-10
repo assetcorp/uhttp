@@ -4,12 +4,11 @@ import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../../index.js'
+import { MIB } from '../helpers/apps.js'
 import { BOUNDARY, multipartBody, multipartType } from '../helpers/body.js'
 import { chunkedRequest, openConnection, requestHead, requestWithBody, send } from '../helpers/http-client.js'
-import { CONNECTION_CHOICES, expectConnectionAfterReply, expectHello, piecesOf, tooLarge } from '../helpers/replies.js'
+import { CONNECTION_CHOICES, expectClosedAfterReply, expectHello, piecesOf, tooLarge } from '../helpers/replies.js'
 import { pause, start } from '../helpers/server.js'
-
-const MIB = 1_048_576
 
 let directory = ''
 
@@ -29,18 +28,20 @@ describe('uploads over the network', () => {
   it('pauses the socket while a destination is busy, and finishes the upload once it accepts more', async () => {
     const gate = Promise.withResolvers<void>()
     const server = await start(
-      createApp().post('/upload', { maxBodyBytes: 64 * MIB }, async c => {
-        const { files } = await c.req.body.multipart({
-          file: () =>
-            new Writable({
-              highWaterMark: 1,
-              write(_chunk, _encoding, done) {
-                void gate.promise.then(() => done())
-              },
-            }),
+      createApp()
+        .post('/upload', { maxBodyBytes: 64 * MIB }, async c => {
+          const { files } = await c.req.body.multipart({
+            file: () =>
+              new Writable({
+                highWaterMark: 1,
+                write(_chunk, _encoding, done) {
+                  void gate.promise.then(() => done())
+                },
+              }),
+          })
+          return c.json({ size: files[0]?.size })
         })
-        return c.json({ size: files[0]?.size })
-      }),
+        .get('/hello', c => c.text('Hello')),
     )
     const fileBytes = 32 * MIB
     const head = fileHead('large.bin')
@@ -64,6 +65,7 @@ describe('uploads over the network', () => {
 
     expect(flushedWhileBusy).toBe(false)
     expect([response.status, response.body.toString()]).toEqual([200, `{"size":${fileBytes}}`])
+    await expectHello(connection)
   }, 20_000)
 
   it('deletes a partial file when the client goes during the upload', async () => {
@@ -139,8 +141,8 @@ describe('uploads over the network', () => {
   })
 
   it.each(CONNECTION_CHOICES)(
-    'answers 413 after the client sends a chunked upload above the limit, deletes the partial file, and %s',
-    async (_choice, lines) => {
+    'answers 413 to a chunked upload above the limit from %s, deletes the partial file, and closes the connection without a reset',
+    async (_client, lines) => {
       const opened = Promise.withResolvers<void>()
       const server = await start(
         createApp()
@@ -166,7 +168,7 @@ describe('uploads over the network', () => {
       expect(response.status).toBe(413)
       expect(response.body.toString()).toBe(tooLarge(MIB))
       expect(readdirSync(directory)).toEqual([])
-      await expectConnectionAfterReply(connection, lines)
+      await expectClosedAfterReply(connection, response, lines)
     },
   )
 })

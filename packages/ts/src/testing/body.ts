@@ -1,7 +1,8 @@
 import { type BodyReader, type BodySource, declaredLength, type OpenedBody, openBody } from '../body/index.js'
+import { declaresNoBody } from '../body/reader.js'
 import type { Exchange } from '../exchange.js'
 import type { RequestChain } from '../resolve.js'
-import type { TestBody } from './parse.js'
+import { firstValue, type TestBody, valuesOf } from './parse.js'
 
 type Lines = readonly (readonly [string, string])[]
 
@@ -68,6 +69,7 @@ async function pump(
       let bytes = toBytes(next.value)
       if (declared !== undefined) bytes = bytes.subarray(0, declared - sent)
       sent += bytes.byteLength
+      exchange.arrival.received(bytes.byteLength)
       reader.push(bytes, declared !== undefined && sent >= declared)
     }
   } catch {
@@ -80,7 +82,9 @@ async function pump(
 /**
  * Attaches the body reader of a test request, as the package does over uWebSockets.js for a request
  * from the network. The function feeds the chunks of the test body into the reader, stops pulling
- * them while the reader has paused the source, and ends a body at its declared length.
+ * them while the reader has paused the source, and ends a body at its declared length. It treats a
+ * body without a reader as still on its way, as uWebSockets.js does when the package answers
+ * before the body arrives.
  *
  * @param exchange - The package passes the state of the request.
  * @param chain - The package passes the chain of the request, with the limits of the route.
@@ -95,18 +99,26 @@ export function attachTestBody(
   lines: Lines,
   body: TestBody | undefined,
 ): OpenedBody {
-  if (!chain.limits.readsBody) return { reader: undefined, chain, flowing: false }
-  const headerValue = (name: string): string | undefined => lines.find(([lineName]) => lineName === name)?.[1]
+  const lengthLines = {
+    contentLength: firstValue(lines, 'content-length'),
+    transferEncoding: firstValue(lines, 'transfer-encoding'),
+  }
+  const declaresBody = !declaresNoBody(lengthLines)
+  const hasFramingLine = lengthLines.contentLength !== undefined || lengthLines.transferEncoding !== undefined
+  const codings = valuesOf(lines, 'content-encoding').filter(value => value !== '')
   const framing = {
-    contentLength: headerValue('content-length'),
-    transferEncoding: headerValue('transfer-encoding'),
-    contentEncoding: headerValue('content-encoding'),
+    ...lengthLines,
+    contentEncoding: hasFramingLine && codings.length > 0 ? codings.join(', ') : undefined,
   }
   const source = new TestSource(exchange)
   const opened = openBody(exchange, chain, framing, source)
   const { reader } = opened
+  const declared = declaredLength(framing)
   if (opened.flowing && reader !== undefined) {
-    void pump(reader, source, exchange, body ?? [], declaredLength(framing))
+    exchange.arrival.expect(declared)
+    void pump(reader, source, exchange, body ?? [], declared)
+  } else if (declaresBody) {
+    exchange.arrival.expect(declared)
   }
   return opened
 }

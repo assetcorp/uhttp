@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../../../index.js'
+import { MIB } from '../../helpers/apps.js'
 import { errorCodeOf } from '../../helpers/body.js'
-
-const MIB = 1_048_576
 
 async function* chunksOf(sizes: readonly number[]): AsyncGenerator<Uint8Array> {
   for (const size of sizes) yield new Uint8Array(size).fill(120)
@@ -89,7 +88,18 @@ describe('body limits through app.request()', () => {
     const response = await app.request('/count', { method: 'POST', body: chunksOf([4, 4, 4]) })
 
     expect(response.status).toBe(413)
-    expect(response.headers.get('connection')).toBeNull()
+    expect(response.headers.get('connection')).toBe('close')
+    expect(response.headers.get('transfer-encoding')).toBe('chunked')
+  })
+
+  it('keeps the connection open after a reply that leaves up to 256 KiB of a declared body unread', async () => {
+    const app = createApp().post('/ignore', c => c.text('ok'))
+
+    const within = await app.request('/ignore', { method: 'POST', body: new Uint8Array(256 * 1024) })
+    const beyond = await app.request('/ignore', { method: 'POST', body: new Uint8Array(256 * 1024 + 1) })
+
+    expect([within.status, within.headers.get('connection')]).toEqual([200, null])
+    expect([beyond.status, beyond.headers.get('connection')]).toEqual([200, 'close'])
   })
 
   it('answers 413 to a declared length above the limit before it reads any of the body', async () => {
@@ -112,7 +122,7 @@ describe('body limits through app.request()', () => {
 
     expect(response.status).toBe(413)
     expect(await errorCodeOf(response)).toBe('PAYLOAD_TOO_LARGE')
-    expect(response.headers.get('connection')).toBeNull()
+    expect(response.headers.get('connection')).toBe('close')
     expect(handled).toBe(false)
     expect(pulled).toBe(0)
   })

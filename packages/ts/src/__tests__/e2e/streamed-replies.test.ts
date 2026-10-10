@@ -1,10 +1,13 @@
+import { Agent } from 'node:http'
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../../index.js'
+import { KIB, MIB } from '../helpers/apps.js'
 import { chunkFrame, openConnection, requestHead, send } from '../helpers/http-client.js'
-import { errorBody, expectConnectionAfterReply, expectHello, withEveryConnectionChoice } from '../helpers/replies.js'
-import { memoryLogger, pause, start, urlOf } from '../helpers/server.js'
+import { sendFromNodeClient } from '../helpers/node-client.js'
+import { errorBody, expectClosedAfterReply, expectHello, withEveryConnectionChoice } from '../helpers/replies.js'
+import { memoryLogger, pause, start } from '../helpers/server.js'
 
-const CHUNK_BYTES = 1024 * 1024
+const CHUNK_BYTES = MIB
 const CHUNK_COUNT = 32
 const TOTAL_BYTES = CHUNK_BYTES * CHUNK_COUNT
 const INTERNAL_ERROR = errorBody('INTERNAL_ERROR', 'The request failed.')
@@ -60,14 +63,20 @@ describe('streamed replies over the network', () => {
     15_000,
   )
 
-  it('delivers the whole body of known length to fetch', async () => {
+  it('delivers the whole body of known length to the HTTP client of Node.js, which then reuses the connection', async () => {
     const server = await start(largeStreamApp(TOTAL_BYTES, { written: 0, done: false }))
+    const agent = new Agent({ keepAlive: true, maxSockets: 1 })
 
-    const response = await fetch(urlOf(server, '/large'))
-    const body = Buffer.from(await response.arrayBuffer())
+    try {
+      const large = await sendFromNodeClient({ port: server.port, path: '/large', agent })
+      const hello = await sendFromNodeClient({ port: server.port, path: '/hello', agent })
 
-    expect(response.headers.get('content-length')).toBe(String(TOTAL_BYTES))
-    expect(body.equals(Buffer.alloc(TOTAL_BYTES, 97))).toBe(true)
+      expect([large.status, large.contentLength, large.errors]).toEqual([200, String(TOTAL_BYTES), []])
+      expect(large.body.equals(Buffer.alloc(TOTAL_BYTES, 97))).toBe(true)
+      expect([hello.body.toString(), hello.reusedSocket, hello.errors]).toEqual(['Hello', true, []])
+    } finally {
+      agent.destroy()
+    }
   })
 
   it('sends a chunked body with the headers that middleware added after the chain returned, and keeps the connection open', async () => {
@@ -202,7 +211,7 @@ describe('streamed replies over the network', () => {
       c.stream(async stream => {
         started.resolve()
         while (results.at(-1) !== false) {
-          results.push(await stream.write(new Uint8Array(64 * 1024)))
+          results.push(await stream.write(new Uint8Array(64 * KIB)))
           await pause(1)
         }
         finished.resolve()
@@ -226,7 +235,7 @@ describe('streamed replies over the network', () => {
       { name: 'known length', length: 14, framing: 'length' },
     ]),
   )(
-    'sends a whole and valid body of $name while the client still uploads a body above the limit, and $choice',
+    'sends a whole and valid body of $name with Connection: close while $client still uploads a chunked body, and closes the connection without a reset',
     async ({ length, framing, lines }) => {
       const app = createApp({ maxBodyBytes: 100 })
         .post('/words', c =>
@@ -245,7 +254,7 @@ describe('streamed replies over the network', () => {
 
       void connection.write(requestHead('POST', '/words', ['Transfer-Encoding: chunked', ...lines]))
       for (let index = 0; index < 8; index++) {
-        void connection.write(chunkFrame(Buffer.alloc(64 * 1024, 120)))
+        void connection.write(chunkFrame(Buffer.alloc(64 * KIB, 120)))
         await pause(40)
       }
       void connection.write('0\r\n\r\n')
@@ -254,7 +263,7 @@ describe('streamed replies over the network', () => {
       expect(response.status).toBe(200)
       expect(response.framing).toBe(framing)
       expect(response.body.toString()).toBe('part-1;part-2;')
-      await expectConnectionAfterReply(connection, lines)
+      await expectClosedAfterReply(connection, response, lines)
     },
   )
 })
@@ -282,18 +291,21 @@ describe('server-sent events over the network', () => {
   })
 
   it('splits data at every CR and LF, so that data from a client cannot start a new event or field', async () => {
-    const app = createApp().get('/events', c =>
-      c.sse(async events => {
-        await events.send({ data: 'hello\n\nevent: admin\rdata: injected\r\nid: 9' })
-      }),
-    )
+    const app = createApp()
+      .get('/events', c =>
+        c.sse(async events => {
+          await events.send({ data: 'hello\n\nevent: admin\rdata: injected\r\nid: 9' })
+        }),
+      )
+      .get('/hello', c => c.text('Hello'))
     const server = await start(app)
 
-    const { response } = await send(server.port, requestHead('GET', '/events'))
+    const { connection, response } = await send(server.port, requestHead('GET', '/events'))
 
     expect(response.body.toString()).toBe(
       'data: hello\ndata: \ndata: event: admin\ndata: data: injected\ndata: id: 9\n\n',
     )
+    await expectHello(connection)
   })
 
   it('sends events and heartbeats, and stops the heartbeat when the client goes', async () => {
@@ -309,21 +321,16 @@ describe('server-sent events over the network', () => {
       ),
     )
     const server = await start(app)
+    const connection = await openConnection(server.port)
 
-    const controller = new AbortController()
-    const response = await fetch(urlOf(server, '/events'), { signal: controller.signal })
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    let text = ''
-    while (!text.includes(':\n\n')) {
-      const { value } = (await reader?.read()) ?? {}
-      text += decoder.decode(value)
-    }
-    controller.abort()
+    void connection.write(requestHead('GET', '/events'))
+    const received = await connection.chunkedUntil(':\n\n')
+    connection.destroy()
 
-    expect(response.headers.get('content-type')).toBe('text/event-stream')
-    expect(text.startsWith('event: greeting\ndata: hello\n\n:\n\n')).toBe(true)
+    expect(received.headers.get('content-type')).toEqual(['text/event-stream'])
+    expect(received.body.startsWith('event: greeting\ndata: hello\n\n:\n\n')).toBe(true)
     expect(await closed.promise).toBe(true)
+    expect(connection.state).not.toBe('open')
   })
 
   it('stops the heartbeat when the producer returns while the client still reads slowly', async () => {
@@ -333,15 +340,17 @@ describe('server-sent events over the network', () => {
     }
     process.on('unhandledRejection', record)
     const returned = Promise.withResolvers<void>()
-    const app = createApp().get('/events', c =>
-      c.sse(
-        events => {
-          void events.send({ data: 'x'.repeat(CHUNK_BYTES * 16) })
-          returned.resolve()
-        },
-        { heartbeatMs: 10 },
-      ),
-    )
+    const app = createApp()
+      .get('/events', c =>
+        c.sse(
+          events => {
+            void events.send({ data: 'x'.repeat(CHUNK_BYTES * 16) })
+            returned.resolve()
+          },
+          { heartbeatMs: 10 },
+        ),
+      )
+      .get('/hello', c => c.text('Hello'))
     const server = await start(app)
     const connection = await openConnection(server.port)
     connection.pauseReading()
@@ -354,5 +363,9 @@ describe('server-sent events over the network', () => {
     } finally {
       process.off('unhandledRejection', record)
     }
-  })
+    connection.resumeReading()
+    const response = await connection.response({ waitMs: 10_000 })
+    expect(response.body.toString().startsWith('data: x')).toBe(true)
+    await expectHello(connection)
+  }, 15_000)
 })
