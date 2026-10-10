@@ -1,80 +1,83 @@
-import { BODYLESS_STATUSES, MAX_REPLY_STATUS, MIN_REPLY_STATUS } from './constants.js'
+import { DEFAULT_REDIRECT_STATUS, REDIRECT_STATUSES } from './constants.js'
 import { UhttpError } from './errors.js'
+import type { Exchange } from './exchange.js'
+import { checkedHeaderValue, type HeaderRecord, headerLinesOf } from './headers.js'
+import { createReply, JSON_CONTENT_TYPE, type Reply, type StreamProducer } from './reply.js'
+import type { RequestInfo } from './request.js'
+import { type EventStreamOptions, type EventStreamProducer, eventStreamReply } from './sse.js'
 
 const TEXT_CONTENT_TYPE = 'text/plain; charset=UTF-8'
-const JSON_CONTENT_TYPE = 'application/json'
-const INTERNAL_ERROR_MESSAGE = 'The request failed.'
-const NOT_FOUND_MESSAGE = 'The app has no route for this path.'
-const MISSING_REPLY_MESSAGE = 'The handler must return the reply that c.text() or c.json() builds.'
+const BYTES_CONTENT_TYPE = 'application/octet-stream'
 
 /**
- * The package copies these parts of the request before your handler starts, so that your
- * handler can use them after any `await`.
+ * You pass these options to {@link Context.stream} to set the status, the headers, the content
+ * type, and the length of a streamed response.
  */
-export interface RequestInfo {
-  /** The client sent this method, such as `GET`, and the package leaves its case unchanged. */
-  readonly method: string
-  /** The path is the target of the request without its query string. */
-  readonly path: string
+export interface StreamOptions {
+  /** When you leave out the status, the package sends 200. */
+  readonly status?: number
+  /** The package sends these headers with the stream. */
+  readonly headers?: HeaderRecord
+  /** When you leave out the content type, the package sends `application/octet-stream`. */
+  readonly contentType?: string
   /**
-   * The query string is the part of the target after the `?`, and it is an empty string when
-   * the target has no `?`.
+   * When you declare the length in bytes, the package sends a `content-length` header, and it
+   * closes the connection if your producer writes a different number of bytes. Without a length,
+   * the package sends a chunked body.
    */
-  readonly query: string
+  readonly length?: number
 }
 
 /**
- * You get a `Reply` from {@link Context.text} or {@link Context.json}, and your handler returns
- * it so that the package can write it to the client.
+ * You pass these options to {@link Context.header}.
  */
-export class Reply {
-  /** The HTTP status is a whole number from 200 to 599. */
-  readonly status: number
-  /** The package sends this value as the `content-type` header. */
-  readonly contentType: string
-  /** The package sends this text as the body, apart from a 204, a 205, or a 304, which have no body. */
-  readonly body: string
-
-  /**
-   * Creates a reply. Only the package calls this constructor, because a handler builds every
-   * reply through its context.
-   *
-   * @param status - The HTTP status must be a whole number from 200 to 599.
-   * @param contentType - The package sends this value as the `content-type` header.
-   * @param body - The package sends this text as the body.
-   * @throws {@link UhttpError} with the code `INVALID_STATUS` when the status is a fraction,
-   * below 200, or above 599.
-   */
-  constructor(status: number, contentType: string, body: string) {
-    if (!Number.isInteger(status) || status < MIN_REPLY_STATUS || status > MAX_REPLY_STATUS) {
-      throw new UhttpError(
-        'INVALID_STATUS',
-        `The status of a reply must be a whole number from ${MIN_REPLY_STATUS} to ${MAX_REPLY_STATUS}, and the handler passed ${status}.`,
-      )
-    }
-    this.status = status
-    this.contentType = contentType
-    this.body = body
-  }
+export interface HeaderOptions {
+  /** When this is `true`, the package adds a line to the header and keeps its earlier lines. */
+  readonly append?: boolean
 }
 
+let construct: (request: RequestInfo, exchange: Exchange) => Context
+
 /**
- * Your handler receives a `Context` with the request in `req` and with the methods that build a
- * reply.
+ * Every middleware and handler receives a `Context`, which has the copied request in `req` and
+ * the helpers that build a reply.
  */
 export class Context {
-  /** The package copies these parts of the request before the handler starts. */
+  /** The package copies these parts of the request before the first `await`. */
   readonly req: RequestInfo
+  readonly #exchange: Exchange
+
+  static {
+    construct = (request, exchange) => new Context(request, exchange)
+  }
+
+  private constructor(request: RequestInfo, exchange: Exchange) {
+    this.req = request
+    this.#exchange = exchange
+  }
 
   /**
-   * Creates the context of one request. Only the package calls this constructor.
-   *
-   * @param method - The client sent this method, and the package leaves its case unchanged.
-   * @param path - The path is the target of the request without its query string.
-   * @param query - The query string is the part of the target after the `?`.
+   * This is the current reply of the request, which a middleware can inspect after `await next()`.
+   * It is `undefined` until a handler or a middleware has returned a reply.
    */
-  constructor(method: string, path: string, query: string) {
-    this.req = { method, path, query }
+  get reply(): Reply | undefined {
+    return this.#exchange.reply
+  }
+
+  /**
+   * Sets a response header, which the package sends with whatever reply the request ends with,
+   * including an error reply. The package drops `content-length`, `transfer-encoding`,
+   * `connection`, and `date`, because it sets the framing itself.
+   *
+   * @param name - The name must be an HTTP token.
+   * @param value - The value must contain no line break, no NUL, and no other control character
+   * apart from a tab.
+   * @param options - When you set `append`, the package keeps the earlier lines of the header.
+   * @throws {@link UhttpError} with the code `INVALID_HEADER` when the name or the value fails its
+   * check.
+   */
+  header(name: string, value: string, options?: HeaderOptions): void {
+    this.#exchange.setHeader(name, value, options?.append === true)
   }
 
   /**
@@ -83,12 +86,13 @@ export class Context {
    *
    * @param body - The package sends this text as the body.
    * @param status - When you leave out the status, the package sends 200.
+   * @param headers - The package sends these headers with the reply.
    * @returns Your handler returns this reply.
-   * @throws {@link UhttpError} with the code `INVALID_STATUS` when the status is a fraction,
-   * below 200, or above 599.
+   * @throws {@link UhttpError} with the code `INVALID_STATUS` for a status outside 200 to 599, or
+   * with the code `INVALID_HEADER` when a header fails its check.
    */
-  text(body: string, status = 200): Reply {
-    return new Reply(status, TEXT_CONTENT_TYPE, body)
+  text(body: string, status = 200, headers?: HeaderRecord): Reply {
+    return createReply(status, TEXT_CONTENT_TYPE, body, headerLinesOf(headers))
   }
 
   /**
@@ -98,76 +102,104 @@ export class Context {
    * @param value - `JSON.stringify` converts this value, and the package sends `null` in place of
    * `undefined`.
    * @param status - When you leave out the status, the package sends 200.
+   * @param headers - The package sends these headers with the reply.
    * @returns Your handler returns this reply.
-   * @throws {@link UhttpError} with the code `INVALID_STATUS` when the status is a fraction,
-   * below 200, or above 599.
+   * @throws {@link UhttpError} with the code `INVALID_STATUS` for a status outside 200 to 599, or
+   * with the code `INVALID_HEADER` when a header fails its check.
    */
-  json(value: unknown, status = 200): Reply {
-    return new Reply(status, JSON_CONTENT_TYPE, JSON.stringify(value) ?? 'null')
+  json(value: unknown, status = 200, headers?: HeaderRecord): Reply {
+    return createReply(status, JSON_CONTENT_TYPE, JSON.stringify(value) ?? 'null', headerLinesOf(headers))
+  }
+
+  /**
+   * Returns a reply whose body is the bytes that you pass. Its content type is
+   * `application/octet-stream` unless the headers set another.
+   *
+   * @param data - The package sends these bytes as the body.
+   * @param status - When you leave out the status, the package sends 200.
+   * @param headers - The package sends these headers with the reply.
+   * @returns Your handler returns this reply.
+   * @throws {@link UhttpError} with the code `INVALID_STATUS` for a status outside 200 to 599, or
+   * with the code `INVALID_HEADER` when a header fails its check.
+   */
+  bytes(data: Uint8Array | ArrayBuffer, status = 200, headers?: HeaderRecord): Reply {
+    const body = data instanceof Uint8Array ? data : new Uint8Array(data)
+    return createReply(status, BYTES_CONTENT_TYPE, body, headerLinesOf(headers))
+  }
+
+  /**
+   * Returns a reply with no body that sends the client to another location.
+   *
+   * @param location - The package sends this URL as the `location` header.
+   * @param status - The status must be 301, 302, 303, 307, or 308, and the package sends 302 when
+   * you leave it out.
+   * @param headers - The package sends these headers with the reply.
+   * @returns Your handler returns this reply.
+   * @throws {@link UhttpError} with the code `INVALID_STATUS` for any other status, or with the code
+   * `INVALID_HEADER` when the location or a header contains a control character.
+   */
+  redirect(location: string, status: number = DEFAULT_REDIRECT_STATUS, headers?: HeaderRecord): Reply {
+    if (!REDIRECT_STATUSES.includes(status)) {
+      throw new UhttpError(
+        'INVALID_STATUS',
+        `A redirect must have one of the statuses ${REDIRECT_STATUSES.join(', ')}, and your code passed ${status}.`,
+      )
+    }
+    const lines = headerLinesOf(headers) ?? new Map<string, string[]>()
+    lines.set('location', [checkedHeaderValue('location', location)])
+    return createReply(status, undefined, null, lines)
+  }
+
+  /**
+   * Returns a streamed reply. The package sends its headers and calls the producer only after the
+   * whole middleware chain has returned, so that a middleware can still add headers to the stream.
+   * For a HEAD request, the package never calls the producer.
+   *
+   * @param produce - The package calls this producer with the stream that it writes to.
+   * @param options - You can set the status, the headers, the content type, and the length here.
+   * @returns Your handler returns this reply.
+   * @throws {@link UhttpError} with the code `INVALID_STREAM` when the length is not a whole number
+   * of zero or more, with the code `INVALID_STATUS` for a status outside 200 to 599, or with the
+   * code `INVALID_HEADER` when the content type or a header fails its check.
+   */
+  stream(produce: StreamProducer, options: StreamOptions = {}): Reply {
+    const { status = 200, headers, contentType = BYTES_CONTENT_TYPE, length } = options
+    if (length !== undefined && (!Number.isSafeInteger(length) || length < 0)) {
+      throw new UhttpError(
+        'INVALID_STREAM',
+        `The length of a stream must be a whole number of zero or more, and your code passed ${length}.`,
+      )
+    }
+    return createReply(status, checkedHeaderValue('content-type', contentType), null, headerLinesOf(headers), {
+      produce,
+      length,
+    })
+  }
+
+  /**
+   * Returns a reply that streams server-sent events with the content type `text/event-stream`. The
+   * package sends a heartbeat comment every 30 seconds by default.
+   *
+   * @param produce - The package calls this producer with the event stream that it sends events on.
+   * @param options - You can set the status, the headers, and the heartbeat interval here.
+   * @returns Your handler returns this reply.
+   * @throws {@link UhttpError} with the code `INVALID_STREAM` when the heartbeat interval is not a
+   * whole number of milliseconds of zero or more, with the code `INVALID_STATUS` for a status outside
+   * 200 to 599, or with the code `INVALID_HEADER` when a header fails its check.
+   */
+  sse(produce: EventStreamProducer, options: EventStreamOptions = {}): Reply {
+    return eventStreamReply(produce, options)
   }
 }
 
 /**
- * A handler is a function that receives the {@link Context} of one request and returns a
- * {@link Reply} or a promise of one.
+ * Returns the context of one request.
  *
- * @param context - The package passes the context of the request to the handler.
- * @returns The handler returns the reply, or a promise that resolves to the reply.
- */
-export type Handler = (context: Context) => Reply | Promise<Reply>
-
-function errorReply({ status, code, message }: UhttpError): Reply {
-  return new Reply(status, JSON_CONTENT_TYPE, JSON.stringify({ error: { code, message } }))
-}
-
-function replyForError(error: unknown): Reply {
-  if (error instanceof UhttpError && error.status < 500) return errorReply(error)
-  return errorReply(new UhttpError('INTERNAL_ERROR', INTERNAL_ERROR_MESSAGE))
-}
-
-function replyForResult(result: unknown): Reply {
-  if (result instanceof Reply) return result
-  return replyForError(new UhttpError('INTERNAL_ERROR', MISSING_REPLY_MESSAGE))
-}
-
-/**
- * Returns a JSON 404 for a request to a path that has no route.
- *
+ * @param request - The package passes the copy of the request.
+ * @param exchange - The package passes the state of the request.
+ * @returns The function returns the context that the chain receives.
  * @internal
  */
-export const notFound: Handler = () => errorReply(new UhttpError('NOT_FOUND', NOT_FOUND_MESSAGE))
-
-/**
- * Returns `true` when the package sends the body of a reply, which it does for every status
- * apart from 204, 205, and 304.
- *
- * @param reply - The function checks the status of this reply.
- * @returns The function returns `false` for a 204, a 205, or a 304, and `true` for every other
- * status.
- * @internal
- */
-export function sendsBody(reply: Reply): boolean {
-  return !BODYLESS_STATUSES.includes(reply.status)
-}
-
-/**
- * Returns the reply from a handler, and it converts an error that the handler throws, a promise
- * that rejects, or a value other than a reply into an error reply. The function returns
- * synchronously whenever the handler returns synchronously.
- *
- * @param handler - The function calls this handler.
- * @param context - The function passes this context to the handler.
- * @returns The function returns the reply, or a promise that always resolves to a reply.
- * @internal
- */
-export function respond(handler: Handler, context: Context): Reply | Promise<Reply> {
-  let result: unknown
-  try {
-    result = handler(context)
-  } catch (error) {
-    return replyForError(error)
-  }
-  if (result instanceof Reply) return result
-  if (result instanceof Promise) return result.then(replyForResult, replyForError)
-  return replyForResult(result)
+export function createContext(request: RequestInfo, exchange: Exchange): Context {
+  return construct(request, exchange)
 }
