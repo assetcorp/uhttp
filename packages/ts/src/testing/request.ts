@@ -5,12 +5,13 @@ import { type Context, createContext } from '../context.js'
 import { startDeadline } from '../deadline.js'
 import { UhttpError } from '../errors.js'
 import { Exchange } from '../exchange.js'
+import { transferCodingError } from '../framing.js'
 import { lineSeparatorOf } from '../headers.js'
-import { bodyByteLength, type Reply, statusHasBody } from '../reply.js'
+import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.js'
 import { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type PreparedRequest, resolveChain } from '../resolve.js'
 import { attachTestBody } from './body.js'
-import { type ParsedTestRequest, parseTestRequest, type TestRequestInit } from './parse.js'
+import { type ParsedTestRequest, parseTestRequest, type TestRequestInit, valuesOf } from './parse.js'
 import { testStreamBody } from './stream.js'
 
 const PARSER_ERROR_BODY = '<h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>'
@@ -48,6 +49,13 @@ function parserErrorResponse(): Response {
   return new Response(PARSER_ERROR_BODY, { status: 400, headers: { connection: 'close' } })
 }
 
+function framingRejectionResponse(error: UhttpError): Response {
+  const reply = errorReply(error)
+  const headers = new Headers({ connection: 'close', 'content-length': String(bodyByteLength(reply.body)) })
+  if (reply.contentType !== undefined) headers.set('content-type', reply.contentType)
+  return new Response(reply.body, { status: reply.status, headers })
+}
+
 function responseHeaders(exchange: Exchange): Headers {
   const headers = new Headers()
   const contentType = exchange.responseContentType()
@@ -63,7 +71,7 @@ function toResponse(exchange: Exchange, context: Context, reply: Reply): Respons
   const { status, stream } = reply
   const head = context.req.method === 'HEAD'
   const streams = stream !== undefined && !head && statusHasBody(status)
-  if (streams ? exchange.closeConnection : exchange.shouldCloseConnection()) headers.set('connection', 'close')
+  if (!streams) exchange.settleBody()
   if (!statusHasBody(status)) {
     exchange.end()
     return new Response(null, { status, headers })
@@ -151,6 +159,8 @@ function watchSignal(exchange: Exchange, signal: AbortSignal | undefined): void 
 export async function requestApp(app: CompiledApp, target: string, init: TestRequestInit): Promise<Response> {
   const parsed = parseTestRequest(target, init)
   if (parsed === undefined) return parserErrorResponse()
+  const framingError = transferCodingError(valuesOf(parsed.lines, 'transfer-encoding'))
+  if (framingError !== undefined) return framingRejectionResponse(framingError)
   const exchange = new Exchange(app.runtime)
   watchSignal(exchange, init.signal)
   const decoded = decodeChain(app, resolveChain(app, parsed.method, parsed.path))

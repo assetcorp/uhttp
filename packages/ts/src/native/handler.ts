@@ -9,7 +9,8 @@ import { lineSeparatorOf } from '../headers.js'
 import { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type PreparedRequest, type RequestChain, resolveChain } from '../resolve.js'
 import { attachBody } from './body.js'
-import { writeCrash, writeReply } from './write.js'
+import { type RequestFraming, readFraming, refusedRequest, refuseLaterRequests } from './framing.js'
+import { writeCrash, writeFramingRejection, writeReply } from './write.js'
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
 
@@ -55,17 +56,17 @@ function copyRequest(
   method: string,
   path: string,
   decoded: DecodedChain,
+  framing: RequestFraming,
 ): PreparedRequest {
   const query: string | undefined = req.getQuery()
   const rawContentType = req.getHeader('content-type')
-  const rawContentLength = req.getHeader('content-length')
-  const contentLength = rawContentLength === '' ? undefined : rawContentLength
+  const { contentLength } = framing
   const { chain, parameters } = decoded
   const plan = chain.copyPlan
   const all = plan.allHeaders ? copyAllHeaders(req) : undefined
   const values = plan.allHeaders || plan.headerNames.length === 0 ? NO_VALUES : copyDeclaredHeaders(req, plan)
   const address = plan.clientAddress ? Buffer.from(res.getRemoteAddressAsText()).toString() : undefined
-  const body = attachBody(res, req, exchange, chain, contentLength)
+  const body = attachBody(res, req, exchange, chain, framing)
   const request = new CopiedRequest(
     exchange,
     method,
@@ -82,6 +83,19 @@ function copyRequest(
     body.reader,
   )
   return { context: createContext(request, exchange), chain: body.chain }
+}
+
+function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange): RequestFraming | undefined {
+  if (refusedRequest(res, exchange)) return undefined
+  const framing = readFraming(req)
+  if (framing.parserRejects) return undefined
+  if (framing.rejection !== undefined) {
+    refuseLaterRequests(res, exchange)
+    writeFramingRejection(res, exchange, framing.rejection)
+    return undefined
+  }
+  exchange.clientCloses = framing.clientCloses
+  return framing
 }
 
 function respond(res: HttpResponse, exchange: Exchange, { context, chain }: PreparedRequest): void {
@@ -127,7 +141,9 @@ function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
 
 /**
  * Returns the uWebSockets.js handler of one route. Inside the synchronous handler, the function
- * attaches the abort handler first. It then copies the path, the query string, the path
+ * attaches the abort handler first. It then checks the `content-length` and `transfer-encoding`
+ * lines, and starts no chain for a request that uWebSockets.js answers with its own 400 or whose
+ * transfer coding the package rejects. It then copies the path, the query string, the path
  * parameters, the content type, the content length, the declared headers, and, where the chain
  * declared it, the client address. Last, it attaches the body reader on a route that reads a
  * body. When that work throws, the client receives a 500.
@@ -157,13 +173,15 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
     let copied: PreparedRequest
     let decoded = withoutParameters
     try {
+      const framing = admittedFraming(res, req, exchange)
+      if (framing === undefined) return
       path = req.getUrl()
       if (count > 0) {
         const raw: string[] = []
         for (let index = 0; index < count; index++) raw.push(req.getParameter(index) ?? '')
         decoded = decodeChain(app, { ...base, rawParameters: raw })
       }
-      copied = copyRequest(res, req, exchange, method, path, decoded)
+      copied = copyRequest(res, req, exchange, method, path, decoded, framing)
     } catch (error) {
       crash(res, exchange, error, method, path)
       return
@@ -173,10 +191,11 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
 }
 
 /**
- * Returns the uWebSockets.js handler for every request that no native route matches. The handler
- * takes the method from the case-sensitive accessor and sends the request through the JavaScript
- * matcher. The client then receives a 404, a 405, or the methods of the path for OPTIONS. When the
- * JavaScript matcher matches a route there, the handler serves it and logs a warning.
+ * Returns the uWebSockets.js handler for every request that no native route matches. After the same
+ * framing checks as a route handler, the handler takes the method from the case-sensitive accessor
+ * and sends the request through the JavaScript matcher. The client then receives a 404, a 405, or
+ * the methods of the path for OPTIONS. When the JavaScript matcher matches a route there, the
+ * handler serves it and logs a warning.
  *
  * @param app - The package passes the compiled app.
  * @returns The function returns the handler to register under `any('/*')`.
@@ -190,11 +209,13 @@ export function fallbackHandler(app: CompiledApp): NativeHandler {
     let path = ''
     let copied: PreparedRequest
     try {
+      const framing = admittedFraming(res, req, exchange)
+      if (framing === undefined) return
       method = req.getCaseSensitiveMethod()
       path = req.getUrl()
       const chain = resolveChain(app, method, path)
       if (chain.matchedRoute) warnMissedRoute(app, method, path)
-      copied = copyRequest(res, req, exchange, method, path, decodeChain(app, chain))
+      copied = copyRequest(res, req, exchange, method, path, decodeChain(app, chain), framing)
     } catch (error) {
       crash(res, exchange, error, method, path)
       return

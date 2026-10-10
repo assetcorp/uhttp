@@ -107,5 +107,58 @@ describe('app.request()', () => {
       }),
     )
     await expectParserError(await app.request('/upload', { method: 'POST', headers: { 'content-length': '1e3' } }))
+    await expectParserError(
+      await app.request('/upload', { method: 'POST', headers: { 'content-length': '1000000000000000000' } }),
+    )
+    await expectParserError(await app.request('/upload', { method: 'POST', headers: { 'transfer-encoding': 'gzip' } }))
+  })
+
+  it('accepts a Content-Length of 18 digits, as uWebSockets.js does, and answers 413 to its size', async () => {
+    const app = createApp().post('/upload', c => c.text('ok'))
+
+    const response = await app.request('/upload', {
+      method: 'POST',
+      headers: { 'content-length': '100000000000000000' },
+    })
+
+    expect(response.status).toBe(413)
+  })
+
+  it.each([
+    ['xchunked', 400, 'INVALID_TRANSFER_ENCODING'],
+    ['chunked, chunked', 400, 'INVALID_TRANSFER_ENCODING'],
+    ['gzip, chunked', 501, 'UNSUPPORTED_TRANSFER_CODING'],
+  ])(
+    'answers a Transfer-Encoding of %s with %i and %s before any handler runs, and closes the connection',
+    async (encoding, status, code) => {
+      let handled = false
+      const app = createApp().post('/upload', c => {
+        handled = true
+        return c.text('ok')
+      })
+
+      const response = await app.request('/upload', {
+        method: 'POST',
+        headers: { 'transfer-encoding': encoding },
+        body: ['hello'],
+      })
+
+      expect(response.status).toBe(status)
+      expect(response.headers.get('connection')).toBe('close')
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(code)
+      expect(handled).toBe(false)
+    },
+  )
+
+  it('reads a body sent with a Transfer-Encoding of Chunked in another case', async () => {
+    const app = createApp().post('/upload', async c => c.text(await c.req.body.text()))
+
+    const response = await app.request('/upload', {
+      method: 'POST',
+      headers: { 'transfer-encoding': 'Chunked', 'content-type': 'text/plain' },
+      body: ['hel', 'lo'],
+    })
+
+    expect(await response.text()).toBe('hello')
   })
 })

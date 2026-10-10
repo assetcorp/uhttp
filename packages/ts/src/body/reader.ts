@@ -139,30 +139,19 @@ export class BodyReader implements BodyState {
 
   /**
    * Adds a copied chunk of the body. The reader fails with `PAYLOAD_TOO_LARGE` once the count passes
-   * the limit, and it pauses the source once it holds 64 KiB that the handler hasn't read.
+   * the limit, and from then on it discards the rest of the body, so that the connection can serve
+   * the next request once the body ends. It pauses the source once it holds 64 KiB that the
+   * handler hasn't read.
    *
    * @param chunk - The source passes a copy of the bytes, which the reader keeps.
    * @param last - The source passes `true` with the last chunk of the body.
    */
   push(chunk: Uint8Array, last: boolean): void {
-    if (!this.accepting) {
-      if (last && this.#discarding) this.#ended = true
-      return
-    }
-    this.#received += chunk.byteLength
-    if (this.#received > this.limit) {
-      this.#exchange.closeConnection = true
-      this.#pause()
-      this.fail(tooLarge(this.limit))
-      return
-    }
-    if (chunk.byteLength > 0) {
-      this.#queue.push(chunk)
-      this.#queuedBytes += chunk.byteLength
-    }
-    if (last) this.#ended = true
+    if (this.accepting) this.#take(chunk, last)
+    if (!last) return
+    this.#ended = true
     this.#wake()
-    if (!last && this.#queuedBytes >= BODY_HIGH_WATER_MARK_BYTES) this.#pause()
+    this.#exchange.bodyEnded()
   }
 
   /**
@@ -202,21 +191,14 @@ export class BodyReader implements BodyState {
   }
 
   /**
-   * Returns `true` when the package must close the connection after the response, because the
-   * reader failed or paused the source before the end of the body. Otherwise, the reader discards
-   * the rest of the body as the source delivers it.
-   *
-   * @returns The method returns `false` for a body that the source delivered in full, or that the
-   * source is still delivering.
+   * Discards the chunks that the handler hasn't read and every chunk that arrives later, and
+   * resumes a paused source, so that the connection can serve the next request once the body ends.
    */
-  settle(): boolean {
-    if (this.#ended && this.#error === undefined) return false
-    const close = this.#error !== undefined || this.#paused
+  settle(): void {
     if (this.#paused) this.#resume()
     this.#discarding = true
     this.#queue.length = 0
     this.#queuedBytes = 0
-    return close
   }
 
   /**
@@ -226,6 +208,22 @@ export class BodyReader implements BodyState {
   keepFlowing(): void {
     this.#flowing = true
     if (this.#paused) this.#resume()
+  }
+
+  #take(chunk: Uint8Array, last: boolean): void {
+    this.#received += chunk.byteLength
+    if (this.#received > this.limit) {
+      this.fail(tooLarge(this.limit))
+      this.#discarding = true
+      return
+    }
+    if (chunk.byteLength > 0) {
+      this.#queue.push(chunk)
+      this.#queuedBytes += chunk.byteLength
+    }
+    if (last) return
+    this.#wake()
+    if (this.#queuedBytes >= BODY_HIGH_WATER_MARK_BYTES) this.#pause()
   }
 
   #wake(): void {

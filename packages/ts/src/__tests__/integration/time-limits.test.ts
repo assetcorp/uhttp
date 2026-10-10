@@ -32,7 +32,7 @@ describe('the time limit of a handler', () => {
     expect(await (await pending).text()).toBe('done')
   })
 
-  it('answers 503 with HANDLER_TIMEOUT, fires the abort signal, and closes the connection once the app limit passes', async () => {
+  it('answers 503 with HANDLER_TIMEOUT, fires the abort signal, and keeps the connection open once the app limit passes', async () => {
     const signals: AbortSignal[] = []
     const app = createApp({ timeoutMs: 1_000 }).get('/hang', hanging(signals))
 
@@ -44,7 +44,7 @@ describe('the time limit of a handler', () => {
 
     expect(response.status).toBe(503)
     expect(await errorCodeOf(response)).toBe('HANDLER_TIMEOUT')
-    expect(response.headers.get('connection')).toBe('close')
+    expect(response.headers.get('connection')).toBeNull()
     expect(signals[0]?.aborted).toBe(true)
     expect(signals[0]?.reason).toEqual(expect.objectContaining({ code: 'HANDLER_TIMEOUT' }))
   })

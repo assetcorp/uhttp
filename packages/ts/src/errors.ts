@@ -3,10 +3,11 @@
  * handler. Each code corresponds to one HTTP status.
  *
  * @remarks
- * `INVALID_PATH_PARAMETER`, `INVALID_JSON`, `VALIDATION_FAILED`, `INVALID_MULTIPART`, and
- * `REQUEST_ABORTED` correspond to 400, `NOT_FOUND` to 404, `METHOD_NOT_ALLOWED` to 405,
- * `PAYLOAD_TOO_LARGE` to 413, `UNSUPPORTED_MEDIA_TYPE` to 415, and `HANDLER_TIMEOUT` to 503. Every
- * other code corresponds to 500. The package throws each code in one situation:
+ * `INVALID_PATH_PARAMETER`, `INVALID_JSON`, `VALIDATION_FAILED`, `INVALID_MULTIPART`,
+ * `REQUEST_ABORTED`, and `INVALID_TRANSFER_ENCODING` correspond to 400, `NOT_FOUND` to 404,
+ * `METHOD_NOT_ALLOWED` to 405, `PAYLOAD_TOO_LARGE` to 413, `UNSUPPORTED_MEDIA_TYPE` to 415,
+ * `UNSUPPORTED_TRANSFER_CODING` to 501, and `HANDLER_TIMEOUT` to 503. Every other code corresponds
+ * to 500. The package throws each code in one situation:
  *
  * - The package throws `INVALID_PATH_PARAMETER` when a path parameter contains a percent sequence
  *   that fails to decode.
@@ -25,6 +26,10 @@
  * - The package throws `REQUEST_ABORTED` from a read of the body when the client disconnects before
  *   the body ends.
  * - The package throws `HANDLER_TIMEOUT` when a handler passes the time limit of its route.
+ * - The package sends `INVALID_TRANSFER_ENCODING` when the `transfer-encoding` lines of a request
+ *   apply `chunked` more than once or end with a coding other than `chunked`.
+ * - The package sends `UNSUPPORTED_TRANSFER_CODING` when a request applies a transfer coding
+ *   before `chunked`, such as `gzip, chunked`, because the package decodes `chunked` alone.
  * - The package throws `UNDECLARED_HEADER` when your code asks for a header that neither the route
  *   nor its middleware declared.
  * - The package throws `UNDECLARED_CLIENT_ADDRESS` when your code asks for the client address and
@@ -55,8 +60,10 @@
  * - The package throws `LISTEN_FAILED` when the operating system can't bind the address that you
  *   chose.
  *
- * When your code throws any error apart from a `UhttpError` below 500 or a `HANDLER_TIMEOUT`, the
- * client receives `INTERNAL_ERROR`.
+ * The package sends `INVALID_TRANSFER_ENCODING` and `UNSUPPORTED_TRANSFER_CODING` before any
+ * middleware or handler runs, and it closes the connection after the reply. When your code throws
+ * any error apart from a `UhttpError` below 500 or a `HANDLER_TIMEOUT`, the client receives
+ * `INTERNAL_ERROR`.
  */
 export type ErrorCode =
   | 'INVALID_PATH_PARAMETER'
@@ -69,6 +76,8 @@ export type ErrorCode =
   | 'INVALID_MULTIPART'
   | 'REQUEST_ABORTED'
   | 'HANDLER_TIMEOUT'
+  | 'INVALID_TRANSFER_ENCODING'
+  | 'UNSUPPORTED_TRANSFER_CODING'
   | 'INTERNAL_ERROR'
   | 'MISSING_REPLY'
   | 'NEXT_CALLED_TWICE'
@@ -98,6 +107,8 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   INVALID_MULTIPART: 400,
   REQUEST_ABORTED: 400,
   HANDLER_TIMEOUT: 503,
+  INVALID_TRANSFER_ENCODING: 400,
+  UNSUPPORTED_TRANSFER_CODING: 501,
   INTERNAL_ERROR: 500,
   MISSING_REPLY: 500,
   NEXT_CALLED_TWICE: 500,

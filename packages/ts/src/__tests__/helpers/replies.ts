@@ -20,3 +20,19 @@ export async function expectHello(connection: HttpConnection): Promise<void> {
   const response = await connection.exchange(requestHead('GET', '/hello'))
   expect([response.status, response.body.toString()]).toEqual([200, 'Hello'])
 }
+
+export const CONNECTION_CHOICES = [
+  ['keeps the connection open for the next request', []],
+  ['closes the connection cleanly once the body ends, as the client asked', ['Connection: close']],
+] as const
+
+export function withEveryConnectionChoice<T extends object>(
+  cases: readonly T[],
+): (T & { choice: string; lines: readonly string[] })[] {
+  return cases.flatMap(entry => CONNECTION_CHOICES.map(([choice, lines]) => ({ ...entry, choice, lines })))
+}
+
+export async function expectConnectionAfterReply(connection: HttpConnection, lines: readonly string[]): Promise<void> {
+  if (lines.includes('Connection: close')) expect(await connection.waitForClose()).toBe('closed')
+  else await expectHello(connection)
+}

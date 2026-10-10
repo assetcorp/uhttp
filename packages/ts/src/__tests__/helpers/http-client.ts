@@ -235,13 +235,14 @@ export function requestWithBody(
   return Buffer.concat([Buffer.from(requestHead(method, target, [...lines, `Content-Length: ${bytes.length}`])), bytes])
 }
 
+export function chunkFrame(piece: string | Uint8Array): Buffer {
+  const bytes = Buffer.from(piece)
+  if (bytes.length === 0) throw new Error('A chunked request cannot hold an empty piece, because 0 ends the body.')
+  return Buffer.concat([Buffer.from(`${bytes.length.toString(16)}\r\n`), bytes, CRLF])
+}
+
 export function chunked(pieces: readonly (string | Uint8Array)[]): Buffer {
-  const frames = pieces.flatMap(piece => {
-    const bytes = Buffer.from(piece)
-    if (bytes.length === 0) throw new Error('A chunked request cannot hold an empty piece, because 0 ends the body.')
-    return [Buffer.from(`${bytes.length.toString(16)}\r\n`), bytes, CRLF]
-  })
-  return Buffer.concat([...frames, LAST_CHUNK])
+  return Buffer.concat([...pieces.map(chunkFrame), LAST_CHUNK])
 }
 
 export function chunkedRequest(

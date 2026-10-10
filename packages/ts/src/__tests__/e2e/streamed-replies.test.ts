@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../../index.js'
-import { chunkedRequest, openConnection, requestHead, send } from '../helpers/http-client.js'
-import { errorBody, expectHello } from '../helpers/replies.js'
+import { chunkFrame, openConnection, requestHead, send } from '../helpers/http-client.js'
+import { errorBody, expectConnectionAfterReply, expectHello, withEveryConnectionChoice } from '../helpers/replies.js'
 import { memoryLogger, pause, start, urlOf } from '../helpers/server.js'
 
 const CHUNK_BYTES = 1024 * 1024
@@ -220,38 +220,41 @@ describe('streamed replies over the network', () => {
     expect(results.at(-1)).toBe(false)
   })
 
-  it.each([
-    ['unknown length', undefined],
-    ['known length', 14],
-  ])(
-    'sends a whole and valid body of %s to a POST whose body passes the limit unread, and leaves the connection usable or closed',
-    async (_name, length) => {
+  it.each(
+    withEveryConnectionChoice([
+      { name: 'unknown length', length: undefined, framing: 'chunked' },
+      { name: 'known length', length: 14, framing: 'length' },
+    ]),
+  )(
+    'sends a whole and valid body of $name while the client still uploads a body above the limit, and $choice',
+    async ({ length, framing, lines }) => {
       const app = createApp({ maxBodyBytes: 100 })
         .post('/words', c =>
           c.stream(
             async stream => {
               await stream.write('part-1;')
-              await pause(100)
+              await pause(50)
               await stream.write('part-2;')
-              await pause(100)
             },
             length === undefined ? {} : { length },
           ),
         )
         .get('/hello', c => c.text('Hello'))
       const server = await start(app)
+      const connection = await openConnection(server.port)
 
-      const { connection, response } = await send(
-        server.port,
-        chunkedRequest('POST', '/words', [], [Buffer.alloc(4096, 120)]),
-      )
+      void connection.write(requestHead('POST', '/words', ['Transfer-Encoding: chunked', ...lines]))
+      for (let index = 0; index < 8; index++) {
+        void connection.write(chunkFrame(Buffer.alloc(64 * 1024, 120)))
+        await pause(40)
+      }
+      void connection.write('0\r\n\r\n')
+      const response = await connection.response()
 
       expect(response.status).toBe(200)
-      expect(response.framing).toBe(length === undefined ? 'chunked' : 'length')
+      expect(response.framing).toBe(framing)
       expect(response.body.toString()).toBe('part-1;part-2;')
-      const state = await connection.waitForClose(300)
-      if (state === 'open') await expectHello(connection)
-      else expect(state).toBe('closed')
+      await expectConnectionAfterReply(connection, lines)
     },
   )
 })

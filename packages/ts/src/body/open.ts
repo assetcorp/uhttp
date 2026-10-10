@@ -21,7 +21,8 @@ export interface OpenedBody {
  * Prepares the body of a request after the copy of the request. On a route without a body reader,
  * the function changes nothing. For a compressed body or a declared length above the limit of the
  * route, it fails the reader with the early rejection and replaces the handler with one that throws
- * it. It also marks the connection for closing, because the client can still be sending the body.
+ * it. The package then sends the rejection at once, and the rest of the body is discarded as it
+ * arrives.
  *
  * @param exchange - The package passes the state of the request.
  * @param chain - The package passes the chain of the request, with the limits of the route.
@@ -42,7 +43,6 @@ export function openBody(
   const empty = rejection !== undefined || declaresNoBody(framing)
   const reader = new BodyReader(exchange, source, maxBodyBytes, empty)
   if (rejection === undefined) return { reader, chain, flowing: !empty }
-  exchange.closeConnection = true
   reader.fail(rejection)
   return { reader, chain: rejectedChain(chain, rejection), flowing: false }
 }

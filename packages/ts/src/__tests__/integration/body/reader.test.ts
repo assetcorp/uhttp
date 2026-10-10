@@ -89,7 +89,7 @@ describe('body limits through app.request()', () => {
     const response = await app.request('/count', { method: 'POST', body: chunksOf([4, 4, 4]) })
 
     expect(response.status).toBe(413)
-    expect(response.headers.get('connection')).toBe('close')
+    expect(response.headers.get('connection')).toBeNull()
   })
 
   it('answers 413 to a declared length above the limit before it reads any of the body', async () => {
@@ -112,7 +112,7 @@ describe('body limits through app.request()', () => {
 
     expect(response.status).toBe(413)
     expect(await errorCodeOf(response)).toBe('PAYLOAD_TOO_LARGE')
-    expect(response.headers.get('connection')).toBe('close')
+    expect(response.headers.get('connection')).toBeNull()
     expect(handled).toBe(false)
     expect(pulled).toBe(0)
   })

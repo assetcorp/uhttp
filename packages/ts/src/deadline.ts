@@ -20,9 +20,8 @@ function warnTimeout(exchange: Exchange, context: Context, timeoutMs: number): v
 /**
  * Starts the time limit of a handler. When the limit passes before the chain finishes, the function
  * fires the abort signal and releases the body reader and the upload destinations. It then makes
- * the reply of the error handler for `HANDLER_TIMEOUT` the last reply, marks the connection for
- * closing, and calls `send`. The handler goes on executing, but the package discards the reply that
- * the handler returns.
+ * the reply of the error handler for `HANDLER_TIMEOUT` the last reply and calls `send`. The handler
+ * goes on executing, but the package discards the reply that the handler returns.
  *
  * @param exchange - The package passes the state of the request.
  * @param context - The package passes the context of the request.
