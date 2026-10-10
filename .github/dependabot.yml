@@ -6,6 +6,9 @@ updates:
       interval: "monthly"
     cooldown:
       default-days: 4
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       production:
         dependency-type: "production"
