@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, type Middleware } from '../index.js'
-import { memoryLogger, pause } from './helpers/server.js'
+import { createApp, type Middleware } from '../../index.js'
+import { memoryLogger, pause } from '../helpers/server.js'
 
 describe('the request context', () => {
   it('copies the method, the path, the query string, the content type, and the content length for use after an await', async () => {

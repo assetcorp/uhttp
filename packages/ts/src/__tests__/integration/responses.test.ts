@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, UhttpError } from '../index.js'
-import { memoryLogger } from './helpers/server.js'
+import { createApp, UhttpError } from '../../index.js'
+import { memoryLogger } from '../helpers/server.js'
 
 describe('reply helpers', () => {
   it('sends text with a status and headers', async () => {

@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApp, type TestRequestInit, type UploadDestination } from '../../index.js'
-import { BOUNDARY, errorCodeOf, forEverySplit, multipartBody, multipartType } from '../helpers/body.js'
+import { createApp, type TestRequestInit, type UploadDestination } from '../../../index.js'
+import { BOUNDARY, errorCodeOf, forEverySplit, multipartBody, multipartType } from '../../helpers/body.js'
 
 const CHUNK_BYTES = 16_384
 const FILE_CHUNKS = 64

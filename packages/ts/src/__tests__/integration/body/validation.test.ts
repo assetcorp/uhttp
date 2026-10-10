@@ -4,8 +4,8 @@ import { type } from 'arktype'
 import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { createApp, type StandardSchemaV1 } from '../../index.js'
-import { memoryLogger } from '../helpers/server.js'
+import { createApp, type StandardSchemaV1 } from '../../../index.js'
+import { memoryLogger } from '../../helpers/server.js'
 
 interface ErrorBody {
   error: { code: string; message: string; issues?: { message: string; path: (string | number)[] }[] }
@@ -135,10 +135,9 @@ describe('json(schema) with a Standard Schema validator', () => {
   })
 
   it('lists no validator among the dependencies of the package', () => {
-    const manifest = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../../package.json'), 'utf8')) as Record<
-      string,
-      Record<string, string> | undefined
-    >
+    const manifest = JSON.parse(
+      readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf8'),
+    ) as Record<string, Record<string, string> | undefined>
     const runtime = { ...manifest.dependencies, ...manifest.peerDependencies, ...manifest.optionalDependencies }
 
     for (const name of ['valibot', 'zod', 'arktype', '@standard-schema/spec']) {

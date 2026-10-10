@@ -3,9 +3,9 @@ import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type * as Uhttp from '../index.js'
+import type * as Uhttp from '../../index.js'
 
-const PACKAGE_DIR = resolve(import.meta.dirname, '../..')
+const PACKAGE_DIR = resolve(import.meta.dirname, '../../..')
 const SOURCE_DIR = join(PACKAGE_DIR, 'src')
 const OUT_DIR = join(PACKAGE_DIR, '.cache', 'package-test', 'dist')
 const TSC = join(PACKAGE_DIR, 'node_modules', '.bin', 'tsc')

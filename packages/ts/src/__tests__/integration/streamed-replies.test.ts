@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, type ResponseStream } from '../index.js'
-import { memoryLogger, pause } from './helpers/server.js'
+import { createApp, type ResponseStream } from '../../index.js'
+import { memoryLogger, pause } from '../helpers/server.js'
 
 describe('streamed replies through app.request()', () => {
   it('sends the chunks of a stream of unknown length', async () => {
