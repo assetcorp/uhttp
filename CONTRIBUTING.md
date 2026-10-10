@@ -27,7 +27,7 @@ Continuous integration applies the same checks, so apply them yourself before yo
 - `pnpm nx run uhttp:api:write` rewrites the API reports in `packages/ts/etc/`. Run it after you change an export, because the build fails until the committed reports match the exports.
 - `pnpm nx run uhttp:speed` measures one route on bare uWebSockets.js and on uhttp for 10 seconds each at 100 connections, and it fails when uhttp is more than 10% slower. Close other busy programs first, because on a busy machine the result can vary by more than 10% in either direction.
 
-On every pull request, the `Speed` workflow compares the speed of the change with main and writes a table to its summary. The workflow passes whatever the table contains.
+On every pull request, the `Speed` workflow compares the speed of the change with main and writes a table to its summary. The `Speed comment` workflow then posts that table as a comment on the pull request, and it updates the same comment after each push. The workflow passes whatever the table contains.
 
 ## Repository layout
 

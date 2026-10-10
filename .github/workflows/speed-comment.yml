@@ -1,0 +1,51 @@
+name: Speed comment
+
+on:
+  workflow_run:
+    workflows: [Speed]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  comment:
+    name: Post the speed table on the pull request
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      pull-requests: write
+
+    steps:
+      - name: Download the speed report of the Speed run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name speed-report --dir speed-report
+
+      - name: Post the table, or update the table that an earlier run posted
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          number="$(head -n 1 speed-report/pull-request-number)"
+          if ! [[ "$number" =~ ^[0-9]+$ ]]; then
+            echo "The speed report contains no pull request number." >&2
+            exit 1
+          fi
+          head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq .head.sha)"
+          if [ "$head" != "$HEAD_SHA" ]; then
+            echo "Pull request $number now points at a newer commit than the measured one, so the job posts nothing."
+            exit 0
+          fi
+          marker='<!-- uhttp-speed-report -->'
+          { echo "$marker"; head -c 60000 speed-report/report.md; } > comment.md
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$number/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
+          if [ -n "$existing" ]; then
+            jq -Rs '{body: .}' comment.md | gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" --input - > /dev/null
+          else
+            jq -Rs '{body: .}' comment.md | gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$number/comments" --input - > /dev/null
+          fi
