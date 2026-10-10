@@ -27,21 +27,32 @@ Match on the code, because the message can change between releases.
 | `INVALID_PATH_PARAMETER` | 400 | A path parameter contains a percent sequence that fails to decode. |
 | `NOT_FOUND` | 404 | A path has no route. You can throw it yourself for a missing record. |
 | `METHOD_NOT_ALLOWED` | 405 | A path has routes, but none for the method of the request. |
+| `PAYLOAD_TOO_LARGE` | 413 | A request body, a form, or an upload passes one of its limits. |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | A body parser meets a content type or a charset that it can't parse, or a request body is compressed. |
+| `INVALID_JSON` | 400 | A JSON body fails to parse, or it contains a `__proto__` key or a `constructor` key with a `prototype` key. |
+| `VALIDATION_FAILED` | 400 | A JSON body fails its schema. The reply lists the first 10 problems under `issues`. |
+| `INVALID_MULTIPART` | 400 | A multipart body has an invalid boundary, a part without a name, a control character in a name, or no closing boundary. |
+| `REQUEST_ABORTED` | 400 | The client goes before the body ends, so a pending read of the body rejects. Nobody receives this reply. |
+| `HANDLER_TIMEOUT` | 503 | A handler passes the time limit of its route. |
 | `INTERNAL_ERROR` | 500 | The package sends this code to the client for every error that maps to 500. |
 | `MISSING_REPLY` | 500 | The middleware chain ends without a reply, or an error handler returns something other than a reply. |
 | `NEXT_CALLED_TWICE` | 500 | A middleware calls `next()` a second time. |
 | `UNDECLARED_HEADER` | 500 | Your code asks for a request header that neither the route nor its middleware declared. |
 | `UNDECLARED_CLIENT_ADDRESS` | 500 | Your code asks for the client address, and nobody declared it. |
+| `UNDECLARED_BODY` | 500 | Your code reads the body on a route without a body reader. |
+| `BODY_ALREADY_READ` | 500 | Your code reads a body after it streamed that body. |
+| `INVALID_SCHEMA` | 500 | A schema lacks the Standard Schema interface, or its validator throws, rejects, or returns something else. |
+| `INVALID_UPLOAD` | 500 | You pass `multipart()` a limit that is not a whole number of zero or more, its `file` callback returns something other than a writable stream, or a destination closes before the package has written the whole file. |
 | `INVALID_HEADER` | 500 | Your code sets a header name that is not an HTTP token, or a value with a control character. |
 | `INVALID_EVENT` | 500 | A server-sent event has a line break in its name or its ID, or a retry time that is not a whole number of zero or more. |
 | `INVALID_STREAM` | 500 | Your producer writes more or fewer bytes than the length that you declared, or you pass a stream option outside its range. |
 | `INVALID_STATUS` | 500 | You pass a helper a status outside the range that its reply allows. |
-| `INVALID_ROUTE` | 500 | You add a route path or a group prefix that breaks the rules of the router. |
-| `INVALID_APP_OPTIONS` | 500 | You pass `createApp()` an option of the wrong type. |
+| `INVALID_ROUTE` | 500 | You add a route path or a group prefix that breaks the rules of the router, or a route option of the wrong type. |
+| `INVALID_APP_OPTIONS` | 500 | You pass `createApp()` an option of the wrong type, or a limit that is not a whole number of zero or more. |
 | `INVALID_SERVE_OPTIONS` | 500 | You pass `serve()` a port outside 0 to 65535. |
 | `LISTEN_FAILED` | 500 | The operating system returns an error when the package binds the address that you chose. |
 
-For a `UhttpError` below 500, the package sends the status, the code, and the message of the error. For every other error, including any error that is not a `UhttpError`, it sends a 500 whose message is 'The request failed.' alone, so that the package writes a stack trace or an internal message only to your logger:
+For a `UhttpError` below 500, and for `HANDLER_TIMEOUT`, the package sends the status, the code, and the message of the error, together with `issues` for `VALIDATION_FAILED`. For every other error, including any error that is not a `UhttpError`, it sends a 500 whose message is 'The request failed.' alone, so that the package writes a stack trace or an internal message only to your logger:
 
 ```json
 { "error": { "code": "INTERNAL_ERROR", "message": "The request failed." } }

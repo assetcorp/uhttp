@@ -1,5 +1,6 @@
-import { type CompiledApp, type CopyPlan, copyPlanOf, handlerOf } from './compile.js'
+import { type CompiledApp, type CopyPlan, copyPlanOf, handlerOf, type RouteLimits } from './compile.js'
 import { OPTIONS_STATUS } from './constants.js'
+import type { Context } from './context.js'
 import { UhttpError } from './errors.js'
 import { createReply, errorReply } from './reply.js'
 import { prefixMatches, splitPath } from './router/index.js'
@@ -28,6 +29,20 @@ export interface RequestChain {
   readonly rawParameters: readonly string[]
   /** This is `true` when the chain ends in the handler of a route. */
   readonly matchedRoute: boolean
+  /** The package applies these limits and attaches a body reader by them. */
+  readonly limits: RouteLimits
+}
+
+/**
+ * The package sends a copied request through this chain, with this context.
+ *
+ * @internal
+ */
+export interface PreparedRequest {
+  /** Every middleware and the handler receive this context. */
+  readonly context: Context
+  /** The package sends the request through this chain. */
+  readonly chain: RequestChain
 }
 
 /**
@@ -73,7 +88,14 @@ function fallbackChain(app: CompiledApp, method: string, segments: readonly stri
     wrapping.layers = middleware.map(handlerOf)
     wrapping.copyPlan = copyPlanOf(middleware)
   }
-  return { ...wrapping, handler, parameterNames: NO_PARAMETERS, rawParameters: NO_PARAMETERS, matchedRoute: false }
+  return {
+    ...wrapping,
+    handler,
+    parameterNames: NO_PARAMETERS,
+    rawParameters: NO_PARAMETERS,
+    matchedRoute: false,
+    limits: app.appLimits,
+  }
 }
 
 /**
@@ -100,6 +122,27 @@ export function resolveChain(app: CompiledApp, method: string, path: string): Re
     parameterNames: route.parameterNames,
     rawParameters: match.parameters,
     matchedRoute: true,
+    limits: route.limits,
+  }
+}
+
+/**
+ * Returns the chain of a request that the package rejects before it reads any of the body. The
+ * middleware of the route still wraps the 413 or the 415, while the handler of the route never
+ * runs. With a 415, the package sends `Accept-Encoding: identity`.
+ *
+ * @param chain - The package passes the chain of the route.
+ * @param rejection - The package passes the error of the early rejection.
+ * @returns The function returns the chain whose handler throws the error.
+ * @internal
+ */
+export function rejectedChain(chain: RequestChain, rejection: UhttpError): RequestChain {
+  return {
+    ...chain,
+    handler: context => {
+      if (rejection.code === 'UNSUPPORTED_MEDIA_TYPE') context.header('accept-encoding', 'identity')
+      throw rejection
+    },
   }
 }
 
@@ -113,6 +156,7 @@ function invalidParameterChain(app: CompiledApp): RequestChain {
     parameterNames: NO_PARAMETERS,
     rawParameters: NO_PARAMETERS,
     matchedRoute: false,
+    limits: app.appLimits,
   }
 }
 

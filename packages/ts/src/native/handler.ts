@@ -3,10 +3,12 @@ import { logServerError, runChain } from '../chain.js'
 import type { CompiledApp, CompiledRoute, CopyPlan } from '../compile.js'
 import { LIST_HEADER_NAMES } from '../constants.js'
 import { type Context, createContext } from '../context.js'
+import { startDeadline } from '../deadline.js'
 import { Exchange } from '../exchange.js'
 import { lineSeparatorOf } from '../headers.js'
 import { CopiedRequest } from '../request.js'
-import { type DecodedChain, decodeChain, type RequestChain, resolveChain } from '../resolve.js'
+import { type DecodedChain, decodeChain, type PreparedRequest, type RequestChain, resolveChain } from '../resolve.js'
+import { attachBody } from './body.js'
 import { writeCrash, writeReply } from './write.js'
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
@@ -53,15 +55,17 @@ function copyRequest(
   method: string,
   path: string,
   decoded: DecodedChain,
-): Context {
+): PreparedRequest {
   const query: string | undefined = req.getQuery()
-  const contentType = req.getHeader('content-type')
-  const contentLength = req.getHeader('content-length')
+  const rawContentType = req.getHeader('content-type')
+  const rawContentLength = req.getHeader('content-length')
+  const contentLength = rawContentLength === '' ? undefined : rawContentLength
   const { chain, parameters } = decoded
   const plan = chain.copyPlan
   const all = plan.allHeaders ? copyAllHeaders(req) : undefined
   const values = plan.allHeaders || plan.headerNames.length === 0 ? NO_VALUES : copyDeclaredHeaders(req, plan)
   const address = plan.clientAddress ? Buffer.from(res.getRemoteAddressAsText()).toString() : undefined
+  const body = attachBody(res, req, exchange, chain, contentLength)
   const request = new CopiedRequest(
     exchange,
     method,
@@ -69,23 +73,31 @@ function copyRequest(
     query ?? '',
     chain.parameterNames,
     parameters,
-    contentType === '' ? undefined : contentType,
-    contentLength === '' ? undefined : contentLength,
+    rawContentType === '' ? undefined : rawContentType,
+    contentLength,
     plan.headerNames,
     values,
     all,
     address,
+    body.reader,
   )
-  return createContext(request, exchange)
+  return { context: createContext(request, exchange), chain: body.chain }
 }
 
-function respond(res: HttpResponse, exchange: Exchange, context: Context, chain: RequestChain): void {
+function respond(res: HttpResponse, exchange: Exchange, { context, chain }: PreparedRequest): void {
   const pending = runChain(context, exchange, chain.layers, chain.handler)
   if (pending === undefined) {
     finish(res, exchange, context, false)
     return
   }
-  pending.then(() => finish(res, exchange, context, true))
+  const { timeoutMs } = chain.limits
+  const stop =
+    timeoutMs > 0 ? startDeadline(exchange, context, timeoutMs, () => finish(res, exchange, context, true)) : undefined
+  pending.then(() => {
+    if (exchange.timedOut) return
+    stop?.()
+    finish(res, exchange, context, true)
+  })
 }
 
 function finish(res: HttpResponse, exchange: Exchange, context: Context, cork: boolean): void {
@@ -117,7 +129,8 @@ function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
  * Returns the uWebSockets.js handler of one route. Inside the synchronous handler, the function
  * attaches the abort handler first. It then copies the path, the query string, the path
  * parameters, the content type, the content length, the declared headers, and, where the chain
- * declared it, the client address. When that copy throws, the client receives a 500.
+ * declared it, the client address. Last, it attaches the body reader on a route that reads a
+ * body. When that work throws, the client receives a 500.
  *
  * @param app - The package passes the compiled app.
  * @param route - The package passes the compiled route.
@@ -134,13 +147,14 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
     parameterNames: route.parameterNames,
     rawParameters: NO_PARAMETERS,
     matchedRoute: true,
+    limits: route.limits,
   }
   const withoutParameters: DecodedChain = { chain: base, parameters: NO_PARAMETERS }
   return (res, req) => {
     const exchange = new Exchange(app.runtime)
     res.onAborted(() => exchange.abort())
     let path = ''
-    let context: Context
+    let copied: PreparedRequest
     let decoded = withoutParameters
     try {
       path = req.getUrl()
@@ -149,12 +163,12 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
         for (let index = 0; index < count; index++) raw.push(req.getParameter(index) ?? '')
         decoded = decodeChain(app, { ...base, rawParameters: raw })
       }
-      context = copyRequest(res, req, exchange, method, path, decoded)
+      copied = copyRequest(res, req, exchange, method, path, decoded)
     } catch (error) {
       crash(res, exchange, error, method, path)
       return
     }
-    respond(res, exchange, context, decoded.chain)
+    respond(res, exchange, copied)
   }
 }
 
@@ -174,19 +188,17 @@ export function fallbackHandler(app: CompiledApp): NativeHandler {
     res.onAborted(() => exchange.abort())
     let method = ''
     let path = ''
-    let context: Context
-    let decoded: DecodedChain
+    let copied: PreparedRequest
     try {
       method = req.getCaseSensitiveMethod()
       path = req.getUrl()
       const chain = resolveChain(app, method, path)
       if (chain.matchedRoute) warnMissedRoute(app, method, path)
-      decoded = decodeChain(app, chain)
-      context = copyRequest(res, req, exchange, method, path, decoded)
+      copied = copyRequest(res, req, exchange, method, path, decodeChain(app, chain))
     } catch (error) {
       crash(res, exchange, error, method, path)
       return
     }
-    respond(res, exchange, context, decoded.chain)
+    respond(res, exchange, copied)
   }
 }
