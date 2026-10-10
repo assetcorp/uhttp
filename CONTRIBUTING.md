@@ -4,7 +4,7 @@ This guide covers how to set up the repository, check a change, and propose it.
 
 ## Prerequisites
 
-- You need Node.js 22 or newer.
+- You need Node.js 22.18 or a later 22 release, Node.js 24, or Node.js 26, because the repository's scripts are TypeScript files that those releases execute without a build step. The `.node-version` file contains 24.
 - You need pnpm 11.8.0, the version in the `packageManager` field of `package.json`. Once you enable Corepack with `corepack enable`, Corepack uses that version whenever you call pnpm in this repository.
 
 ## Set up the repository
@@ -24,6 +24,10 @@ Continuous integration applies the same checks, so apply them yourself before yo
 - `pnpm lint` checks the code with Biome.
 - `pnpm typecheck` type-checks the TypeScript.
 - `pnpm format` applies Biome formatting.
+- `pnpm nx run uhttp:api:write` rewrites the API reports in `packages/ts/etc/`. Run it after you change an export, because the build fails until the committed reports match the exports.
+- `pnpm nx run uhttp:speed` measures one route on bare uWebSockets.js and on uhttp for 10 seconds each at 100 connections, and it fails when uhttp is more than 10% slower. Close other busy programs first, because on a busy machine the result can vary by more than 10% in either direction.
+
+On every pull request, the `Speed` workflow compares the speed of the change with main and writes a table to its summary. The workflow passes whatever the table contains.
 
 ## Repository layout
 
