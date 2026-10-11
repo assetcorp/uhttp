@@ -26,9 +26,9 @@ Continuous integration applies the same checks, so apply them yourself before yo
 - `pnpm typecheck` type-checks the TypeScript.
 - `pnpm format` applies Biome formatting.
 - `pnpm nx run uhttp:api:write` rewrites the API reports in `packages/ts/etc/`. Run it after you change an export, because the build fails until the committed reports match the exports.
-- `pnpm nx run uhttp:speed` measures one route on bare uWebSockets.js and on uhttp for 10 seconds each at 100 connections, and it fails when uhttp is more than 10% slower. Close other busy programs first, because on a busy machine the result can vary by more than 10% in either direction.
+- `pnpm nx run uhttp:speed` measures one route on bare uWebSockets.js and on uhttp for 10 seconds each at 100 connections, and it fails when uhttp is more than 5% slower. Close other busy programs first, because on a busy machine the result can vary by more than 10% in either direction.
 
-On every pull request, the `Speed` workflow compares the speed of the change with main and writes a table to its summary. The `Speed comment` workflow then posts that table as a comment on the pull request, and it updates the same comment after each push. The workflow passes whatever the table contains.
+On every pull request, the `Speed` workflow measures the change, main, and bare uWebSockets.js on one machine in 10 rounds and writes a table to its summary. The workflow compares the change with main to measure the slowdown from that pull request alone, and that comparison never fails the workflow. It also compares the change with bare uWebSockets.js, and it fails when uhttp is more than 5% slower than bare uWebSockets.js in the median round, because several pull requests can each stay within the noise of main while their slowdowns add up past that limit. The `Speed comment` workflow then posts that table as a comment on the pull request, and it updates the same comment after each push. When a pull request upgrades uWebSockets.js, the bare server uses the new version, so read the comparison with main to see what the upgrade changed.
 
 ## Tests
 

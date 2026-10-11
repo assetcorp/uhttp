@@ -3,7 +3,7 @@ import {
   CONNECTIONS,
   LOCAL_MEASURE_DURATION_MS,
   LOCAL_WARM_UP_DURATION_MS,
-  MAX_LOCAL_SLOWDOWN_RATIO,
+  MAX_SLOWDOWN_FROM_BARE_RATIO,
 } from './constants.ts'
 import { formatRate, formatShare, measure, startServer } from './harness.ts'
 
@@ -29,8 +29,8 @@ console.log(`uhttp served ${formatRate(uhttp)}.`)
 
 const change = uhttp / bare - 1
 const comparison = `uhttp is ${formatShare(Math.abs(change))} ${change < 0 ? 'slower' : 'faster'} than bare uWebSockets.js`
-const limit = `the limit of a ${formatShare(MAX_LOCAL_SLOWDOWN_RATIO)} slowdown`
-if (uhttp < bare * (1 - MAX_LOCAL_SLOWDOWN_RATIO)) {
+const limit = `the limit of a ${formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)} slowdown`
+if (uhttp < bare * (1 - MAX_SLOWDOWN_FROM_BARE_RATIO)) {
   console.error(`${comparison}, which is beyond ${limit}.`)
   process.exitCode = 1
 } else {

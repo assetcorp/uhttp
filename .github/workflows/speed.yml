@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   compare:
-    name: Compare speed with main
+    name: Compare speed with main and with bare uWebSockets.js
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -55,7 +55,7 @@ jobs:
             echo "comparable=true" >> "$GITHUB_OUTPUT"
           else
             echo "comparable=false" >> "$GITHUB_OUTPUT"
-            printf '## Speed compared with main\n\nMain has no uhttp package for this job to compile, so the job measured nothing.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
+            printf '## Speed compared with main and with bare uWebSockets.js\n\nMain has no uhttp package for this job to compile, so the job measured nothing.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Install and compile main
@@ -65,19 +65,21 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --dir packages/ts run compile
 
-      - name: Compare main with the change
+      - name: Compare the change with main and with bare uWebSockets.js
         id: compare
         if: steps.main.outputs.comparable == 'true'
         continue-on-error: true
         env:
           BASE_ENTRY: .speed/main/packages/ts/dist/index.js
           CHANGE_ENTRY: packages/ts/dist/index.js
+        shell: bash
         run: node packages/ts/benchmarks/speed-guard/compare.ts | tee speed-report/report.md
 
-      - name: Report a comparison that ended before it wrote a table
+      - name: Report a comparison that ended before it wrote a table, and fail the job
         if: steps.compare.outcome == 'failure'
         run: |
-          printf '## Speed compared with main\n\nThe comparison script exited before it wrote a table, so open the log of the comparison step to find the error.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
+          printf '## Speed compared with main and with bare uWebSockets.js\n\nThe comparison script exited before it wrote a table, so open the log of the comparison step to find the error.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Record the pull request that the comment workflow posts the table on
         if: always() && hashFiles('speed-report/report.md') != ''
@@ -93,3 +95,9 @@ jobs:
           path: speed-report/
           if-no-files-found: error
           retention-days: 7
+
+      - name: Fail when the change takes uhttp beyond the slowdown limit from bare uWebSockets.js
+        if: steps.compare.outputs.beyond_bare_limit == 'true'
+        run: |
+          echo "::error title=Speed limit::uhttp is beyond the slowdown limit from bare uWebSockets.js, so read the speed table in the job summary."
+          exit 1
