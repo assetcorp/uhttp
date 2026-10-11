@@ -1,6 +1,8 @@
 export const CONNECTIONS = 100
 
-export const LOAD_WORKERS = 2
+export const LOAD_THREADS = 2
+
+export const LOAD_TIMEOUT_GRACE_MS = 10_000
 
 export const LOCAL_WARM_UP_DURATION_MS = 3_000
 

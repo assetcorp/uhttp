@@ -54,11 +54,9 @@
   },
   "devDependencies": {
     "@microsoft/api-extractor": "7.59.4",
-    "@types/autocannon": "7.12.7",
     "@types/node": "22.20.5",
     "@vitest/coverage-v8": "5.0.3",
     "arktype": "2.2.7",
-    "autocannon": "8.0.0",
     "typescript": "7.0.2",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#9ec36de7709996c58dce03d63796216c90a17136",
     "valibot": "1.5.0",

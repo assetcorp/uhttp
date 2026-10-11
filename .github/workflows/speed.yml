@@ -55,7 +55,7 @@ jobs:
             echo "comparable=true" >> "$GITHUB_OUTPUT"
           else
             echo "comparable=false" >> "$GITHUB_OUTPUT"
-            printf '## Speed check\n\nMain has no uhttp package for this job to compile, so the job measured nothing.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
+            printf '## Speed check\n\nThe job skipped the measurement, because main has no uhttp package to compile.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Install and compile main
@@ -64,6 +64,12 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm --dir packages/ts run compile
+
+      - name: Install h2load, which sends the requests that the speed check measures
+        if: steps.main.outputs.comparable == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes nghttp2-client
 
       - name: Measure uhttp before and after this PR, and uWebSockets.js on its own
         id: compare
@@ -78,10 +84,10 @@ jobs:
       - name: Report a speed script that ended before it wrote the tables, and fail the job
         if: steps.compare.outcome == 'failure'
         run: |
-          printf '## Speed check\n\nThe speed script exited before it wrote the tables, so open the log of the measuring step to find the error.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
+          printf '## Speed check\n\nThe speed script stopped before it wrote the tables. Open the log of the measuring step to find the error.\n' | tee speed-report/report.md >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      - name: Record the pull request that the comment workflow posts the table on
+      - name: Record the PR that the comment workflow posts the tables on
         if: always() && hashFiles('speed-report/report.md') != ''
         env:
           PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
@@ -96,8 +102,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Fail when uhttp after this PR is too much slower than uWebSockets.js on its own
+      - name: Fail when uhttp after this PR is slower than uWebSockets.js on its own by more than the limit
         if: steps.compare.outputs.beyond_bare_limit == 'true'
         run: |
-          echo "::error title=Speed limit::uhttp after this PR is beyond the speed limit against uWebSockets.js on its own, so read the speed tables in the job summary."
+          echo "::error title=Speed limit::uhttp after this PR is slower than uWebSockets.js on its own by more than the limit. Read the speed tables in the job summary to see each round."
           exit 1
