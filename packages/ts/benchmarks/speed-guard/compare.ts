@@ -45,7 +45,7 @@ const COPIES: readonly CopySpec[] = [
 
 type Rates = Record<Copy, number>
 
-interface Round extends Rates {
+interface Round {
   bareRate: number
   mainRate: number
   changeRate: number
@@ -116,7 +116,6 @@ function toRound(rates: Rates): Round {
     copyGap(rates.change, rates.changeCopy),
   )
   return {
-    ...rates,
     bareRate,
     mainRate,
     changeRate,
@@ -152,13 +151,13 @@ function summarise(rounds: readonly Round[]): Summary {
 }
 
 function mainVerdict({ moved, threshold, consistent }: Summary): string {
-  const movement = `The median of the change differs from the median of main by ${formatSignedPercent(moved)}, and the threshold is ${formatShare(threshold)}, which is the larger of the copy noise and ${formatShare(FLAGGED_CHANGE_FLOOR_RATIO)}.`
-  if (Math.abs(moved) <= threshold) return `**The difference from main is within the noise.** ${movement}`
+  const movement = `In the median, uhttp after this PR differs from uhttp before it by ${formatSignedPercent(moved)}, and the threshold is ${formatShare(threshold)}, which is the larger of the median machine noise and ${formatShare(FLAGGED_CHANGE_FLOOR_RATIO)}.`
+  if (Math.abs(moved) <= threshold) return `**The difference is within the machine noise.** ${movement}`
   if (!consistent) {
-    return `**The difference from main changes sign between rounds, so the job flags nothing.** ${movement}`
+    return `**The difference changes sign between rounds, so the job flags nothing.** ${movement}`
   }
   const direction = moved < 0 ? 'slower' : 'faster'
-  return `**The change is ${formatShare(Math.abs(moved))} ${direction} than main, and it is ${direction} in every round.** ${movement}`
+  return `**This PR makes uhttp ${formatShare(Math.abs(moved))} ${direction}, and uhttp is ${direction} in every round.** ${movement}`
 }
 
 function describeGap(ratio: number): string {
@@ -166,36 +165,57 @@ function describeGap(ratio: number): string {
 }
 
 function bareVerdict({ changeVsBare, mainVsBare, roundsBeyondLimit, noise }: Summary, roundCount: number): string {
-  const limit = `the limit of a ${formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)} slowdown from bare uWebSockets.js`
-  const noisy = `The copy noise of ${formatShare(noise)} is larger than the limit, so rerun the job before you act on this result.`
+  const limit = `the ${formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)} limit`
+  const noisy = `The median machine noise of ${formatShare(noise)} is larger than the limit, so rerun the job before you act on this result.`
   const gaps = [
-    `In the median round, the change is ${describeGap(changeVsBare)} than bare uWebSockets.js, and main is ${describeGap(mainVsBare)}.`,
-    `The change is beyond the limit in ${roundsBeyondLimit} of ${roundCount} rounds.`,
+    `In the median round, uhttp after this PR is ${describeGap(changeVsBare)} than uWebSockets.js on its own, and uhttp before this PR is ${describeGap(mainVsBare)}.`,
+    `uhttp after this PR is beyond the limit in ${roundsBeyondLimit} of ${roundCount} rounds.`,
     ...(noise > MAX_SLOWDOWN_FROM_BARE_RATIO ? [noisy] : []),
   ].join(' ')
-  if (!beyondBareLimit(changeVsBare)) return `**The change is inside ${limit}.** ${gaps}`
+  if (!beyondBareLimit(changeVsBare)) return `**uhttp is inside ${limit}.** ${gaps}`
   if (beyondBareLimit(mainVsBare)) {
-    return `**The change is beyond ${limit}, and main was beyond it already, so the job fails.** ${gaps}`
+    return `**uhttp is beyond ${limit}, and it was beyond it before this PR, so the job fails.** ${gaps}`
   }
-  return `**This change takes uhttp beyond ${limit}, so the job fails.** ${gaps}`
+  return `**This PR takes uhttp beyond ${limit}, so the job fails.** ${gaps}`
 }
 
-function table(rounds: readonly Round[], summary: Summary): string {
-  const lines = [
-    '| Round | bare | bare copy | main | main copy | change | change copy | change vs main | change vs bare | copy noise |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
-  ]
-  rounds.forEach((round, index) => {
-    const rates = [round.bare, round.bareCopy, round.main, round.mainCopy, round.change, round.changeCopy]
-      .map(formatRate)
-      .join(' | ')
-    const ratios = [round.changeVsMain, round.changeVsBare].map(formatSignedPercent).join(' | ')
-    lines.push(`| ${index + 1} | ${rates} | ${ratios} | ${formatShare(round.noise)} |`)
+function tableRow(label: string, cells: readonly string[]): string {
+  return `| ${label} | ${cells.join(' | ')} |`
+}
+
+function table(headings: readonly string[], rows: readonly (readonly string[])[]): string {
+  const divider = headings.map(() => '---:')
+  const lines = [tableRow('Round', headings), tableRow('---', divider)]
+  rows.forEach((cells, index) => {
+    lines.push(tableRow(index === rows.length - 1 ? 'Median' : String(index + 1), cells))
   })
-  const medians = [summary.bareMedian, summary.mainMedian, summary.changeMedian].map(formatRate).join(' | | ')
-  const ratios = [summary.moved, summary.changeVsBare].map(formatSignedPercent).join(' | ')
-  lines.push(`| Median | ${medians} | | ${ratios} | ${formatShare(summary.noise)} |`)
   return lines.join('\n')
+}
+
+function prTable(rounds: readonly Round[], summary: Summary): string {
+  const headings = ['Before this PR', 'After this PR', 'Difference', 'Machine noise']
+  const row = (before: number, after: number, moved: number, noise: number): string[] => [
+    formatRate(before),
+    formatRate(after),
+    formatSignedPercent(moved),
+    formatShare(noise),
+  ]
+  const rows = rounds.map(round => row(round.mainRate, round.changeRate, round.changeVsMain, round.noise))
+  rows.push(row(summary.mainMedian, summary.changeMedian, summary.moved, summary.noise))
+  return table(headings, rows)
+}
+
+function bareTable(rounds: readonly Round[], summary: Summary): string {
+  const headings = ['uWebSockets.js on its own', 'uhttp after this PR', 'uhttp is slower by', 'Machine noise']
+  const row = (bare: number, after: number, changeVsBare: number, noise: number): string[] => [
+    formatRate(bare),
+    formatRate(after),
+    formatShare(-changeVsBare),
+    formatShare(noise),
+  ]
+  const rows = rounds.map(round => row(round.bareRate, round.changeRate, round.changeVsBare, round.noise))
+  rows.push(row(summary.bareMedian, summary.changeMedian, summary.changeVsBare, summary.noise))
+  return table(headings, rows)
 }
 
 function report(rounds: readonly Round[], summary: Summary, pinned: boolean): string {
@@ -204,16 +224,27 @@ function report(rounds: readonly Round[], summary: Summary, pinned: boolean): st
     ? `The job pinned every server to CPU ${SERVER_CPU} and the load generator to CPUs ${LOAD_CPUS}.`
     : 'The job pinned no process to a CPU, because taskset exists on Linux alone.'
   const warmUp = COMPARE_WARM_UP_ROUNDS === 1 ? '1 warm-up round' : `${COMPARE_WARM_UP_ROUNDS} warm-up rounds`
+  const limit = formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)
   return [
-    '## Speed compared with main and with bare uWebSockets.js',
+    '## Speed check',
     '',
-    `In each of ${rounds.length} rounds, autocannon sent \`GET ${ROUTE_PATH}\` to each of ${COPIES.length} servers for ${seconds} s at ${CONNECTIONS} connections, after the job had discarded ${warmUp}. ${pinning} The copy noise is the largest gap between two identical copies of one server.`,
+    `The job measures three servers that answer \`GET ${ROUTE_PATH}\`: uWebSockets.js on its own, uhttp before this PR, and uhttp after this PR. It starts two identical copies of each server, and each figure below is the average of the two, in requests per second. In each of ${rounds.length} rounds, autocannon sent requests to each of the ${COPIES.length} servers for ${seconds} s at ${CONNECTIONS} connections, after the job had discarded ${warmUp}. ${pinning}`,
     '',
-    `The bare uWebSockets.js server answers the same route without uhttp, using the uWebSockets.js that the change installs. Its speed stays the same whatever a pull request changes in uhttp, so the job fails once uhttp is more than ${formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)} slower than that server in the median round, even when every earlier pull request was within the noise of main. The comparison with main never fails the job.`,
+    'Machine noise is how far two identical servers differed in the same round, so a difference smaller than this can come from the machine alone.',
     '',
-    table(rounds, summary),
+    '### Does this PR make uhttp slower?',
+    '',
+    'This table never fails the job.',
+    '',
+    prTable(rounds, summary),
     '',
     mainVerdict(summary),
+    '',
+    '### How much slower is uhttp than uWebSockets.js on its own?',
+    '',
+    `The job fails when uhttp after this PR is more than ${limit} slower in the median round. uWebSockets.js on its own uses the uWebSockets.js that this PR installs, so its speed stays the same whatever a PR changes in uhttp, and this table catches small slowdowns that add up across PRs.`,
+    '',
+    bareTable(rounds, summary),
     '',
     bareVerdict(summary, rounds.length),
     '',
