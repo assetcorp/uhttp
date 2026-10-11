@@ -8,14 +8,15 @@ import {
   CONNECTIONS,
   FLAGGED_CHANGE_FLOOR_RATIO,
   LOAD_CPUS,
+  LOAD_THREADS,
   MAX_SLOWDOWN_FROM_BARE_RATIO,
   ROUTE_PATH,
   SERVER_CPU,
 } from './constants.ts'
 import {
+  formatGap,
   formatRate,
   formatShare,
-  formatSignedPercent,
   measure,
   type RunningServer,
   type ServerSpec,
@@ -35,12 +36,12 @@ const BARE_SCRIPT = 'servers/bare.ts'
 const UHTTP_SCRIPT = 'servers/uhttp.ts'
 
 const COPIES: readonly CopySpec[] = [
-  { copy: 'bare', label: 'bare uWebSockets.js', script: BARE_SCRIPT },
-  { copy: 'main', label: 'main', script: UHTTP_SCRIPT, entryVariable: 'BASE_ENTRY' },
-  { copy: 'change', label: 'change', script: UHTTP_SCRIPT, entryVariable: 'CHANGE_ENTRY' },
-  { copy: 'bareCopy', label: 'bare uWebSockets.js copy', script: BARE_SCRIPT },
-  { copy: 'mainCopy', label: 'main copy', script: UHTTP_SCRIPT, entryVariable: 'BASE_ENTRY' },
-  { copy: 'changeCopy', label: 'change copy', script: UHTTP_SCRIPT, entryVariable: 'CHANGE_ENTRY' },
+  { copy: 'bare', label: 'uWebSockets.js', script: BARE_SCRIPT },
+  { copy: 'main', label: 'main uhttp', script: UHTTP_SCRIPT, entryVariable: 'BASE_ENTRY' },
+  { copy: 'change', label: 'PR uhttp', script: UHTTP_SCRIPT, entryVariable: 'CHANGE_ENTRY' },
+  { copy: 'bareCopy', label: 'second uWebSockets.js', script: BARE_SCRIPT },
+  { copy: 'mainCopy', label: 'second main uhttp', script: UHTTP_SCRIPT, entryVariable: 'BASE_ENTRY' },
+  { copy: 'changeCopy', label: 'second PR uhttp', script: UHTTP_SCRIPT, entryVariable: 'CHANGE_ENTRY' },
 ]
 
 type Rates = Record<Copy, number>
@@ -150,33 +151,39 @@ function summarise(rounds: readonly Round[]): Summary {
   }
 }
 
-function mainVerdict({ moved, threshold, consistent }: Summary): string {
-  const movement = `In the median, uhttp after this PR differs from uhttp before it by ${formatSignedPercent(moved)}, and the threshold is ${formatShare(threshold)}, which is the larger of the median machine noise and ${formatShare(FLAGGED_CHANGE_FLOOR_RATIO)}.`
-  if (Math.abs(moved) <= threshold) return `**The difference is within the machine noise.** ${movement}`
+function mainVerdict({ moved, threshold, consistent }: Summary, roundCount: number): string {
+  const median = `Across the ${roundCount} rounds, the median speed of uhttp after this PR was ${formatGap(moved)} than its median speed before this PR.`
+  const bar = `The job counts a difference only when it is larger than ${formatShare(threshold)}, which is the median machine noise or ${formatShare(FLAGGED_CHANGE_FLOOR_RATIO)}, whichever is larger.`
+  if (Math.abs(moved) <= threshold) {
+    return `**This PR changes the speed of uhttp by less than the machine noise.** ${median} ${bar}`
+  }
   if (!consistent) {
-    return `**The difference changes sign between rounds, so the job flags nothing.** ${movement}`
+    return `**uhttp after this PR was faster in some rounds and slower in others, so the job treats its speed as unchanged.** ${median} ${bar}`
   }
   const direction = moved < 0 ? 'slower' : 'faster'
-  return `**This PR makes uhttp ${formatShare(Math.abs(moved))} ${direction}, and uhttp is ${direction} in every round.** ${movement}`
-}
-
-function describeGap(ratio: number): string {
-  return `${formatShare(Math.abs(ratio))} ${ratio < 0 ? 'slower' : 'faster'}`
+  return `**This PR makes uhttp ${formatGap(moved)}.** ${median} uhttp after this PR was ${direction} in all ${roundCount} rounds. ${bar}`
 }
 
 function bareVerdict({ changeVsBare, mainVsBare, roundsBeyondLimit, noise }: Summary, roundCount: number): string {
-  const limit = `the ${formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)} limit`
-  const noisy = `The median machine noise of ${formatShare(noise)} is larger than the limit, so rerun the job before you act on this result.`
-  const gaps = [
-    `In the median round, uhttp after this PR is ${describeGap(changeVsBare)} than uWebSockets.js on its own, and uhttp before this PR is ${describeGap(mainVsBare)}.`,
-    `uhttp after this PR is beyond the limit in ${roundsBeyondLimit} of ${roundCount} rounds.`,
+  const limit = formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)
+  const share = roundsBeyondLimit === roundCount ? `all ${roundCount}` : `${roundsBeyondLimit} of ${roundCount}`
+  const rounds =
+    roundsBeyondLimit === 0
+      ? `uhttp after this PR stayed within the limit in all ${roundCount} rounds.`
+      : `uhttp after this PR went past the limit in ${share} rounds.`
+  const noisy = `Rerun the job before you act on this result, because the median machine noise of ${formatShare(noise)} is larger than the ${limit} limit.`
+  const facts = [
+    `In the median round, uhttp after this PR was ${formatGap(changeVsBare)} than uWebSockets.js on its own, while uhttp before this PR was ${formatGap(mainVsBare)}.`,
+    rounds,
     ...(noise > MAX_SLOWDOWN_FROM_BARE_RATIO ? [noisy] : []),
   ].join(' ')
-  if (!beyondBareLimit(changeVsBare)) return `**uhttp is inside ${limit}.** ${gaps}`
-  if (beyondBareLimit(mainVsBare)) {
-    return `**uhttp is beyond ${limit}, and it was beyond it before this PR, so the job fails.** ${gaps}`
+  if (!beyondBareLimit(changeVsBare)) {
+    return `**uhttp after this PR is within ${limit} of the speed of uWebSockets.js on its own.** ${facts}`
   }
-  return `**This PR takes uhttp beyond ${limit}, so the job fails.** ${gaps}`
+  if (beyondBareLimit(mainVsBare)) {
+    return `**uhttp is more than ${limit} slower than uWebSockets.js on its own, both before and after this PR, so the job fails.** ${facts}`
+  }
+  return `**This PR makes uhttp more than ${limit} slower than uWebSockets.js on its own, so the job fails.** ${facts}`
 }
 
 function tableRow(label: string, cells: readonly string[]): string {
@@ -197,7 +204,7 @@ function prTable(rounds: readonly Round[], summary: Summary): string {
   const row = (before: number, after: number, moved: number, noise: number): string[] => [
     formatRate(before),
     formatRate(after),
-    formatSignedPercent(moved),
+    formatGap(moved),
     formatShare(noise),
   ]
   const rows = rounds.map(round => row(round.mainRate, round.changeRate, round.changeVsMain, round.noise))
@@ -206,11 +213,11 @@ function prTable(rounds: readonly Round[], summary: Summary): string {
 }
 
 function bareTable(rounds: readonly Round[], summary: Summary): string {
-  const headings = ['uWebSockets.js on its own', 'uhttp after this PR', 'uhttp is slower by', 'Machine noise']
+  const headings = ['uWebSockets.js on its own', 'uhttp after this PR', 'Difference', 'Machine noise']
   const row = (bare: number, after: number, changeVsBare: number, noise: number): string[] => [
     formatRate(bare),
     formatRate(after),
-    formatShare(-changeVsBare),
+    formatGap(changeVsBare),
     formatShare(noise),
   ]
   const rows = rounds.map(round => row(round.bareRate, round.changeRate, round.changeVsBare, round.noise))
@@ -220,29 +227,33 @@ function bareTable(rounds: readonly Round[], summary: Summary): string {
 
 function report(rounds: readonly Round[], summary: Summary, pinned: boolean): string {
   const seconds = COMPARE_ROUND_DURATION_MS / 1_000
+  const loadCpus = new Intl.ListFormat('en-US', { type: 'conjunction' }).format(LOAD_CPUS.split(','))
   const pinning = pinned
-    ? `The job pinned every server to CPU ${SERVER_CPU} and the load generator to CPUs ${LOAD_CPUS}.`
-    : 'The job pinned no process to a CPU, because taskset exists on Linux alone.'
-  const warmUp = COMPARE_WARM_UP_ROUNDS === 1 ? '1 warm-up round' : `${COMPARE_WARM_UP_ROUNDS} warm-up rounds`
+    ? `The job pins every server to CPU ${SERVER_CPU} and h2load to CPUs ${loadCpus}.`
+    : 'The servers and h2load share every CPU on this machine, because the job pins processes with taskset, which Linux alone provides.'
+  const warmUp =
+    COMPARE_WARM_UP_ROUNDS === 1
+      ? '1 warm-up round and discards its figures'
+      : `${COMPARE_WARM_UP_ROUNDS} warm-up rounds and discards their figures`
   const limit = formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)
   return [
     '## Speed check',
     '',
-    `The job measures three servers that answer \`GET ${ROUTE_PATH}\`: uWebSockets.js on its own, uhttp before this PR, and uhttp after this PR. It starts two identical copies of each server, and each figure below is the average of the two, in requests per second. In each of ${rounds.length} rounds, autocannon sent requests to each of the ${COPIES.length} servers for ${seconds} s at ${CONNECTIONS} connections, after the job had discarded ${warmUp}. ${pinning}`,
+    `The job measures three servers that answer \`GET ${ROUTE_PATH}\`: uWebSockets.js on its own, uhttp before this PR, and uhttp after this PR. Because the job starts two identical copies of each server, each figure in the tables below is the average of those two copies, in requests per second. The job first runs ${warmUp}. In each of the ${rounds.length} rounds that follow, h2load sends requests to each of the ${COPIES.length} servers for ${seconds} s from ${LOAD_THREADS} threads over ${CONNECTIONS} connections. ${pinning}`,
     '',
-    'Machine noise is how far two identical servers differed in the same round, so a difference smaller than this can come from the machine alone.',
+    'Machine noise is the largest gap between the two copies of any one server in the same round. Because each pair of copies runs identical code, a difference smaller than the machine noise can come from the machine alone.',
     '',
     '### Does this PR make uhttp slower?',
     '',
-    'This table never fails the job.',
+    'In the Difference column, each figure is the speed of uhttp after this PR compared with uhttp before it. The job reports this comparison without failing on it.',
     '',
     prTable(rounds, summary),
     '',
-    mainVerdict(summary),
+    mainVerdict(summary, rounds.length),
     '',
     '### How much slower is uhttp than uWebSockets.js on its own?',
     '',
-    `The job fails when uhttp after this PR is more than ${limit} slower in the median round. uWebSockets.js on its own uses the uWebSockets.js that this PR installs, so its speed stays the same whatever a PR changes in uhttp, and this table catches small slowdowns that add up across PRs.`,
+    `In the Difference column, each figure is the speed of uhttp after this PR compared with uWebSockets.js on its own. The job fails when uhttp after this PR is more than ${limit} slower than uWebSockets.js on its own in the median round. Several PRs can each slow uhttp by less than the machine noise, so the job compares uhttp with uWebSockets.js on its own to catch their total. Both servers run the uWebSockets.js version that this PR installs, so only a change to uhttp can move the gap between them.`,
     '',
     bareTable(rounds, summary),
     '',
