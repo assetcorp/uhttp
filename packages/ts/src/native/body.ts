@@ -43,7 +43,8 @@ function listenForBody(
  * @param exchange - The package passes the state of the request.
  * @param chain - The package passes the chain of the request, with the limits of the route.
  * @param framing - The package passes the framing headers that it read from the request.
- * @returns The function returns the reader and the chain that the package then calls.
+ * @returns The function returns the reader and the chain that the package then calls, or
+ * `undefined` on a route without a body reader, whose chain stays as it is.
  * @internal
  */
 export function attachBody(
@@ -51,10 +52,14 @@ export function attachBody(
   exchange: Exchange,
   chain: RequestChain,
   framing: RequestFraming,
-): OpenedBody {
-  const opened = chain.limits.readsBody
-    ? openBody(exchange, chain, framing, sourceOf(res, exchange))
-    : { reader: undefined, chain, flowing: false }
+): OpenedBody | undefined {
+  if (chain.limits.readsBody) return attachReader(res, exchange, chain, framing)
+  if (framing.declaresBody) followBody(res, exchange, framing)
+  return undefined
+}
+
+function attachReader(res: HttpResponse, exchange: Exchange, chain: RequestChain, framing: RequestFraming): OpenedBody {
+  const opened = openBody(exchange, chain, framing, sourceOf(res, exchange))
   const { reader } = opened
   if (opened.flowing && reader !== undefined) {
     listenForBody(res, exchange, framing, (chunk, isLast) => {
