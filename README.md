@@ -7,6 +7,8 @@ The package is under construction and has no release yet. The first release will
 ## Guides
 
 - Read [Routing and middleware](docs/routing.md) for routes, path parameters, groups, middleware, the request context, and testing without a port.
+- Read [Request bodies and validation](docs/bodies.md) for the body parsers, Standard Schema validation, body limits, and time limits.
+- Read [Uploads](docs/uploads.md) for multipart forms, streaming each file to a destination, and the limits of an upload.
 - Read [Responses](docs/responses.md) for the reply helpers, response headers, streamed responses, and server-sent events.
 - Read [Errors](docs/errors.md) for the error codes, the error and not-found handlers, the logger, and the errors that uWebSockets.js sends itself.
 

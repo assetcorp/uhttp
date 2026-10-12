@@ -21,13 +21,27 @@ Continuous integration applies the same checks, so apply them yourself before yo
 
 - `pnpm build` builds every package.
 - `pnpm test` tests every package.
+- `pnpm test:integration`, `pnpm test:e2e`, and `pnpm test:package` each test one of the three groups that the Tests section describes.
 - `pnpm lint` checks the code with Biome.
 - `pnpm typecheck` type-checks the TypeScript.
 - `pnpm format` applies Biome formatting.
 - `pnpm nx run uhttp:api:write` rewrites the API reports in `packages/ts/etc/`. Run it after you change an export, because the build fails until the committed reports match the exports.
-- `pnpm nx run uhttp:speed` measures one route on bare uWebSockets.js and on uhttp for 10 seconds each at 100 connections, and it fails when uhttp is more than 10% slower. Close other busy programs first, because on a busy machine the result can vary by more than 10% in either direction.
+- `pnpm nx run uhttp:speed` measures one route on uWebSockets.js on its own and on uhttp for 10 seconds each over 100 connections, and it fails when uhttp is more than 5% slower. It sends its requests with h2load from [nghttp2](https://github.com/nghttp2/nghttp2), so install h2load first with `brew install nghttp2` on macOS or `sudo apt-get install nghttp2-client` on Ubuntu. Close other busy programs before you run it, because on a busy machine the measured speed can differ by more than 10% between two runs.
 
-On every pull request, the `Speed` workflow compares the speed of the change with main and writes a table to its summary. The `Speed comment` workflow then posts that table as a comment on the pull request, and it updates the same comment after each push. The workflow passes whatever the table contains.
+The speed check needs a load generator that sends requests faster than the fastest server can answer them. When the load generator is the slower side, every server measures at the speed of the load generator, which hides the extra work that uhttp does. In a Linux container pinned the way the `Speed` workflow pins its processes, autocannon, a load generator written in JavaScript, reached about 320,000 requests a second against uWebSockets.js on its own, while h2load reached about 390,000. The check uses h2load because the nghttp2 project still releases it, Ubuntu packages it, and it counts every failed request.
+
+On every PR, the `Speed` workflow measures three servers on one machine over 10 rounds with h2load: uWebSockets.js on its own, uhttp from main, and uhttp from the PR. It writes two tables to its summary. In the first table, the workflow compares uhttp before and after the PR, and it passes whatever the difference is. In the second table, it compares uhttp after the PR with uWebSockets.js on its own, and it fails when uhttp is more than 5% slower in the median round. Several PRs can each slow uhttp by less than the machine noise, so the workflow compares uhttp with uWebSockets.js on its own to catch their total. The `Speed comment` workflow then posts both tables as a comment on the PR and updates that comment after each push. When a PR upgrades uWebSockets.js, both servers in the second table run the new version, so read the first table to see what the upgrade changed.
+
+## Tests
+
+The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups. Vitest treats each group as a project of the same name and prints that name beside every test in its output.
+
+- `integration/` holds the tests that send requests through `app.request()`. Those requests go through the real router, middleware, request context, and body parsers, without a socket or uWebSockets.js. Mirror the source directory that a test covers, as `integration/body/parsers.test.ts` does for `src/body/`.
+- `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1. Most of these tests use the client in `helpers/http-client.ts`, while a few use `fetch` or the HTTP client of Node.js through `helpers/node-client.ts`. That client rejects any response that breaks HTTP/1.1. It also reports whether the server kept the connection open, closed it cleanly, or reset it. Name each file after the behaviour that a client sees, as `e2e/request-bodies.test.ts` does.
+- `package/` holds the tests of the built files and of the manifest that npm publishes.
+- `helpers/` holds the helpers that the three groups share.
+
+Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never calls the code that writes to the socket, so only an end-to-end test can catch a fault in that code. In each end-to-end test, send the whole request that a real client would send, including the body of a request that the server rejects. Then check what happened to the connection after the response, as well as the response itself.
 
 ## Repository layout
 
@@ -40,7 +54,7 @@ On every pull request, the `Speed` workflow compares the speed of the change wit
 - Keep each source file under 400 lines. When you split a module across several files, put them in a directory with an `index.ts` that re-exports the module.
 - Let Biome format the code, and keep the layout that it writes.
 - Write a TSDoc comment on every published export, and write no other comment anywhere.
-- Put every test under `packages/ts/src/__tests__/`, mirroring the directory that it covers.
+- Put every test in one of the three groups that the Tests section describes.
 
 ## Propose a change
 

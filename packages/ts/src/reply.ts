@@ -10,6 +10,13 @@ import type { HeaderLines } from './headers.js'
 export const JSON_CONTENT_TYPE = 'application/json'
 
 /**
+ * The package sends this content type with a text reply.
+ *
+ * @internal
+ */
+export const TEXT_CONTENT_TYPE = 'text/plain; charset=UTF-8'
+
+/**
  * Returns the error that a stream write must reject with, or `undefined` when the write can go
  * ahead.
  *
@@ -193,12 +200,14 @@ export function bodyByteLength(body: string | Uint8Array | null): number {
 }
 
 /**
- * Returns the reply that the default handlers send for an error, as `{ error: { code, message } }`.
+ * Returns the reply that the default handlers send for an error, as `{ error: { code, message } }`,
+ * with `issues` added for an error that lists validation problems.
  *
- * @param error - The function puts the status, the code, and the message of this error into the reply.
+ * @param error - The function puts the status, the code, the message, and the problems of this error into the reply.
  * @returns The function returns a JSON reply.
  * @internal
  */
-export function errorReply({ status, code, message }: UhttpError): Reply {
-  return construct(status, JSON_CONTENT_TYPE, JSON.stringify({ error: { code, message } }), undefined, undefined)
+export function errorReply({ status, code, message, issues }: UhttpError): Reply {
+  const error = issues === undefined ? { code, message } : { code, message, issues }
+  return construct(status, JSON_CONTENT_TYPE, JSON.stringify({ error }), undefined, undefined)
 }

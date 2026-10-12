@@ -27,21 +27,35 @@ Match on the code, because the message can change between releases.
 | `INVALID_PATH_PARAMETER` | 400 | A path parameter contains a percent sequence that fails to decode. |
 | `NOT_FOUND` | 404 | A path has no route. You can throw it yourself for a missing record. |
 | `METHOD_NOT_ALLOWED` | 405 | A path has routes, but none for the method of the request. |
+| `PAYLOAD_TOO_LARGE` | 413 | A request body, a form, or an upload passes one of its limits. The package closes the connection after the reply. |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | A body parser receives a content type or a charset that it can't parse, or the client compresses a request body. |
+| `INVALID_JSON` | 400 | `json()` can't parse a body, or the body contains a `__proto__` key or a `constructor` key with a `prototype` key. |
+| `VALIDATION_FAILED` | 400 | A schema rejects a JSON body. The package lists the first 10 problems under `issues`. |
+| `INVALID_MULTIPART` | 400 | A multipart body has an invalid boundary, a part without a name, a control character in a name or a filename, or no closing boundary. |
+| `REQUEST_ABORTED` | 400 | The client disconnects before the body ends, so a pending read of the body rejects with this code. The package passes this error to your code alone, because the client has gone or the response has ended. |
+| `HANDLER_TIMEOUT` | 503 | A handler passes the time limit of its route. The package closes the connection after the reply. |
+| `INVALID_TRANSFER_ENCODING` | 400 | A client lists `chunked` more than once in the `Transfer-Encoding` lines of a request, or ends those lines with a coding other than `chunked`, such as `xchunked`. The package sends this reply before it calls any middleware, and it closes the connection after the reply. |
+| `UNSUPPORTED_TRANSFER_CODING` | 501 | A client applies a transfer coding such as `gzip` before `chunked`, while the package decodes `chunked` alone. The package sends this reply before it calls any middleware, and it closes the connection after the reply. |
 | `INTERNAL_ERROR` | 500 | The package sends this code to the client for every error that maps to 500. |
 | `MISSING_REPLY` | 500 | The middleware chain ends without a reply, or an error handler returns something other than a reply. |
 | `NEXT_CALLED_TWICE` | 500 | A middleware calls `next()` a second time. |
 | `UNDECLARED_HEADER` | 500 | Your code asks for a request header that neither the route nor its middleware declared. |
 | `UNDECLARED_CLIENT_ADDRESS` | 500 | Your code asks for the client address, and nobody declared it. |
+| `UNDECLARED_BODY` | 500 | Your code reads the body on a route without a body reader. |
+| `BODY_ALREADY_READ` | 500 | Your code reads a body after it streamed that body. |
+| `REQUEST_RELEASED` | 500 | Your code reads the query string or the content type for the first time after the package has sent a reply that your handler returned without an `await`, such as from a task that the handler started without waiting for it. `c.req.header('content-type')`, `c.req.headers()`, and `c.req.body` read the content type too. |
+| `INVALID_SCHEMA` | 500 | A schema lacks the Standard Schema interface, or its validator throws, rejects, or returns something other than a Standard Schema result. |
+| `INVALID_UPLOAD` | 500 | You pass `multipart()` a limit that is not a whole number of zero or more, its `file` callback returns something other than a writable stream, or a destination closes before the package has written the whole file. |
 | `INVALID_HEADER` | 500 | Your code sets a header name that is not an HTTP token, or a value with a control character. |
 | `INVALID_EVENT` | 500 | A server-sent event has a line break in its name or its ID, or a retry time that is not a whole number of zero or more. |
 | `INVALID_STREAM` | 500 | Your producer writes more or fewer bytes than the length that you declared, or you pass a stream option outside its range. |
 | `INVALID_STATUS` | 500 | You pass a helper a status outside the range that its reply allows. |
-| `INVALID_ROUTE` | 500 | You add a route path or a group prefix that breaks the rules of the router. |
-| `INVALID_APP_OPTIONS` | 500 | You pass `createApp()` an option of the wrong type. |
+| `INVALID_ROUTE` | 500 | You add a route path or a group prefix that breaks the rules of the router, or a route option of the wrong type. |
+| `INVALID_APP_OPTIONS` | 500 | You pass `createApp()` an option of the wrong type, or a limit that is not a whole number of zero or more. |
 | `INVALID_SERVE_OPTIONS` | 500 | You pass `serve()` a port outside 0 to 65535. |
 | `LISTEN_FAILED` | 500 | The operating system returns an error when the package binds the address that you chose. |
 
-For a `UhttpError` below 500, the package sends the status, the code, and the message of the error. For every other error, including any error that is not a `UhttpError`, it sends a 500 whose message is 'The request failed.' alone, so that the package writes a stack trace or an internal message only to your logger:
+For a `UhttpError` below 500, and for `HANDLER_TIMEOUT`, the package sends the status, the code, and the message of the error, together with `issues` for `VALIDATION_FAILED`. For every other error, including any error that is not a `UhttpError`, it sends a 500 whose message is 'The request failed.' alone, so that the package writes a stack trace or an internal message only to your logger:
 
 ```json
 { "error": { "code": "INTERNAL_ERROR", "message": "The request failed." } }
@@ -87,10 +101,12 @@ When uWebSockets.js matches no route for a request and the JavaScript matcher ma
 
 ## Errors that uWebSockets.js sends itself
 
-For some malformed requests, uWebSockets.js sends a 400 itself, before it calls the package. That 400 has an HTML body, outside the JSON contract of the package. uWebSockets.js v20.71.0 sends this 400 with `Connection: close` for a request with no `Host` header, an empty or repeated `Host`, more than 98 header lines, a request line and headers above 4,096 bytes, both `Content-Length` and `Transfer-Encoding`, or an HTTP/1.0 request line:
+For some malformed requests, uWebSockets.js sends a 400 itself, before it calls the package. That 400 has an HTML body, outside the JSON contract of the package:
 
 ```html
 <h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>
 ```
+
+uWebSockets.js v20.71.0 sends this 400 with `Connection: close` for a request with no `Host` header, an empty or repeated `Host`, more than 98 header lines, a request line and headers above 4,096 bytes, both `Content-Length` and `Transfer-Encoding`, or an HTTP/1.0 request line. It sends the same 400 for `Content-Length` lines that differ or that hold anything other than up to 18 digits, and for a first `Transfer-Encoding` line that does not end with `chunked`. Because uWebSockets.js calls the route handler before it applies those last checks, the package applies them first and calls no middleware or handler for such a request.
 
 For headers that are too large, uWebSockets.js v20.71.0 sends that 400 in place of the 431 that [RFC 6585](https://www.rfc-editor.org/rfc/rfc6585.html#section-5) defines, because its maintainers commented out the 431 in [the parser source](https://github.com/uNetworking/uWebSockets/blob/1d80f7a53816ef2433e89793b285b827f3efb2b2/src/HttpParser.h). Set `UWS_HTTP_MAX_HEADERS_SIZE` before uWebSockets.js loads to raise the limit of 4,096 bytes. A proxy in front of the server can replace these HTML bodies with JSON when your clients need one error format for every response.

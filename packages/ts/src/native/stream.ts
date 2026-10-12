@@ -3,6 +3,8 @@ import { logServerError } from '../chain.js'
 import type { Context } from '../context.js'
 import type { Exchange } from '../exchange.js'
 import { type ResponseStream, type StreamProducer, streamShortfallError, streamWriteError } from '../reply.js'
+import { closeConnection } from './close.js'
+import { holdForBody } from './hold.js'
 
 interface QueuedChunk {
   readonly bytes: Uint8Array
@@ -21,7 +23,13 @@ function toBytes(chunk: string | Uint8Array): Uint8Array {
 /**
  * The package writes a streamed body to uWebSockets.js through this object. It writes a body of
  * unknown length with `write()` and a body of known length with `tryEnd()`. Whenever the client
- * reads slowly, it waits for `onWritable` before it writes more.
+ * reads slowly, the package waits for `onWritable` before it writes more. When the connection
+ * closes after the response while the request body is still arriving, the object holds the end of
+ * the response until the last byte of the body arrives. When the body is still arriving once
+ * {@link holdForBody} stops waiting, the object sends all but the last byte of the reply and waits
+ * for the socket to drain. It then pauses the socket, so that the package reads no more of the
+ * body, and sends the rest, which ends the response. uWebSockets.js then closes the idle
+ * connection, or closes it at once when the client sent `Connection: close`.
  *
  * @internal
  */
@@ -34,9 +42,12 @@ export class NativeStream implements ResponseStream {
   #accepted = 0
   #blocked = false
   #partial: PartialChunk | undefined
+  #held: QueuedChunk | undefined
   #waiter: ((written: boolean) => void) | undefined
   #returned = false
   #finishing = false
+  #stopRequested = false
+  #readingStopped = false
 
   /**
    * Creates the stream of one response.
@@ -68,6 +79,7 @@ export class NativeStream implements ResponseStream {
     const error = streamWriteError(this.#returned, this.#accepted, bytes.byteLength, this.#length)
     if (error !== undefined) return Promise.reject(error)
     this.#accepted += bytes.byteLength
+    if (this.#accepted === this.#length && this.#holdsEnd()) return this.#hold(bytes)
     if (this.#blocked) {
       return new Promise(resolve => {
         this.#queue.push({ bytes, resolve })
@@ -156,7 +168,9 @@ export class NativeStream implements ResponseStream {
       }
       this.#waiter = next.resolve
     }
-    if (!this.#blocked && this.#finishing) this.#complete()
+    if (this.#blocked) return
+    if (this.#stopRequested && !this.#readingStopped) this.#stopReadingOnceDrained()
+    else if (this.#finishing) this.#complete()
   }
 
   #resolveWaiter(written: boolean): void {
@@ -168,6 +182,9 @@ export class NativeStream implements ResponseStream {
   #release(): void {
     this.#resolveWaiter(false)
     for (const queued of this.#queue.splice(0)) queued.resolve(false)
+    const held = this.#held
+    this.#held = undefined
+    held?.resolve(false)
   }
 
   #producerReturned(): void {
@@ -179,27 +196,75 @@ export class NativeStream implements ResponseStream {
 
   #complete(): void {
     this.#finishing = false
-    if (this.#exchange.closed) return
+    if (this.#exchange.closed || this.#held !== undefined) return
     const shortfall = streamShortfallError(this.#accepted, this.#length)
     if (shortfall !== undefined) {
       this.#fail(shortfall)
       return
     }
+    this.#exchange.settleBody()
     const res = this.#res
+    if (this.#holdsEnd()) {
+      holdForBody(
+        res,
+        this.#exchange,
+        () => this.#complete(),
+        () => this.#stopReadingOnceDrained(),
+      )
+      return
+    }
     res.cork(() => {
       res.end()
     })
     this.#exchange.end()
   }
 
+  #holdsEnd(): boolean {
+    return !this.#readingStopped && this.#exchange.closesBeforeBodyEnds()
+  }
+
+  #stopReadingOnceDrained(): void {
+    this.#stopRequested = true
+    if (this.#exchange.closed || this.#blocked) return
+    const held = this.#held
+    if (held !== undefined && held.bytes.byteLength > 1) {
+      this.#held = { bytes: held.bytes.subarray(-1), resolve: held.resolve }
+      if (!this.#send(held.bytes.subarray(0, -1))) return
+    }
+    this.#readingStopped = true
+    this.#res.pause()
+    if (this.#held === undefined) this.#complete()
+    else this.#releaseHeld()
+  }
+
+  #hold(bytes: Uint8Array): Promise<boolean> {
+    return new Promise(resolve => {
+      this.#held = { bytes, resolve }
+      holdForBody(
+        this.#res,
+        this.#exchange,
+        () => this.#releaseHeld(),
+        () => this.#stopReadingOnceDrained(),
+      )
+    })
+  }
+
+  #releaseHeld(): void {
+    const held = this.#held
+    this.#held = undefined
+    if (held === undefined || this.#exchange.closed) return
+    if (this.#blocked) {
+      this.#queue.push(held)
+      return
+    }
+    if (this.#send(held.bytes)) held.resolve(true)
+    else this.#waiter = held.resolve
+  }
+
   #fail(error: unknown): void {
     this.#returned = true
     logServerError(this.#exchange.runtime.logger, error, this.#context.req.method, this.#context.req.path)
     if (this.#exchange.closed) return
-    setImmediate(() => {
-      if (this.#exchange.closed) return
-      this.#res.close()
-      this.#exchange.abort()
-    })
+    setImmediate(() => closeConnection(this.#res, this.#exchange))
   }
 }

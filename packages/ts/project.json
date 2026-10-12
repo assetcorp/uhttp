@@ -18,6 +18,27 @@
         "cwd": "packages/ts"
       }
     },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/ts"
+      }
+    },
+    "test:e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:e2e",
+        "cwd": "packages/ts"
+      }
+    },
+    "test:package": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:package",
+        "cwd": "packages/ts"
+      }
+    },
     "test:coverage": {
       "executor": "nx:run-commands",
       "outputs": ["{projectRoot}/coverage"],
