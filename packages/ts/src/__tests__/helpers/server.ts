@@ -11,10 +11,20 @@ afterEach(async () => {
   await Promise.all(servers.map(server => server.close()))
 })
 
-export async function start(app: App): Promise<Server> {
-  const server = await serve({ app, port: 0, host: HOST })
+export interface PortServer {
+  readonly port: number
+  close(): Promise<void>
+}
+
+export function track(server: Server): PortServer {
   running.push(server)
-  return server
+  const { port } = server
+  if (port === undefined) throw new Error('The server listens on no port.')
+  return { port, close: () => server.close() }
+}
+
+export async function start(app: App): Promise<PortServer> {
+  return track(await serve({ app, port: 0, host: HOST }))
 }
 
 export function pause(milliseconds: number): Promise<void> {

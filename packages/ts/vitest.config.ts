@@ -1,9 +1,13 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
+
+const typescriptHook = fileURLToPath(new URL('./src/__tests__/helpers/typescript-hook.ts', import.meta.url))
 
 export default defineConfig({
   test: {
     environment: 'node',
     pool: 'forks',
+    execArgv: ['--import', typescriptHook],
     projects: [
       {
         extends: true,
@@ -24,6 +28,7 @@ export default defineConfig({
       exclude: ['src/**/__tests__/**'],
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
+      autoAttachSubprocess: true,
       thresholds: {
         statements: 80,
         functions: 80,

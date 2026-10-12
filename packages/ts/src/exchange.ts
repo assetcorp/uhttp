@@ -4,6 +4,7 @@ import { settableHeaderName } from './headers.js'
 import { addListener, type OnceListeners } from './listeners.js'
 import type { Reply } from './reply.js'
 import type { ErrorHandler, Handler, Logger } from './types.js'
+import type { PubSubAdapter } from './websocket/types.js'
 
 const CONTENT_TYPE = 'content-type'
 
@@ -29,6 +30,8 @@ export interface AppRuntime {
   readonly maxBodyBytes: number
   /** A handler has this many milliseconds before the package sends a 503, and 0 means no limit. */
   readonly timeoutMs: number
+  /** The package carries published messages to other servers through this adapter, when you pass one. */
+  readonly pubsub: PubSubAdapter | undefined
 }
 
 /**

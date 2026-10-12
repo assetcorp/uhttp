@@ -82,6 +82,21 @@ app.get('/reports/:id', auditLog, c => c.json({ id: c.req.param('id') }))
 
 The package builds the chain of each route at startup, in the order app, group, then route. It applies every app middleware to every route, whether you called `use` before or after you added the route. When a middleware returns a reply after `await next()`, the package sends that reply in place of the handler's reply. At any point after `next()` returns, `c.reply` is the current reply.
 
+## Pass values from middleware to the handler
+
+`c.set(key, value)` stores a value for the rest of the request, and `c.get(key)` returns it, or `undefined` when nothing is stored under the key. A middleware can therefore work something out once and hand it to every handler behind it:
+
+```ts
+const tenant: Middleware = async (c, next) => {
+  c.set('tenant', c.req.param('tenant'))
+  await next()
+}
+
+app.get('/:tenant/invoices', tenant, c => c.json({ tenant: c.get('tenant') }))
+```
+
+The values belong to one request, so two requests never see each other's values. On a WebSocket route, the values that the chain stores during the upgrade become the `data` of the socket, as [WebSockets](websockets.md) shows.
+
 ## Groups are prefix guards
 
 The package calls a group's middleware for every request whose raw path starts with the group's prefix, segment by segment. Because the package compares raw segments, the middleware of the group `/admin` applies to `/admin` and to `/admin/stats`, while the package treats `/administrator` as a path outside the group. An encoded spelling such as `/%61dmin/stats` differs from `/admin` in its raw first segment, so the package treats that path as outside the group too and sends a 404 for it. The package also calls the group's middleware for a route that you add outside the group, whenever the route's path starts with the prefix:

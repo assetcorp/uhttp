@@ -40,6 +40,7 @@ The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups.
 - `e2e/` holds the tests that start the server with `serve()` and send requests to it on 127.0.0.1. Most of these tests use the client in `helpers/http-client.ts`, while a few use `fetch` or the HTTP client of Node.js through `helpers/node-client.ts`. That client rejects any response that breaks HTTP/1.1. It also reports whether the server kept the connection open, closed it cleanly, or reset it. Name each file after the behaviour that a client sees, as `e2e/request-bodies.test.ts` does.
 - `package/` holds the tests of the built files and of the manifest that npm publishes.
 - `helpers/` holds the helpers that the three groups share.
+- `fixtures/` holds the app modules and the host scripts that a test starts in a worker thread or in a child process, such as `fixtures/thread-host.ts`, which serves an app on worker threads and closes it when the test sends `close` over IPC.
 
 Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never calls the code that writes to the socket, so only an end-to-end test can catch a fault in that code. In each end-to-end test, send the whole request that a real client would send, including the body of a request that the server rejects. Then check what happened to the connection after the response, as well as the response itself.
 

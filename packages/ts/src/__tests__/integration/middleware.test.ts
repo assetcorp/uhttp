@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createApp, type Middleware, UhttpError } from '../../index.js'
+import { pause } from '../helpers/server.js'
 
 function tracer(trace: string[], name: string): Middleware {
   return async (_c, next) => {
@@ -209,6 +210,43 @@ describe('errors at middleware boundaries', () => {
       .get('/users', c => c.text('list'))
 
     expect(await (await app.request('/users')).text()).toBe('list')
+  })
+
+  it('passes the values that a middleware stores with c.set to later middleware and the handler, after an await', async () => {
+    const app = createApp()
+      .use(async (c, next) => {
+        c.set('user', { id: 7 })
+        c.set('__proto__', 'kept as a key')
+        await pause(1)
+        await next()
+      })
+      .use(async (c, next) => {
+        c.set('role', 'admin')
+        c.set('role', 'owner')
+        await next()
+      })
+      .get('/me', async c => {
+        await pause(1)
+        return c.json({ user: c.get('user'), role: c.get('role'), proto: c.get('__proto__'), missing: c.get('x') })
+      })
+
+    expect(await (await app.request('/me')).json()).toEqual({
+      user: { id: 7 },
+      role: 'owner',
+      proto: 'kept as a key',
+    })
+  })
+
+  it('starts every request with no stored values', async () => {
+    const app = createApp().get('/count', c => {
+      const seen = c.get('count')
+      c.set('count', 1)
+      return c.json({ seen: seen ?? null })
+    })
+
+    await app.request('/count')
+
+    expect(await (await app.request('/count')).json()).toEqual({ seen: null })
   })
 
   it('throws INVALID_ROUTE for an entry that is not a middleware', () => {

@@ -10,6 +10,8 @@ The package is under construction and has no release yet. The first release will
 - Read [Request bodies and validation](docs/bodies.md) for the body parsers, Standard Schema validation, body limits, and time limits.
 - Read [Uploads](docs/uploads.md) for multipart forms, streaming each file to a destination, and the limits of an upload.
 - Read [Responses](docs/responses.md) for the reply helpers, response headers, streamed responses, and server-sent events.
+- Read [WebSockets](docs/websockets.md) for WebSocket routes, the upgrade through middleware, the origin check, the limits of a socket, and pub/sub across threads and servers.
+- Read [Worker threads](docs/threads.md) for serving on several threads, the memory of each worker, and what happens when a worker crashes or hangs.
 - Read [Errors](docs/errors.md) for the error codes, the error and not-found handlers, the logger, and the errors that uWebSockets.js sends itself.
 
 ## License
