@@ -3,7 +3,7 @@ import { MessagePort } from 'node:worker_threads'
 import { MAX_ERROR_CAUSE_DEPTH } from '../constants.js'
 
 /**
- * The main thread hands each worker these values when it starts the worker.
+ * The main thread passes each worker these values when it starts the worker.
  *
  * @internal
  */
@@ -39,7 +39,7 @@ export type MainMessage =
   | { readonly type: 'peer-gone'; readonly id: number }
 
 /**
- * Two workers post these messages to each other through the port that joins them.
+ * Two workers post these messages to each other through the channel between them.
  *
  * @internal
  */
@@ -57,7 +57,7 @@ export type PeerMessage =
 
 /**
  * A worker posts an error to the main thread in this form, because a structured clone of an error
- * drops its code and the errors that it wraps.
+ * keeps only some of its properties and drops its `code`.
  *
  * @internal
  */
@@ -75,7 +75,7 @@ export interface SerializedError {
 }
 
 /**
- * Returns an error in a form that survives a structured clone, with its chain of causes.
+ * Returns an error as a plain object that a structured clone copies whole, with its chain of causes.
  *
  * @param error - The worker passes the error that it caught.
  * @param depth - The function passes the depth of the cause that it serialises.
@@ -98,7 +98,7 @@ export function serializedError(error: unknown, depth = 0): SerializedError {
 }
 
 /**
- * Returns an `Error` that carries the name, the message, the stack, the code, and the causes of a
+ * Returns an `Error` with the name, the message, the stack, the code, and the causes of a
  * serialised error.
  *
  * @param value - The main thread passes the error that a worker posted.

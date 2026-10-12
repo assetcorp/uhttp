@@ -6,9 +6,10 @@ import {
 } from '../constants.js'
 
 /**
- * One place among the worker threads keeps its restart delay in this object. The delay starts at
- * {@link FIRST_RESTART_DELAY_MS}, doubles after each replacement up to {@link MAX_RESTART_DELAY_MS},
- * and returns to the start once a replacement has served for {@link RESTART_DELAY_RESET_MS}.
+ * The supervisor keeps the restart delay of one worker in this object, which every replacement of
+ * that worker shares. The delay is {@link FIRST_RESTART_DELAY_MS} at first, and the slot doubles it
+ * after each replacement, up to {@link MAX_RESTART_DELAY_MS}. Once a replacement has served for
+ * {@link RESTART_DELAY_RESET_MS}, the slot resets the delay to {@link FIRST_RESTART_DELAY_MS}.
  *
  * @internal
  */
@@ -17,12 +18,12 @@ export class RestartSlot {
   #reset: NodeJS.Timeout | undefined
   #restart: NodeJS.Timeout | undefined
 
-  /** The next replacement in this place starts after this many milliseconds. */
+  /** The supervisor starts the next replacement of this worker after this many milliseconds. */
   get delay(): number {
     return this.#delay
   }
 
-  /** Records that the worker in this place has started to serve, which starts the reset timer. */
+  /** Records that the worker has started to serve, and starts the timer that resets the delay. */
   serving(): void {
     clearTimeout(this.#reset)
     this.#reset = setTimeout(() => {
@@ -80,7 +81,7 @@ export class CrashWindow {
    * Records a crash.
    *
    * @param now - The supervisor passes the time of the crash from `performance.now()`.
-   * @returns The method returns `true` once the window holds as many crashes as the limit.
+   * @returns The method returns `true` once the window has as many crashes as the limit.
    */
   record(now: number): boolean {
     this.#times.push(now)

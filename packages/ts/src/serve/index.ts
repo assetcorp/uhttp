@@ -20,8 +20,8 @@ const NO_WORKER_BODY = headerBytes('No worker thread can serve this request.')
  */
 export interface Server {
   /**
-   * The server listens on this port, which the operating system assigns when you pass port 0. It
-   * is `undefined` for a server on a Unix socket.
+   * The server listens on this port, which the operating system assigns when you pass port 0. The
+   * port is `undefined` for a server on a Unix socket.
    */
   readonly port: number | undefined
   /**
@@ -98,16 +98,18 @@ async function serveOnWorkers(uws: Uws, options: CheckedServeOptions, module: UR
 /**
  * Returns a server that listens on the address that you choose, once the package has registered
  * the routes of the app with uWebSockets.js. With `threads`, each worker thread imports the module
- * at the URL that you pass and builds its own app, while the main thread accepts each connection
- * and hands it to a worker. The main thread replaces a worker that crashes, and the server exits
- * with an error when every worker is dead, when workers crash too often, or when a worker hangs.
+ * at the URL that you pass and builds its own app from it. The main thread accepts each connection
+ * and passes it to a worker, and it replaces a worker that crashes. The server exits with an error
+ * when no worker is left, when workers crash `crashLimit` times within `crashWindowMs`, or when a
+ * worker hangs.
  *
  * @param options - You choose the app, the address, and the worker threads here.
  * @returns The promise resolves to the server once the server listens.
- * @throws {@link UhttpError} with the code `INVALID_SERVE_OPTIONS` when an option is invalid or
- * the options combine in a way that the server can't serve, with the code `APP_START_FAILED` when
- * the app module fails to build the app, and with the code `LISTEN_FAILED` when the operating
- * system can't bind the address or another file or server holds the Unix socket path.
+ * @throws {@link UhttpError} with the code `INVALID_SERVE_OPTIONS` when an option has the wrong type
+ * or a value outside its range, or when you pass options that the package can't use together. It
+ * throws the code `APP_START_FAILED` when the app module fails to build the app or a worker
+ * crashes during the start, and the code `LISTEN_FAILED` when the operating system can't bind the
+ * address or the Unix socket path names a file in use.
  */
 export async function serve(options: ServeOptions): Promise<Server> {
   const checked = checkedServeOptions(options)

@@ -84,7 +84,7 @@ The package builds the chain of each route at startup, in the order app, group, 
 
 ## Pass values from middleware to the handler
 
-`c.set(key, value)` stores a value for the rest of the request, and `c.get(key)` returns it, or `undefined` when nothing is stored under the key. A middleware can therefore work something out once and hand it to every handler behind it:
+`c.set(key, value)` stores a value for the rest of the request, and `c.get(key)` returns that value, or `undefined` when your code has stored nothing under the key. A middleware can therefore look up a value once, such as the tenant of the request, so that every later middleware and the handler can get it with `c.get()`:
 
 ```ts
 const tenant: Middleware = async (c, next) => {
@@ -95,7 +95,7 @@ const tenant: Middleware = async (c, next) => {
 app.get('/:tenant/invoices', tenant, c => c.json({ tenant: c.get('tenant') }))
 ```
 
-The values belong to one request, so two requests never see each other's values. On a WebSocket route, the values that the chain stores during the upgrade become the `data` of the socket, as [WebSockets](websockets.md) shows.
+The package keeps a separate set of values for each request, so `c.get()` returns only the values that your code stored while it handled the same request. On a WebSocket route, the package copies the values that your code stores during the upgrade into the `data` of the socket, as you can read in [WebSockets](websockets.md).
 
 ## Groups are prefix guards
 

@@ -15,7 +15,7 @@ export type Uws = typeof import('uWebSockets.js')
 
 /**
  * Returns uWebSockets.js, which the package loads through `require`, because the ESM entry of
- * v20.71.0 imports a file that the tag lacks.
+ * v20.71.0 imports a file that is missing from the tag.
  *
  * @returns The function returns the module of uWebSockets.js.
  * @internal
@@ -66,8 +66,8 @@ async function hubOf(native: TemplatedApp, app: CompiledApp, origin: Uint8Array)
  * @param native - The package passes the app of uWebSockets.js on this thread.
  * @param app - The package passes the compiled app.
  * @param origin - The package passes the bytes that identify this process to a pub/sub adapter.
- * @returns The promise resolves to the hub of the thread, through which every socket publishes, or
- * to `undefined` for an app without WebSocket routes or a pub/sub adapter.
+ * @returns The promise resolves to the hub of the thread, which publishes the messages of every
+ * socket, or to `undefined` for an app without WebSocket routes or a pub/sub adapter.
  * @internal
  */
 export async function registerApp(

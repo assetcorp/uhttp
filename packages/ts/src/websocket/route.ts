@@ -18,21 +18,21 @@ import type { WebSocketRoute } from './types.js'
 type AnyRoute = WebSocketRoute<object>
 
 /**
- * The package checks a {@link WebSocketRoute} into this form when you add the route, with every
- * limit in the unit that uWebSockets.js reads.
+ * The package stores a {@link WebSocketRoute} in this form once it has checked the route, with
+ * every limit in the unit that uWebSockets.js expects.
  *
  * @internal
  */
 export interface CheckedWebSocketRoute {
   /** The package accepts an upgrade from these origins, and from the host of the request when this is `undefined`. */
   readonly origins: readonly string[] | undefined
-  /** uWebSockets.js closes a socket whose message is longer than this many bytes. */
+  /** uWebSockets.js drops the connection of a client that sends a message longer than this many bytes. */
   readonly maxPayloadLength: number
   /** uWebSockets.js closes a socket after this many seconds without a message. */
   readonly idleTimeout: number
   /** uWebSockets.js closes a socket after this many minutes, and 0 means no limit. */
   readonly maxLifetime: number
-  /** uWebSockets.js stops sending to a socket with more than this many bytes waiting. */
+  /** uWebSockets.js drops each message to a socket with more than this many bytes in its buffer. */
   readonly maxBackpressure: number
   /** uWebSockets.js closes a socket once it drops a message for backpressure when this is `true`. */
   readonly closeOnBackpressureLimit: boolean
@@ -42,7 +42,7 @@ export interface CheckedWebSocketRoute {
   readonly open: AnyRoute['open']
   /** The package calls this handler for each message. */
   readonly message: AnyRoute['message']
-  /** The package calls this handler once a full buffer drains. */
+  /** The package calls this handler each time uWebSockets.js has sent part of the buffer of a socket. */
   readonly drain: AnyRoute['drain']
   /** The package calls this handler once a socket closes. */
   readonly close: AnyRoute['close']
@@ -93,7 +93,7 @@ function handlerOf<T>(value: T | undefined, name: string): T | undefined {
 }
 
 /**
- * Returns an origin from an allow-list in the form that a browser sends in `Origin`, such as
+ * Returns an entry of the `origins` list in the form that a browser sends in `Origin`, such as
  * `https://app.example.com`.
  *
  * @param entry - You pass one entry of the `origins` list of a WebSocket route.
@@ -137,13 +137,14 @@ export function isWebSocketRoute(value: unknown): value is AnyRoute {
 }
 
 /**
- * Returns a WebSocket route after checking each of its handlers and limits, so that a limit that
- * makes uWebSockets.js abort the process fails when you add the route.
+ * Returns a WebSocket route once the function has checked each of its handlers and limits. Because
+ * uWebSockets.js aborts the process for an idle time or a lifetime outside its range, the function
+ * throws for such a limit when you add the route.
  *
  * @param route - You pass the route that you gave to {@link Group.ws}.
- * @returns The function returns the checked route, with each limit in the unit that uWebSockets.js reads.
- * @throws {@link UhttpError} with the code `INVALID_ROUTE` when a handler is not a function or a
- * limit has the wrong type or lies outside its range.
+ * @returns The function returns the checked route, with each limit in the unit that uWebSockets.js expects.
+ * @throws {@link UhttpError} with the code `INVALID_ROUTE` when a handler is not a function, or when
+ * a limit has the wrong type or a value outside its range.
  * @internal
  */
 export function checkedWebSocketRoute(route: AnyRoute): CheckedWebSocketRoute {

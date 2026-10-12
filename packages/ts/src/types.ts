@@ -151,9 +151,10 @@ export interface AppOptions {
    */
   readonly onError?: ErrorHandler
   /**
-   * The package hands every message that the app or one of its sockets publishes to this adapter,
-   * such as one for Redis, so that subscribers on other servers receive it. Each worker thread
-   * builds its own app, so each one has its own adapter.
+   * The package passes every message that your code publishes with `app.publish()` or
+   * `socket.publish()` to this adapter, such as an adapter for Redis, so that the adapter can
+   * deliver the message to the subscribers on other servers. Each worker thread builds its own
+   * app, so each worker has its own adapter.
    */
   readonly pubsub?: PubSubAdapter
 }

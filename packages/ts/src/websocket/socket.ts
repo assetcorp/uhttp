@@ -14,7 +14,7 @@ const DROPPED: SendStatus = 2
 
 /**
  * The package stores the {@link NativeSocket} of a client under this key of the user data that it
- * hands to uWebSockets.js, which copies the key onto its socket object.
+ * passes to uWebSockets.js, which copies the key onto its socket object.
  *
  * @internal
  */
@@ -61,14 +61,15 @@ function sendStatusOf(status: number): SendStatus {
 }
 
 /**
- * The package hands every handler of a WebSocket route this object, which calls uWebSockets.js
- * while the socket stays open. Once the socket has closed, `send` returns 2, `subscribe` and
- * `unsubscribe` return `false`, `end` does nothing, and `publish` still reaches every subscriber.
+ * The package passes this object to every handler of a WebSocket route, and each method calls
+ * uWebSockets.js while the socket is open. Once the socket has closed, `send` returns 2,
+ * `subscribe` and `unsubscribe` return `false`, and `end` does nothing, while `publish` delivers
+ * the message to every subscriber.
  *
  * @internal
  */
 export class NativeSocket implements ServerWebSocket {
-  /** The chain stored these values during the upgrade. */
+  /** Your middleware stored these values during the upgrade. */
   readonly data: Record<string, unknown>
   readonly #hub: Hub
   #ws: WebSocket<unknown> | undefined
@@ -77,8 +78,8 @@ export class NativeSocket implements ServerWebSocket {
   /**
    * Creates the socket of one client before the upgrade.
    *
-   * @param data - The package passes the values that the chain stored during the upgrade.
-   * @param hub - The package passes the hub of the thread, through which the socket publishes.
+   * @param data - The package passes the values that your middleware stored during the upgrade.
+   * @param hub - The package passes the hub of the thread, which publishes the messages of the socket.
    */
   constructor(data: Record<string, unknown>, hub: Hub) {
     this.data = data
@@ -94,13 +95,13 @@ export class NativeSocket implements ServerWebSocket {
     this.#ws = ws
   }
 
-  /** Records that the socket has closed, after which every method does nothing. */
+  /** Records that the socket has closed, so that no method calls the socket of uWebSockets.js again. */
   detach(): void {
     this.#ws = undefined
   }
 
   /**
-   * Sends a message to this client while the socket stays open.
+   * Sends a message to this client while the socket is open.
    *
    * @param message - Your code passes the message.
    * @param options - Your code can choose a binary or a text message and ask for compression.
@@ -115,7 +116,7 @@ export class NativeSocket implements ServerWebSocket {
   }
 
   /**
-   * Subscribes this socket to a topic while the socket stays open.
+   * Subscribes this socket to a topic while the socket is open.
    *
    * @param topic - Your code passes the topic.
    * @returns The method returns `false` once the socket has closed, and `true` otherwise.
@@ -131,10 +132,11 @@ export class NativeSocket implements ServerWebSocket {
   }
 
   /**
-   * Removes this socket from the subscribers of a topic while the socket stays open.
+   * Removes this socket from the subscribers of a topic while the socket is open.
    *
    * @param topic - Your code passes the topic.
-   * @returns The method returns `true` when the socket was a subscriber, and `false` once it has closed.
+   * @returns The method returns `true` when the socket was a subscriber, and `false` when it was not
+   * a subscriber or has closed.
    * @throws {@link UhttpError} with the code `INVALID_WEBSOCKET` for a topic that is not a string.
    */
   unsubscribe(topic: string): boolean {
@@ -145,8 +147,7 @@ export class NativeSocket implements ServerWebSocket {
   }
 
   /**
-   * Publishes a message through the hub, which leaves out this socket while it stays open and
-   * subscribed.
+   * Publishes a message through the hub to every subscriber of the topic apart from this socket.
    *
    * @param topic - Your code passes the topic.
    * @param message - Your code passes the message.
@@ -175,7 +176,7 @@ export class NativeSocket implements ServerWebSocket {
   }
 
   /**
-   * Returns the number of bytes that wait for the client to read.
+   * Returns the number of bytes in the buffer of the socket that uWebSockets.js has yet to send.
    *
    * @returns The method returns 0 once the socket has closed.
    */

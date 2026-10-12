@@ -9,7 +9,8 @@ import { openSocket, type TestSocket } from '../helpers/websocket.js'
 const ENVELOPE_VERSION = 1
 const BINARY_FLAG = 1
 const ORIGIN_BYTES = 16
-const DROPPED_WARNING = 'The package dropped a message from the pub/sub adapter that it could not read.'
+const DROPPED_WARNING =
+  'The package dropped a message from the pub/sub adapter, because it could not parse the message.'
 
 function foreignEnvelope(flags: number, body: Uint8Array): Uint8Array {
   return new Uint8Array([ENVELOPE_VERSION, flags, ...randomBytes(ORIGIN_BYTES), ...body])
@@ -81,7 +82,7 @@ describe('a pub/sub adapter shared by several servers', () => {
     expect(topicEvents(broker, 'news')).toEqual(['subscribe', 'unsubscribe'])
   })
 
-  it('drops a message from the adapter that it cannot read with a warning, and delivers one from another server', async () => {
+  it('logs a warning and drops a message from the adapter that the package cannot parse, and delivers a message from another server', async () => {
     const broker = await startBroker()
     const host = await startAdapterHost(broker, 0)
     const listener = await openSocket(host.port, '/chat/room')

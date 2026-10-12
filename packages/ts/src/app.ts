@@ -88,8 +88,8 @@ export class App extends Group {
    * context. The method lowercases header names, and it sends `host: localhost` when your headers
    * include no `Host`, as `fetch` does. It returns the same 400 as uWebSockets.js for more than 98
    * header lines, for a request line and headers above 4,096 bytes, and for an empty, repeated, or
-   * invalid `Host`. For a WebSocket upgrade that the route accepts, it returns the 101 with
-   * `sec-websocket-accept` and the first subprotocol that the request offers, and it opens no socket.
+   * invalid `Host`. When the package accepts a WebSocket upgrade, the method returns the 101 with
+   * `sec-websocket-accept` and the first subprotocol that the request offers, but it opens no socket.
    *
    * @param target - You pass the path with an optional query string, such as `/search?q=uhttp`.
    * @param init - You can set the method, the headers, the client address, and an abort signal here.
@@ -101,13 +101,14 @@ export class App extends Group {
   }
 
   /**
-   * Sends a message to every WebSocket that subscribed to a topic, on every worker thread and,
-   * through the pub/sub adapter of the app, on every other server. Until {@link serve} has started
-   * the app, no socket can subscribe, so the method sends nothing.
+   * Sends a message to every WebSocket that has subscribed to a topic on any worker thread. When the
+   * app has a pub/sub adapter, the package also passes the message to the adapter for the
+   * subscribers on other servers. Because no socket can subscribe before {@link serve} has started
+   * the app, the method drops any message that your code publishes before then.
    *
    * @param topic - You pass the name of the topic.
-   * @param message - The package sends a string as text and bytes as a binary message, unless the
-   * options choose otherwise.
+   * @param message - The package sends a string as text and bytes as a binary message, unless you
+   * set `binary` in the options.
    * @param options - You can choose a binary or a text message and ask for compression here.
    * @throws {@link UhttpError} with the code `INVALID_WEBSOCKET` when the server has started and the
    * topic is not a string or the message is neither a string nor bytes.
@@ -158,7 +159,8 @@ export function setPublisher(app: App, publish: Publish | undefined): void {
  * time limit, and a pub/sub adapter here.
  * @returns The function returns the new app.
  * @throws {@link UhttpError} with the code `INVALID_APP_OPTIONS` when an option has the wrong type,
- * when a limit is not a whole number of zero or more, or when the adapter lacks one of its methods.
+ * when a limit is not a whole number of zero or more, or when the adapter is missing one of its
+ * five methods.
  */
 export function createApp(options: AppOptions = {}): App {
   return construct(checkedRuntime(options))

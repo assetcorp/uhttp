@@ -52,13 +52,13 @@ Match on the code, because the message can change between releases.
 | `INVALID_STATUS` | 500 | You pass a helper a status outside the range that its reply allows. |
 | `INVALID_ROUTE` | 500 | You add a route path or a group prefix that breaks the rules of the router, or a route option of the wrong type. |
 | `INVALID_APP_OPTIONS` | 500 | You pass `createApp()` an option of the wrong type, or a limit that is not a whole number of zero or more. |
-| `INVALID_SERVE_OPTIONS` | 500 | You pass `serve()` a port outside 0 to 65535, an option outside its range, or options that it can't combine, such as `threads` with an app object or with a Unix socket path. |
-| `LISTEN_FAILED` | 500 | The operating system returns an error when the package binds the address that you chose, or another file or a running server holds the Unix socket path. |
-| `APP_START_FAILED` | 500 | The module that you pass to `serve()` throws while it builds the app, or its default export returns no app. With worker threads, the `cause` holds the error of the worker. |
-| `UPGRADE_REQUIRED` | 426 | A request without a WebSocket upgrade reaches a WebSocket route, or an upgrade asks for a version of the protocol other than 13. |
-| `INVALID_UPGRADE` | 400 | An upgrade request lacks `upgrade: websocket` or `connection: upgrade`, has a malformed `sec-websocket-key`, or declares a body. After a body, the package closes the connection. |
-| `FORBIDDEN_ORIGIN` | 403 | An upgrade request comes from the `null` origin, or from an origin that fails the check of the route. |
-| `INVALID_WEBSOCKET` | 500 | Your code passes a socket a close code or a close reason that RFC 6455 forbids, or a topic or a message of the wrong type. |
+| `INVALID_SERVE_OPTIONS` | 500 | You pass `serve()` a port outside 0 to 65535 or another option outside its range. `serve()` also throws this code when you pass `threads` together with an app object or a Unix socket path. |
+| `LISTEN_FAILED` | 500 | The operating system returns an error when the package binds the address that you chose. The package also throws this code when the Unix socket path names a file other than a socket, or a socket on which a server answers. |
+| `APP_START_FAILED` | 500 | The module that you pass to `serve()` throws while it builds the app, or its default export is neither an app nor a function that returns one. With worker threads, the package also throws this code when a worker crashes before every worker serves, and it stores the error of the worker in `cause`. |
+| `UPGRADE_REQUIRED` | 426 | A client sends a request without a WebSocket upgrade to a WebSocket route, or asks for a version of the protocol other than 13. |
+| `INVALID_UPGRADE` | 400 | A client sends an upgrade request without `upgrade: websocket` or `connection: upgrade`, with a malformed `sec-websocket-key`, or with a body. When the request has a body, the package closes the connection after the reply. |
+| `FORBIDDEN_ORIGIN` | 403 | A client sends an upgrade request from the `null` origin, or from an origin that fails the check of the route. |
+| `INVALID_WEBSOCKET` | 500 | Your code passes a topic or a message of the wrong type to a socket or to `app.publish()`, or closes a socket with a code or a reason that RFC 6455 forbids. |
 
 For a `UhttpError` below 500, and for `HANDLER_TIMEOUT`, the package sends the status, the code, and the message of the error, together with `issues` for `VALIDATION_FAILED`. For every other error, including any error that is not a `UhttpError`, it sends a 500 whose message is 'The request failed.' alone, so that the package writes a stack trace or an internal message only to your logger:
 

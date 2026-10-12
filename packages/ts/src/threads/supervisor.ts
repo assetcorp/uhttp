@@ -34,9 +34,9 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * The main thread starts the worker threads through this object, adds the app of each worker to
- * the app of uWebSockets.js that accepts the connections, replaces a worker that crashes, and
- * pings each worker that serves.
+ * The main thread starts the worker threads through this object, which adds the app of each worker
+ * to the app of uWebSockets.js that accepts the connections. The object also replaces a worker that
+ * crashes, and it pings each worker that serves.
  *
  * @internal
  */
@@ -49,6 +49,7 @@ export class Supervisor {
   readonly #records = new Map<number, WorkerRecord>()
   readonly #live = new Set<AppDescriptor>()
   readonly #slots: RestartSlot[] = []
+  readonly #startup = Promise.withResolvers<void>()
   #nextId = 1
   #started = false
   #stopping = false
@@ -71,14 +72,15 @@ export class Supervisor {
   }
 
   /**
-   * Starts every worker and waits until each one serves. When one fails, the method stops the
-   * others first.
+   * Starts every worker and waits until each one serves. When a worker fails to build its app, or
+   * crashes before every other worker serves, the method stops every worker before it throws.
    *
    * @returns The promise resolves once every worker serves.
-   * @throws {@link UhttpError} with the code `APP_START_FAILED` when a worker fails to build its app,
-   * with the error of the worker as the cause.
+   * @throws {@link UhttpError} with the code `APP_START_FAILED` when a worker fails or crashes during
+   * the start, with the error of the worker as the cause.
    */
   async start(): Promise<void> {
+    void settled(this.#startup.promise)
     const first: WorkerRecord[] = []
     for (let index = 0; index < this.#options.threads; index++) {
       const slot = new RestartSlot()
@@ -86,10 +88,10 @@ export class Supervisor {
       first.push(this.#spawn(slot))
     }
     try {
-      await Promise.all(first.map(record => record.ready.promise))
+      await Promise.race([Promise.all(first.map(record => record.ready.promise)), this.#startup.promise])
     } catch (error) {
       await this.stop()
-      throw new UhttpError('APP_START_FAILED', 'A worker thread failed to build the app.', { cause: error })
+      throw new UhttpError('APP_START_FAILED', 'A worker thread failed while the server started.', { cause: error })
     }
     this.#started = true
     this.#startWatchdog()
@@ -229,6 +231,7 @@ export class Supervisor {
     record.state = 'leaving'
     if (!this.#started || this.#stopping) {
       record.ready.reject(error)
+      this.#startup.reject(error)
       return
     }
     this.#log(message, { err: error, worker: record.id })

@@ -71,9 +71,10 @@ export class Context {
   }
 
   /**
-   * Stores a value under a key for the rest of the request, so that a middleware can pass what it
-   * found, such as the signed-in user, to the handler and to later middleware. On a WebSocket
-   * route, the values that the chain stores during the upgrade become the `data` of the socket.
+   * Stores a value under a key for the rest of the request, so that a middleware can look up a
+   * value once, such as the signed-in user, and every later middleware and the handler can get it
+   * with {@link Context.get}. On a WebSocket route, the package copies the values that your code
+   * stores during the upgrade into the `data` of the socket.
    *
    * @param key - You choose the key, and a later call with the same key replaces the value.
    * @param value - The package stores this value as it is.
@@ -87,8 +88,9 @@ export class Context {
    * Returns the value that a middleware or the handler stored under a key with
    * {@link Context.set}.
    *
-   * @param key - You pass the key that the code used to store the value.
-   * @returns The method returns the value, or `undefined` when nothing is stored under the key.
+   * @param key - You pass the key under which your code stored the value.
+   * @returns The method returns the value, or `undefined` when your code has stored nothing under
+   * the key.
    */
   get(key: string): unknown {
     return this.#values?.get(key)
@@ -235,12 +237,12 @@ export function createContext(request: RequestInfo, exchange: Exchange): Context
 }
 
 /**
- * Returns a new object with every value that the chain stored on a context with
+ * Returns a new object with every value that your code stored on a context with
  * {@link Context.set}. The object has no prototype, so a key such as `__proto__` stays an ordinary
  * key.
  *
  * @param context - The package passes the context of an upgrade request.
- * @returns The function returns an empty object when the chain stored nothing.
+ * @returns The function returns an empty object when your code stored nothing.
  * @internal
  */
 export function contextValues(context: Context): Record<string, unknown> {

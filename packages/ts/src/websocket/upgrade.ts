@@ -94,19 +94,19 @@ function respond(upgrade: Upgrade, request: CopiedRequest, chain: RequestChain):
 }
 
 /**
- * Returns the upgrade handler of one WebSocket route for uWebSockets.js, which calls it for a GET
- * request whose `sec-websocket-key` has 24 characters. Inside the synchronous handler, the function
- * applies the framing checks of an HTTP route, copies the path parameters, the declared headers,
- * and the handshake headers, and sends the request through the middleware chain of the route.
- * That chain ends in the 101 for a valid handshake, and in a 400, a 403, or a 426 otherwise. When
- * every middleware has returned, the package performs the upgrade inside a cork with the values
- * that the chain stored as the `data` of the socket, or it writes the reply that replaced the 101.
- * It attaches the abort handler before the handler of uWebSockets.js returns, unless the response
- * ended inside it.
+ * Returns the upgrade handler of one WebSocket route for uWebSockets.js, which calls the handler for
+ * a GET request whose `sec-websocket-key` has 24 characters. Inside that synchronous call, the
+ * handler applies the framing checks of an HTTP route and copies the path parameters, the declared
+ * headers, and the handshake headers. It then passes the request to the middleware of the route,
+ * and the last handler returns the 101 for a valid handshake or throws a 400, a 403, or a 426.
+ * Once every middleware has returned, the package switches the connection inside a cork, with the
+ * values that your middleware stored as the `data` of the socket. When a middleware has returned
+ * another reply in place of the 101, the package writes that reply. The handler attaches the abort
+ * handler before it returns to uWebSockets.js, unless the response has already ended.
  *
  * @param app - The package passes the compiled app.
  * @param socket - The package passes the compiled WebSocket route.
- * @param hub - The package passes the hub of the thread, through which every socket publishes.
+ * @param hub - The package passes the hub of the thread, which publishes the messages of every socket.
  * @returns The function returns the handler to pass as `upgrade` to uWebSockets.js.
  * @internal
  */

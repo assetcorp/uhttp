@@ -29,7 +29,7 @@ describe('registering a WebSocket route', () => {
     for (const maxLifetimeMs of [0, 1, 239 * 60_000]) expect(addTo({ maxLifetimeMs })).not.toThrow()
   })
 
-  it('refuses a backpressure limit of 0, which uWebSockets.js reads as no limit, and sizes beyond 32 bits', () => {
+  it('refuses a backpressure limit of 0, which uWebSockets.js treats as no limit, and a size beyond 32 bits', () => {
     for (const maxBackpressureBytes of [0, -1, 2 ** 31, 0.5]) {
       expect(addTo({ maxBackpressureBytes })).toThrowError(expect.objectContaining({ code: 'INVALID_ROUTE' }))
     }
@@ -92,7 +92,7 @@ describe('registering a WebSocket route', () => {
 })
 
 describe('the pub/sub options of an app', () => {
-  it('refuses a pub/sub adapter that lacks one of its five methods', () => {
+  it('refuses a pub/sub adapter that is missing one of its five methods', () => {
     const complete = {
       start: () => undefined,
       subscribe: () => undefined,
@@ -122,7 +122,7 @@ describe('the pub/sub options of an app', () => {
 })
 
 describe('a request without an upgrade to a WebSocket route', () => {
-  it('receives a 426 that names the WebSocket protocol, after the middleware of the route', async () => {
+  it('receives a 426 with the WebSocket protocol in upgrade, after the middleware of the route', async () => {
     const seen: string[] = []
     const app = createApp()
       .use(async (c, next) => {
@@ -137,7 +137,7 @@ describe('a request without an upgrade to a WebSocket route', () => {
     expect(response.headers.get('upgrade')).toBe('websocket')
     expect(response.headers.get('sec-websocket-version')).toBe('13')
     expect(await response.json()).toEqual({
-      error: { code: 'UPGRADE_REQUIRED', message: 'This path accepts WebSocket upgrade requests alone.' },
+      error: { code: 'UPGRADE_REQUIRED', message: 'Send a WebSocket upgrade request to this path.' },
     })
     expect(seen).toEqual(['app 426'])
   })
@@ -156,7 +156,7 @@ describe('a request without an upgrade to a WebSocket route', () => {
     expect(post.status).toBe(405)
   })
 
-  it('reaches the GET route that you added to the same path', async () => {
+  it('sends a plain GET to the GET route that you added on the same path', async () => {
     const app = createApp()
       .get('/chat', c => c.text('the chat page'))
       .ws('/chat', {})

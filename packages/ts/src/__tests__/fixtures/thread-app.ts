@@ -1,10 +1,12 @@
-import { appendFileSync, existsSync } from 'node:fs'
+import { appendFileSync, existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { getHeapStatistics } from 'node:v8'
 import { MessagePort, threadId } from 'node:worker_threads'
 import { createApp } from '../../index.js'
 
 const stateDirectory = process.env.UHTTP_FIXTURE_DIR
+const SLOW_START_MS = 3_000
+const CRASH_AFTER_START_MS = 200
 let portMessages = 0
 const postMessage = MessagePort.prototype.postMessage
 
@@ -22,10 +24,28 @@ function blockForever(): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)
 }
 
-export default function buildApp() {
+function claimed(name: string): boolean {
+  if (stateDirectory === undefined) return false
+  try {
+    renameSync(join(stateDirectory, name), join(stateDirectory, `${name}.claimed`))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export default async function buildApp() {
   if (stateDirectory !== undefined && existsSync(join(stateDirectory, 'fail-start'))) {
     record('fail')
     throw new Error('The fixture refuses to build its app.')
+  }
+  if (claimed('crash-after-start')) {
+    setTimeout(() => {
+      throw new Error('The fixture crashed on purpose after it started.')
+    }, CRASH_AFTER_START_MS)
+  } else if (stateDirectory !== undefined && existsSync(join(stateDirectory, 'slow-start'))) {
+    record('slow')
+    await new Promise(resolve => setTimeout(resolve, SLOW_START_MS))
   }
   record('start')
   const app = createApp()

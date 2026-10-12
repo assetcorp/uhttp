@@ -29,7 +29,7 @@ function socketPath(): string {
 }
 
 describe('the options of serve()', () => {
-  it('refuses options that the server cannot serve', async () => {
+  it('throws INVALID_SERVE_OPTIONS for a value outside its range and for options that the package cannot use together', async () => {
     const app = createApp()
     const module = fixture('apps.js')
     const invalid: unknown[] = [
@@ -111,7 +111,7 @@ describe('a server on a Unix socket', () => {
     await server.close()
   })
 
-  it('refuses a path that a regular file or a running server holds, and leaves both alone', async () => {
+  it('refuses a path that names a regular file or a socket with a running server, and leaves both alone', async () => {
     const filePath = join(mkdtempSync(join(tmpdir(), 'uhttp-unix-')), 'data.txt')
     writeFileSync(filePath, 'keep me')
     const busyPath = socketPath()
