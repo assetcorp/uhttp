@@ -17,10 +17,6 @@ export async function start(app: App): Promise<Server> {
   return server
 }
 
-export function urlOf(server: Server, target: string): string {
-  return `http://${HOST}:${server.port}${target}`
-}
-
 export function pause(milliseconds: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
 }

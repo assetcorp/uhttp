@@ -45,6 +45,18 @@ export const MAX_REQUEST_HEADER_COUNT = 98
  */
 export const DEFAULT_MAX_REQUEST_HEAD_BYTES = 4096
 
+/**
+ * uWebSockets.js v20.71.0 sends a 400 for a `content-length` value with more characters than
+ * this, and the package checks the same rule before it calls any handler.
+ */
+export const LONGEST_CONTENT_LENGTH_DIGITS = 18
+
+/**
+ * uWebSockets.js v20.71.0 closes the connection after the response when the `connection` header of
+ * the request has this many characters, as `close` does, and the package applies the same rule.
+ */
+export const CONNECTION_CLOSE_VALUE_LENGTH = 5
+
 /** When a test sets no `Host` header, `app.request()` sends this one, as `fetch` does. */
 export const TEST_REQUEST_HOST = 'localhost'
 
@@ -99,6 +111,78 @@ export const DEFAULT_SSE_HEARTBEAT_MS = 30_000
 
 /** The server-sent events helper sends this comment as its heartbeat. */
 export const SSE_HEARTBEAT_COMMENT = ':\n\n'
+
+/** When neither the app nor the route sets `maxBodyBytes`, the package accepts a request body of up to 1 MiB. */
+export const DEFAULT_MAX_BODY_BYTES = 1_048_576
+
+/** The package attaches a body reader on routes of these methods unless the route sets `body: false`. */
+export const BODY_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH']
+
+/**
+ * The package pauses the socket once it holds this many bytes of the body that your code hasn't
+ * read, so that it holds no more than this figure and one more chunk in memory for a slow reader.
+ */
+export const BODY_HIGH_WATER_MARK_BYTES = 65_536
+
+/**
+ * uWebSockets.js clears its 10-second idle timer while the package keeps a socket paused, so the
+ * package closes the connection itself once the socket stays paused for this many milliseconds.
+ */
+export const BODY_PAUSE_TIMEOUT_MS = 10_000
+
+/**
+ * When more of the request body than this is still on its way after the reply, the package closes
+ * the connection, because reading the rest would cost more than a new connection. A chunked body of
+ * unknown length counts as more. Go's HTTP server applies the same 256 KiB limit to the part of a
+ * body that a handler leaves unread.
+ */
+export const DISCARDABLE_BODY_BYTES = 262_144
+
+/**
+ * When the package closes a connection while the request body is still arriving, it keeps reading
+ * and discarding the body for up to this many milliseconds, so that the client can read the reply
+ * before the close. The figure matches the default `lingering_time` of nginx.
+ */
+export const LINGERING_CLOSE_MS = 30_000
+
+/** When neither the app nor the route sets `timeoutMs`, a handler has no time limit, since 0 means no limit. */
+export const DEFAULT_TIMEOUT_MS = 0
+
+/** Node sets a `setTimeout` delay above this many milliseconds to 1 millisecond, so the package throws for a longer time limit. */
+export const MAX_TIMEOUT_MS = 2_147_483_647
+
+/** `form()` throws once a URL-encoded body has more parameters than this. */
+export const MAX_FORM_FIELDS = 1_000
+
+/** The package sends no more than this many problems in the reply to a body that a schema rejects. */
+export const VALIDATION_ISSUE_COUNT = 10
+
+/** The package cuts the message of each validation problem to this many characters. */
+export const VALIDATION_MESSAGE_LENGTH = 256
+
+/** The package keeps no more than this many segments of the path of each validation problem. */
+export const VALIDATION_PATH_SEGMENTS = 16
+
+/** When you leave out `maxParts`, `multipart()` throws once a body has more parts than this. */
+export const DEFAULT_MAX_MULTIPART_PARTS = 1_000
+
+/** When you leave out `maxFieldBytes`, `multipart()` throws for a field value longer than this. */
+export const DEFAULT_MAX_MULTIPART_FIELD_BYTES = 1_048_576
+
+/** `multipart()` throws for a boundary longer than this, because RFC 2046 allows 1 to 70 characters. */
+export const MAX_MULTIPART_BOUNDARY_LENGTH = 70
+
+/** RFC 2046 allows these characters in a multipart boundary, and a space too, apart from at its end. */
+export const MULTIPART_BOUNDARY_CHARACTERS = "0-9A-Za-z'()+_,\\-./:=?"
+
+/** `multipart()` throws once the headers of one part take more bytes than this, which is busboy's limit too. */
+export const MAX_PART_HEADER_BYTES = 16_384
+
+/** `multipart()` throws for a part with more header lines than this. */
+export const MAX_PART_HEADER_COUNT = 16
+
+/** `multipart()` throws for a field name longer than this many bytes. */
+export const MAX_PART_NAME_BYTES = 256
 
 /** The package writes the reason phrase from this table after each standard status code from 200 to 511. */
 export const STATUS_TEXT: Readonly<Record<number, string>> = {

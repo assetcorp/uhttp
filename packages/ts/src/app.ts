@@ -1,7 +1,9 @@
 import { type CompiledApp, compileApp } from './compile.js'
+import { DEFAULT_MAX_BODY_BYTES, DEFAULT_TIMEOUT_MS } from './constants.js'
 import { UhttpError } from './errors.js'
 import type { AppRuntime } from './exchange.js'
 import { attachGroup, Group, Registry, registryOf } from './group.js'
+import { checkedLimit, checkedTimeLimit } from './limits.js'
 import type { TestRequestInit } from './testing/index.js'
 import type { AppOptions } from './types.js'
 
@@ -9,7 +11,7 @@ let construct: (runtime: AppRuntime) => App
 let compile: (app: App) => CompiledApp
 
 function checkedRuntime(options: AppOptions): AppRuntime {
-  const { logger, notFound, onError } = options
+  const { logger, notFound, onError, maxBodyBytes = DEFAULT_MAX_BODY_BYTES, timeoutMs = DEFAULT_TIMEOUT_MS } = options
   if (logger !== undefined) {
     for (const level of ['info', 'warn', 'error'] as const) {
       if (typeof logger[level] !== 'function') {
@@ -23,7 +25,13 @@ function checkedRuntime(options: AppOptions): AppRuntime {
   if (onError !== undefined && typeof onError !== 'function') {
     throw new UhttpError('INVALID_APP_OPTIONS', 'Pass an error handler function as the onError option.')
   }
-  return { logger, notFound, onError }
+  return {
+    logger,
+    notFound,
+    onError,
+    maxBodyBytes: checkedLimit(maxBodyBytes, 'INVALID_APP_OPTIONS', 'maxBodyBytes'),
+    timeoutMs: checkedTimeLimit(timeoutMs, 'INVALID_APP_OPTIONS'),
+  }
 }
 
 /**
@@ -90,9 +98,11 @@ export function compiledOf(app: App): CompiledApp {
  * Returns a new app with no routes, so that you can add routes before you pass the app to
  * {@link serve}.
  *
- * @param options - You can pass a logger, a not-found handler, and an error handler here.
+ * @param options - You can pass a logger, a not-found handler, an error handler, a body limit, and
+ * a time limit here.
  * @returns The function returns the new app.
- * @throws {@link UhttpError} with the code `INVALID_APP_OPTIONS` when an option has the wrong type.
+ * @throws {@link UhttpError} with the code `INVALID_APP_OPTIONS` when an option has the wrong type,
+ * or when a limit is not a whole number of zero or more.
  */
 export function createApp(options: AppOptions = {}): App {
   return construct(checkedRuntime(options))

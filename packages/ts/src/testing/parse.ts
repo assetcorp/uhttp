@@ -1,5 +1,6 @@
 import { DEFAULT_MAX_REQUEST_HEAD_BYTES, MAX_REQUEST_HEADER_COUNT, TEST_REQUEST_HOST } from '../constants.js'
-import { containsControlCharacter, containsSpaceOrControl, isDecimalDigits, isToken } from '../headers.js'
+import { parserRejectsFraming } from '../framing.js'
+import { containsControlCharacter, containsSpaceOrControl, isToken } from '../headers.js'
 
 const HOST_FORBIDDEN_PUNCTUATION = /[,@]/
 const EDGE_WHITESPACE = /^[ \t]+|[ \t]+$/g
@@ -14,10 +15,27 @@ type Lines = readonly (readonly [string, string])[]
 export type TestHeaders = Readonly<Record<string, string | readonly string[]>> | readonly (readonly [string, string])[]
 
 /**
+ * You pass a request body to {@link App.request} as text, as bytes, or as a list or an async
+ * iterable of chunks. {@link App.request} sends text and bytes with a `content-length` header, and
+ * chunks with `transfer-encoding: chunked`, unless your headers set either one.
+ */
+export type TestBody =
+  | string
+  | Uint8Array
+  | ArrayBuffer
+  | Iterable<string | Uint8Array>
+  | AsyncIterable<string | Uint8Array>
+
+/**
  * You pass these settings to {@link App.request}, which sends a request through the app without
  * a network.
  */
 export interface TestRequestInit {
+  /**
+   * {@link App.request} sends this body in the chunks that you pass, so that a test can place a
+   * chunk boundary anywhere in the body.
+   */
+  readonly body?: TestBody
   /** When you leave out the method, {@link App.request} sends a `GET`. */
   readonly method?: string
   /**
@@ -72,13 +90,52 @@ function headBytes(method: string, target: string, lines: Lines): number {
   return bytes
 }
 
-function framingIsValid(lines: Lines): boolean {
-  const lengths = lines.filter(([name]) => name === 'content-length').map(([, value]) => value)
-  const [encoding] = lines.filter(([name]) => name === 'transfer-encoding').map(([, value]) => value)
-  if (encoding !== undefined) return lengths.length === 0 && encoding.toLowerCase().endsWith(CHUNKED)
-  const [first] = lengths
-  if (first === undefined) return true
-  return isDecimalDigits(first) && lengths.every(length => length === first)
+/**
+ * Returns the value of every line of one header in a test request.
+ *
+ * @param lines - The package passes the header lines of the test request.
+ * @param name - The package passes the lowercase name of the header.
+ * @returns The function returns the values in the order of the lines.
+ * @internal
+ */
+export function valuesOf(lines: Lines, name: string): string[] {
+  return lines.filter(([lineName]) => lineName === name).map(([, value]) => value)
+}
+
+/**
+ * Returns the value of the first line of one header in a test request, as uWebSockets.js returns
+ * it from `getHeader()`.
+ *
+ * @param lines - The package passes the header lines of the test request.
+ * @param name - The package passes the lowercase name of the header.
+ * @returns The function returns the value, or `undefined` when the header is missing or empty.
+ * @internal
+ */
+export function firstValue(lines: Lines, name: string): string | undefined {
+  for (const [lineName, value] of lines) {
+    if (lineName === name) return value === '' ? undefined : value
+  }
+  return undefined
+}
+
+/**
+ * Returns the length of a body that a test passed whole, or `undefined` for a body in chunks.
+ *
+ * @param body - The test passed this body.
+ * @returns The function returns the length in bytes, counting text as UTF-8.
+ * @internal
+ */
+export function wholeBodyLength(body: TestBody): number | undefined {
+  if (typeof body === 'string') return Buffer.byteLength(body)
+  if (body instanceof Uint8Array || body instanceof ArrayBuffer) return body.byteLength
+  return undefined
+}
+
+function addFraming(lines: (readonly [string, string])[], body: TestBody | undefined): void {
+  if (body === undefined) return
+  if (lines.some(([name]) => name === 'content-length' || name === 'transfer-encoding')) return
+  const length = wholeBodyLength(body)
+  lines.push(length === undefined ? ['transfer-encoding', CHUNKED] : ['content-length', String(length)])
 }
 
 function hostIsValid(lines: Lines): boolean {
@@ -95,11 +152,13 @@ function hostIsValid(lines: Lines): boolean {
  * - The function returns `undefined` for a method with a space or a control character, and for a
  *   target that does not start with `/` or that contains a space or a control character.
  * - It returns `undefined` for an invalid header name or a control character in a header value.
- * - It returns `undefined` for more than 98 header lines.
- * - It returns `undefined` when the request line and the headers take more than 4,096 bytes, or
- *   more than `UWS_HTTP_MAX_HEADERS_SIZE` where the host set it.
+ * - It returns `undefined` for more than {@link MAX_REQUEST_HEADER_COUNT} header lines.
+ * - It returns `undefined` when the request line and the headers take more than
+ *   {@link DEFAULT_MAX_REQUEST_HEAD_BYTES} bytes, or more than `UWS_HTTP_MAX_HEADERS_SIZE` where the
+ *   host set it.
  * - It returns `undefined` for an empty, repeated, or invalid `Host`.
- * - It returns `undefined` for conflicting `content-length` and `transfer-encoding` headers.
+ * - It returns `undefined` for the `content-length` and `transfer-encoding` lines that
+ *   {@link parserRejectsFraming} rejects.
  *
  * @param target - The test passes the path with an optional query string.
  * @param init - The test passes the method, the headers, the client address, and the signal.
@@ -116,9 +175,11 @@ export function parseTestRequest(target: string, init: TestRequestInit): ParsedT
     lines.push([name.toLowerCase(), value.replace(EDGE_WHITESPACE, '')])
   }
   if (!lines.some(([name]) => name === 'host')) lines.unshift(['host', TEST_REQUEST_HOST])
+  addFraming(lines, init.body)
   if (lines.length > MAX_REQUEST_HEADER_COUNT) return undefined
   if (headBytes(method, target, lines) > maxHeadBytes()) return undefined
-  if (!hostIsValid(lines) || !framingIsValid(lines)) return undefined
+  if (!hostIsValid(lines)) return undefined
+  if (parserRejectsFraming(valuesOf(lines, 'content-length'), valuesOf(lines, 'transfer-encoding'))) return undefined
   const queryStart = target.indexOf('?')
   return {
     method,

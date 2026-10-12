@@ -1,4 +1,4 @@
-import { ALLOW_METHOD_ORDER, LIST_HEADER_NAMES } from './constants.js'
+import { ALLOW_METHOD_ORDER, BODY_METHODS, LIST_HEADER_NAMES } from './constants.js'
 import type { AppRuntime } from './exchange.js'
 import { Matcher, prefixCoverage, prefixMatches, type Segment, splitPath } from './router/index.js'
 import type { Handler, Middleware, MiddlewareHandler, RouteOptions } from './types.js'
@@ -86,6 +86,22 @@ export interface CompiledRoute {
   readonly handler: Handler
   /** The package copies the request for the route by this plan. */
   readonly copyPlan: CopyPlan
+  /** The package reads the body reader, the body limit, and the time limit of the route from these limits. */
+  readonly limits: RouteLimits
+}
+
+/**
+ * The package applies these limits to each request of a route.
+ *
+ * @internal
+ */
+export interface RouteLimits {
+  /** This is `true` when the package attaches a body reader for the route. */
+  readonly readsBody: boolean
+  /** The package accepts a body of up to this many bytes. */
+  readonly maxBodyBytes: number
+  /** A handler has this many milliseconds before the package sends a 503, and 0 means no limit. */
+  readonly timeoutMs: number
 }
 
 /**
@@ -120,6 +136,8 @@ export interface CompiledApp {
   readonly appLayers: readonly MiddlewareHandler[]
   /** The package copies a request by this plan when only the middleware of the app wraps it. */
   readonly appCopyPlan: CopyPlan
+  /** A request that no route handles has these limits, which are those of the app with no body reader. */
+  readonly appLimits: RouteLimits
   /** The package checks these prefix guards from the shortest prefix to the longest. */
   readonly guards: readonly CompiledGuard[]
 }
@@ -174,10 +192,22 @@ export function copyPlanOf(middleware: readonly Middleware[], options: readonly 
   return { headerNames, listHeaders, hasListHeader: listHeaders.includes(true), allHeaders, clientAddress }
 }
 
+function routeLimitsOf(record: RouteRecord, runtime: AppRuntime): RouteLimits {
+  let readsBody = BODY_METHODS.includes(record.method)
+  let { maxBodyBytes, timeoutMs } = runtime
+  for (const options of record.options) {
+    if (options.body !== undefined) readsBody = options.body
+    if (options.maxBodyBytes !== undefined) maxBodyBytes = options.maxBodyBytes
+    if (options.timeoutMs !== undefined) timeoutMs = options.timeoutMs
+  }
+  return { readsBody, maxBodyBytes, timeoutMs }
+}
+
 function compileRoute(
   record: RouteRecord,
   appMiddleware: readonly Middleware[],
   guards: readonly CompiledGuard[],
+  runtime: AppRuntime,
 ): CompiledRoute {
   const layers: MiddlewareHandler[] = appMiddleware.map(handlerOf)
   const declared: Middleware[] = [...appMiddleware]
@@ -199,7 +229,20 @@ function compileRoute(
     layers,
     handler: record.handler,
     copyPlan: copyPlanOf(declared, record.options),
+    limits: routeLimitsOf(record, runtime),
   }
+}
+
+/**
+ * Returns the HEAD route that the package adds beside a GET route. It shares the chain and the
+ * limits of the GET route, apart from the body reader, which a HEAD request never needs.
+ *
+ * @param route - The package passes the compiled GET route.
+ * @returns The function returns the HEAD route.
+ * @internal
+ */
+export function headRouteOf(route: CompiledRoute): CompiledRoute {
+  return { ...route, method: 'HEAD', limits: { ...route.limits, readsBody: false } }
 }
 
 function methodRank(method: string): number {
@@ -223,9 +266,9 @@ export function compileApp(runtime: AppRuntime, contents: RegistryContents): Com
     .sort((left, right) => left.segments.length - right.segments.length)
   const matcher = new Matcher<CompiledRoute>()
   const routes = contents.routes.map(record => {
-    const route = compileRoute(record, contents.middleware, guards)
+    const route = compileRoute(record, contents.middleware, guards, runtime)
     matcher.add(route.method, record.segments, route)
-    if (route.method === 'GET') matcher.add('HEAD', record.segments, { ...route, method: 'HEAD' })
+    if (route.method === 'GET') matcher.add('HEAD', record.segments, headRouteOf(route))
     return route
   })
   const methods = matcher.methods().sort((left, right) => methodRank(left) - methodRank(right))
@@ -237,6 +280,7 @@ export function compileApp(runtime: AppRuntime, contents: RegistryContents): Com
     appMiddleware: [...contents.middleware],
     appLayers: contents.middleware.map(handlerOf),
     appCopyPlan: copyPlanOf(contents.middleware),
+    appLimits: { readsBody: false, maxBodyBytes: runtime.maxBodyBytes, timeoutMs: runtime.timeoutMs },
     guards,
   }
 }

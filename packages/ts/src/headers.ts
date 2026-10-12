@@ -8,6 +8,22 @@ const TAB_CODE = 0x09
 const DELETE_CODE = 0x7f
 
 /**
+ * Returns the UTF-8 bytes of a header name or value in an `ArrayBuffer` of their own. The package
+ * builds each one once, because uWebSockets.js reads an `ArrayBuffer` in place, while it converts
+ * text to UTF-8 on every call and looks up the underlying buffer of a view such as a `Buffer`.
+ *
+ * @param text - The package passes a header name or a header value.
+ * @returns The function returns a new `ArrayBuffer` that holds the bytes alone.
+ * @internal
+ */
+export function headerBytes(text: string): ArrayBuffer {
+  const bytes = new TextEncoder().encode(text)
+  const owned = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(owned).set(bytes)
+  return owned
+}
+
+/**
  * Returns `true` when a text is an HTTP token under RFC 9110, which is the form that every header
  * name must take.
  *

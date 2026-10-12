@@ -12,7 +12,7 @@ uws
   })
   .listen('127.0.0.1', 0, listenSocket => {
     if (!listenSocket) {
-      console.error('The bare uWebSockets.js server could not listen on 127.0.0.1.')
+      console.error('The uWebSockets.js server failed to listen on 127.0.0.1.')
       process.exit(1)
     }
     console.log(JSON.stringify({ port: uws.us_socket_local_port(listenSocket) }))

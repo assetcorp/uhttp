@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   comment:
-    name: Post the speed table on the pull request
+    name: Post the speed tables on the PR
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -25,7 +25,7 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name speed-report --dir speed-report
 
-      - name: Post the table, or update the table that an earlier run posted
+      - name: Post the tables, or update the comment that an earlier run posted
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}

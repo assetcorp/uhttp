@@ -100,7 +100,17 @@ Groups can nest, in which case the package calls the middleware of the outer gro
 
 ## Declare the headers that a route uses
 
-The package copies the method, the path, the query string, the path parameters, the content type, and the content length for every request. It copies any other request header only when the route or one of its middleware declares it, because the package does more work on every request of a route for each header that it copies. Pass a `RouteOptions` object before the handler to declare headers or the client address:
+The package copies the method, the path, the path parameters, and the content length for every request. It reads the query string and the content type from uWebSockets.js when your code first asks for them, because each read adds work to the request that makes it. When your handler awaits something or returns a stream, the package copies whatever your code has not read yet before uWebSockets.js frees the request, so you can read both after an `await`. When your handler returns any other reply without an `await`, the package sends that reply at once and frees the request. In that case, read the query string and the content type before the handler returns, including in any task that the handler starts without waiting for it. A first read after that throws `REQUEST_RELEASED`, and so do `c.req.header('content-type')`, `c.req.headers()`, and `c.req.body`, because each of them needs the content type:
+
+```ts
+app.get('/search', c => {
+  const query = c.req.query
+  void recordSearch(query)
+  return c.json(findProducts(query))
+})
+```
+
+The package copies any other request header only when the route or one of its middleware declares it, because the package does more work on every request of a route for each header that it copies. Pass a `RouteOptions` object before the handler to declare headers or the client address:
 
 ```ts
 app.get('/me', { headers: ['authorization'] }, c => {
@@ -125,11 +135,13 @@ const requireLogin: Middleware = {
 
 `c.req.header()` throws a `UhttpError` with the code `UNDECLARED_HEADER` for a header that nobody declared, so the first test that calls that code fails with the name of the missing header in its message. `c.req.clientAddress` throws `UNDECLARED_CLIENT_ADDRESS` in the same way when nobody declared the client address.
 
+Set the body reader, the body limit, and the time limit of a route in the same options object, with `body`, `maxBodyBytes`, and `timeoutMs`, as [Request bodies and validation](bodies.md) describes.
+
 A client can send some headers, such as `x-forwarded-for` and `cookie`, on several lines. For those list headers, the package collects every line and joins the lines into one value, with a semicolon and a space between cookie lines and a comma and a space between the lines of any other list header. For any other header, it copies the first line. For a route such as a proxy, pass `{ headers: 'all' }` to copy every header, and `c.req.headers()` then returns all of them.
 
 ## Stop work for a client that has gone
 
-`c.req.signal` is an `AbortSignal` that fires when the client disconnects before the response ends. The package creates the signal the first time that your code asks for it, so it creates signals only for the requests whose code uses one:
+`c.req.signal` is an `AbortSignal` that fires when the client disconnects before the response ends, or when the handler passes the time limit of its route. The package creates the signal the first time that your code asks for it, so it creates signals only for the requests whose code uses one:
 
 ```ts
 app.get('/stock', async c => {
@@ -147,4 +159,4 @@ const response = await app.request('/users/42', { headers: { authorization: 'Bea
 console.log(response.status, await response.json())
 ```
 
-`app.request()` applies the checks that uWebSockets.js v20.71.0 applies to every request. It lowercases header names and trims the spaces around each value. It returns the same 400 as uWebSockets.js for more than 98 header lines and for an empty, repeated, or invalid `Host`. It returns that 400 too when the request line and the headers take more than 4,096 bytes, or more than `UWS_HTTP_MAX_HEADERS_SIZE` where you set it. When your headers include no `Host`, it sends `host: localhost`, as `fetch` does. Pass `clientAddress` to set the address that `c.req.clientAddress` returns, and pass `signal` to test what happens when the client disconnects.
+`app.request()` applies the checks that uWebSockets.js v20.71.0 applies to every request. It lowercases header names and trims the spaces around each value. It returns the same 400 as uWebSockets.js for more than 98 header lines and for an empty, repeated, or invalid `Host`. It returns that 400 too when the request line and the headers take more than 4,096 bytes, or more than `UWS_HTTP_MAX_HEADERS_SIZE` where you set it. When your headers include no `Host`, it sends `host: localhost`, as `fetch` does. Pass `clientAddress` to set the address that `c.req.clientAddress` returns, pass `signal` to test what happens when the client disconnects, and pass `body` to send a request body, which [Request bodies and validation](bodies.md) shows.
