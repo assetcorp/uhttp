@@ -1,6 +1,11 @@
 import { runChain } from '../chain.js'
 import type { CompiledApp, CopyPlan } from '../compile.js'
-import { CONNECTION_CLOSE_VALUE_LENGTH, LIST_HEADER_NAMES, TEST_CLIENT_ADDRESS } from '../constants.js'
+import {
+  CONNECTION_CLOSE_VALUE_LENGTH,
+  LIST_HEADER_NAMES,
+  SWITCHING_PROTOCOLS_STATUS,
+  TEST_CLIENT_ADDRESS,
+} from '../constants.js'
 import { type Context, createContext } from '../context.js'
 import { startDeadline } from '../deadline.js'
 import { UhttpError } from '../errors.js'
@@ -13,6 +18,7 @@ import { type DecodedChain, decodeChain, type PreparedRequest, resolveChain } fr
 import { attachTestBody } from './body.js'
 import { firstValue, type ParsedTestRequest, parseTestRequest, type TestRequestInit, valuesOf } from './parse.js'
 import { testStreamBody } from './stream.js'
+import { switchingResponse, testUpgradeOf } from './upgrade.js'
 
 const PARSER_ERROR_BODY = '<h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>'
 
@@ -175,7 +181,9 @@ export async function requestApp(app: CompiledApp, target: string, init: TestReq
   const exchange = new Exchange(app.runtime)
   exchange.clientCloses = (firstValue(parsed.lines, 'connection') ?? '').length === CONNECTION_CLOSE_VALUE_LENGTH
   watchSignal(exchange, init.signal)
-  const decoded = decodeChain(app, resolveChain(app, parsed.method, parsed.path))
+  const upgrade = testUpgradeOf(app, parsed)
+  if (upgrade?.declaresBody === true) exchange.closeAfterReply = true
+  const decoded = upgrade?.decoded ?? decodeChain(app, resolveChain(app, parsed.method, parsed.path))
   const { context, chain, request } = copyTestRequest(exchange, parsed, decoded, init)
   const pending = runChain(context, exchange, chain.layers, chain.handler)
   if (pending !== undefined) {
@@ -185,5 +193,8 @@ export async function requestApp(app: CompiledApp, target: string, init: TestReq
   const reply = exchange.reply
   if (reply === undefined) throw new UhttpError('MISSING_REPLY', 'The middleware chain ended without a reply.')
   if (pending === undefined) request.release(keepsUnread(exchange, reply))
+  if (upgrade !== undefined && reply.status === SWITCHING_PROTOCOLS_STATUS && !exchange.closed) {
+    return switchingResponse(exchange, upgrade.handshake)
+  }
   return toResponse(exchange, context, reply)
 }

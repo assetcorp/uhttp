@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createApp, serve, UhttpError } from '../../index.js'
 import { openConnection, requestHead, send } from '../helpers/http-client.js'
 import { errorBody, expectHello } from '../helpers/replies.js'
-import { memoryLogger, pause, start } from '../helpers/server.js'
+import { memoryLogger, pause, start, track } from '../helpers/server.js'
 
 const INTERNAL_ERROR = errorBody('INTERNAL_ERROR', 'The request failed.')
 
@@ -214,7 +214,7 @@ describe('connections to a server from serve()', () => {
   })
 
   it('listens on every interface when you leave out the host', async () => {
-    const server = await serve({ app: createApp().get('/hello', c => c.text('Hello')), port: 0 })
+    const server = track(await serve({ app: createApp().get('/hello', c => c.text('Hello')), port: 0 }))
 
     try {
       await expectHello(await openConnection(server.port))

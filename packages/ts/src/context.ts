@@ -36,6 +36,7 @@ export interface HeaderOptions {
 }
 
 let construct: (request: RequestInfo, exchange: Exchange) => Context
+let readValues: (context: Context) => Record<string, unknown>
 
 /**
  * Every middleware and handler receives a `Context`, which has the copied request in `req` and
@@ -45,9 +46,15 @@ export class Context {
   /** The package copies these parts of the request before the first `await`. */
   readonly req: RequestInfo
   readonly #exchange: Exchange
+  #values: Map<string, unknown> | undefined
 
   static {
     construct = (request, exchange) => new Context(request, exchange)
+    readValues = context => {
+      const values: Record<string, unknown> = Object.create(null)
+      for (const [key, value] of context.#values ?? []) values[key] = value
+      return values
+    }
   }
 
   private constructor(request: RequestInfo, exchange: Exchange) {
@@ -61,6 +68,30 @@ export class Context {
    */
   get reply(): Reply | undefined {
     return this.#exchange.reply
+  }
+
+  /**
+   * Stores a value under a key for the rest of the request, so that a middleware can pass what it
+   * found, such as the signed-in user, to the handler and to later middleware. On a WebSocket
+   * route, the values that the chain stores during the upgrade become the `data` of the socket.
+   *
+   * @param key - You choose the key, and a later call with the same key replaces the value.
+   * @param value - The package stores this value as it is.
+   */
+  set(key: string, value: unknown): void {
+    this.#values ??= new Map()
+    this.#values.set(key, value)
+  }
+
+  /**
+   * Returns the value that a middleware or the handler stored under a key with
+   * {@link Context.set}.
+   *
+   * @param key - You pass the key that the code used to store the value.
+   * @returns The method returns the value, or `undefined` when nothing is stored under the key.
+   */
+  get(key: string): unknown {
+    return this.#values?.get(key)
   }
 
   /**
@@ -201,4 +232,17 @@ export class Context {
  */
 export function createContext(request: RequestInfo, exchange: Exchange): Context {
   return construct(request, exchange)
+}
+
+/**
+ * Returns a new object with every value that the chain stored on a context with
+ * {@link Context.set}. The object has no prototype, so a key such as `__proto__` stays an ordinary
+ * key.
+ *
+ * @param context - The package passes the context of an upgrade request.
+ * @returns The function returns an empty object when the chain stored nothing.
+ * @internal
+ */
+export function contextValues(context: Context): Record<string, unknown> {
+  return readValues(context)
 }

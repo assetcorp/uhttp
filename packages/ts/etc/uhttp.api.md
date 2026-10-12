@@ -8,6 +8,7 @@ import type { Writable } from 'node:stream';
 
 // @public
 export class App extends Group {
+    publish(topic: string, message: string | Uint8Array | ArrayBuffer, options?: PublishOptions): void;
     request(target: string, init?: TestRequestInit): Promise<Response>;
 }
 
@@ -17,17 +18,20 @@ export interface AppOptions {
     readonly maxBodyBytes?: number;
     readonly notFound?: Handler;
     readonly onError?: ErrorHandler;
+    readonly pubsub?: PubSubAdapter;
     readonly timeoutMs?: number;
 }
 
 // @public
 export class Context {
     bytes(data: Uint8Array | ArrayBuffer, status?: number, headers?: HeaderRecord): Reply;
+    get(key: string): unknown;
     header(name: string, value: string, options?: HeaderOptions): void;
     json(value: unknown, status?: number, headers?: HeaderRecord): Reply;
     redirect(location: string, status?: number, headers?: HeaderRecord): Reply;
     get reply(): Reply | undefined;
     readonly req: RequestInfo;
+    set(key: string, value: unknown): void;
     sse(produce: EventStreamProducer, options?: EventStreamOptions): Reply;
     stream(produce: StreamProducer, options?: StreamOptions): Reply;
     text(body: string, status?: number, headers?: HeaderRecord): Reply;
@@ -37,7 +41,7 @@ export class Context {
 export function createApp(options?: AppOptions): App;
 
 // @public
-export type ErrorCode = 'INVALID_PATH_PARAMETER' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED' | 'PAYLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' | 'INVALID_JSON' | 'VALIDATION_FAILED' | 'INVALID_MULTIPART' | 'REQUEST_ABORTED' | 'HANDLER_TIMEOUT' | 'INVALID_TRANSFER_ENCODING' | 'UNSUPPORTED_TRANSFER_CODING' | 'INTERNAL_ERROR' | 'MISSING_REPLY' | 'NEXT_CALLED_TWICE' | 'UNDECLARED_HEADER' | 'UNDECLARED_CLIENT_ADDRESS' | 'UNDECLARED_BODY' | 'BODY_ALREADY_READ' | 'REQUEST_RELEASED' | 'INVALID_SCHEMA' | 'INVALID_UPLOAD' | 'INVALID_HEADER' | 'INVALID_EVENT' | 'INVALID_STREAM' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_APP_OPTIONS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED';
+export type ErrorCode = 'INVALID_PATH_PARAMETER' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED' | 'PAYLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' | 'INVALID_JSON' | 'VALIDATION_FAILED' | 'INVALID_MULTIPART' | 'REQUEST_ABORTED' | 'HANDLER_TIMEOUT' | 'INVALID_TRANSFER_ENCODING' | 'UNSUPPORTED_TRANSFER_CODING' | 'INTERNAL_ERROR' | 'MISSING_REPLY' | 'NEXT_CALLED_TWICE' | 'UNDECLARED_HEADER' | 'UNDECLARED_CLIENT_ADDRESS' | 'UNDECLARED_BODY' | 'BODY_ALREADY_READ' | 'REQUEST_RELEASED' | 'INVALID_SCHEMA' | 'INVALID_UPLOAD' | 'INVALID_HEADER' | 'INVALID_EVENT' | 'INVALID_STREAM' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_APP_OPTIONS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED' | 'UPGRADE_REQUIRED' | 'INVALID_UPGRADE' | 'FORBIDDEN_ORIGIN' | 'INVALID_WEBSOCKET' | 'APP_START_FAILED';
 
 // @public
 export type ErrorHandler = (error: unknown, context: Context) => Reply | Promise<Reply>;
@@ -73,6 +77,7 @@ export class Group {
     post(path: string, ...args: RouteArguments): this;
     put(path: string, ...args: RouteArguments): this;
     use(...middleware: Middleware[]): this;
+    ws<Data extends object = Record<string, unknown>>(path: string, ...args: WebSocketArguments<Data>): this;
 }
 
 // @public
@@ -123,6 +128,21 @@ export interface MultipartResult {
 
 // @public
 export type Next = () => Promise<void>;
+
+// @public
+export interface PublishOptions {
+    readonly binary?: boolean;
+    readonly compress?: boolean;
+}
+
+// @public
+export interface PubSubAdapter {
+    close(): void | Promise<void>;
+    publish(topic: string, payload: Uint8Array): void | Promise<void>;
+    start(deliver: (topic: string, payload: Uint8Array) => void): void | Promise<void>;
+    subscribe(topic: string): void | Promise<void>;
+    unsubscribe(topic: string): void | Promise<void>;
+}
 
 // @public
 export class Reply {
@@ -186,19 +206,35 @@ export interface RouteOptions {
 }
 
 // @public
+export interface SendOptions {
+    readonly binary?: boolean;
+    readonly compress?: boolean;
+}
+
+// @public
+export type SendStatus = 0 | 1 | 2;
+
+// @public
 export function serve(options: ServeOptions): Promise<Server>;
 
 // @public
 export interface ServeOptions {
-    app: App;
+    app: App | URL;
+    crashLimit?: number;
+    crashWindowMs?: number;
     host?: string;
-    port: number;
+    logger?: Logger;
+    path?: string;
+    port?: number;
+    threads?: number;
+    watchdogMs?: number;
+    workerHeapMb?: number;
 }
 
 // @public
 export interface Server {
     close(): Promise<void>;
-    readonly port: number;
+    readonly port: number | undefined;
 }
 
 // @public
@@ -207,6 +243,17 @@ export interface ServerSentEvent {
     readonly event?: string;
     readonly id?: string;
     readonly retry?: number;
+}
+
+// @public
+export interface ServerWebSocket<Data extends object = Record<string, unknown>> {
+    readonly data: Data;
+    end(code?: number, reason?: string): void;
+    getBufferedAmount(): number;
+    publish(topic: string, message: string | Uint8Array | ArrayBuffer, options?: SendOptions): void;
+    send(message: string | Uint8Array | ArrayBuffer, options?: SendOptions): SendStatus;
+    subscribe(topic: string): boolean;
+    unsubscribe(topic: string): boolean;
 }
 
 // @public
@@ -309,6 +356,27 @@ export type UploadStream = Writable | WritableStream<Uint8Array>;
 export interface ValidationIssue {
     readonly message: string;
     readonly path: readonly (string | number)[];
+}
+
+// @public
+export type WebSocketArguments<Data extends object = Record<string, unknown>> = readonly [
+...stack: (Middleware | RouteOptions)[],
+route: WebSocketRoute<Data>
+];
+
+// @public
+export interface WebSocketRoute<Data extends object = Record<string, unknown>> {
+    readonly close?: (socket: ServerWebSocket<Data>, code: number, reason: string) => void | Promise<void>;
+    readonly closeOnBackpressureLimit?: boolean;
+    readonly compression?: boolean;
+    readonly drain?: (socket: ServerWebSocket<Data>) => void | Promise<void>;
+    readonly idleTimeoutMs?: number;
+    readonly maxBackpressureBytes?: number;
+    readonly maxLifetimeMs?: number;
+    readonly maxMessageBytes?: number;
+    readonly message?: (socket: ServerWebSocket<Data>, message: string | Uint8Array) => void | Promise<void>;
+    readonly open?: (socket: ServerWebSocket<Data>) => void | Promise<void>;
+    readonly origins?: readonly string[];
 }
 
 ```

@@ -1,8 +1,12 @@
-import type { GuardRecord, RegistryContents, RouteRecord } from './compile.js'
+import type { GuardRecord, RegistryContents, RouteRecord, WebSocketRecord } from './compile.js'
 import { UhttpError } from './errors.js'
 import { checkedLimit, checkedTimeLimit } from './limits.js'
 import { joinPath, Matcher, parseGroupPrefix, parseRoutePath } from './router/index.js'
 import type { Handler, Middleware, RouteArguments, RouteOptions } from './types.js'
+import { checkedWebSocketRoute, isWebSocketRoute } from './websocket/route.js'
+import type { WebSocketArguments } from './websocket/types.js'
+
+const WEBSOCKET_SHAPE = 'WEBSOCKET'
 
 /**
  * The app and its groups share this record of everything that you added.
@@ -16,6 +20,8 @@ export class Registry implements RegistryContents {
   readonly guards: GuardRecord[] = []
   /** You added these routes, in this order. */
   readonly routes: RouteRecord[] = []
+  /** You added these WebSocket routes, in this order. */
+  readonly webSockets: WebSocketRecord[] = []
   /** The registry counts every change, so that the app can rebuild its startup form after one. */
   version = 0
   readonly #shapes = new Matcher<true>()
@@ -35,6 +41,24 @@ export class Registry implements RegistryContents {
       )
     }
     this.routes.push(record)
+    this.version++
+  }
+
+  /**
+   * Records a WebSocket route after checking that no other WebSocket route has the same shape.
+   *
+   * @param record - The package passes the WebSocket route to record.
+   * @throws {@link UhttpError} with the code `INVALID_ROUTE` when a WebSocket route of the same
+   * shape exists.
+   */
+  addWebSocket(record: WebSocketRecord): void {
+    if (!this.#shapes.add(WEBSOCKET_SHAPE, record.segments, true)) {
+      throw new UhttpError(
+        'INVALID_ROUTE',
+        `You have already added a WebSocket route of the same shape as '${record.path}'.`,
+      )
+    }
+    this.webSockets.push(record)
     this.version++
   }
 }
@@ -106,16 +130,31 @@ function isRouteOptions(value: unknown): value is RouteOptions {
   return true
 }
 
-function splitArguments(args: RouteArguments): { options: RouteOptions[]; middleware: Middleware[]; handler: Handler } {
-  const handler: unknown = args.at(-1)
-  if (!isHandler(handler)) throw new UhttpError('INVALID_ROUTE', 'Pass the handler of a route last.')
+function splitStack(stack: readonly unknown[]): { options: RouteOptions[]; middleware: Middleware[] } {
   const options: RouteOptions[] = []
   const middleware: unknown[] = []
-  for (const entry of args.slice(0, -1)) {
+  for (const entry of stack) {
     if (isRouteOptions(entry)) options.push(entry)
     else middleware.push(entry)
   }
-  return { options, middleware: checkedMiddleware(middleware), handler }
+  return { options, middleware: checkedMiddleware(middleware) }
+}
+
+function splitArguments(args: RouteArguments): { options: RouteOptions[]; middleware: Middleware[]; handler: Handler } {
+  const handler: unknown = args.at(-1)
+  if (!isHandler(handler)) throw new UhttpError('INVALID_ROUTE', 'Pass the handler of a route last.')
+  return { ...splitStack(args.slice(0, -1)), handler }
+}
+
+function checkWebSocketOptions(options: readonly RouteOptions[]): void {
+  for (const entry of options) {
+    if (entry.body !== undefined || entry.maxBodyBytes !== undefined) {
+      throw new UhttpError(
+        'INVALID_ROUTE',
+        'Leave body and maxBodyBytes out of the options of a WebSocket route, because an upgrade request carries no body.',
+      )
+    }
+  }
 }
 
 /**
@@ -271,6 +310,37 @@ export class Group {
    */
   options(path: string, ...args: RouteArguments): this {
     return this.#add('OPTIONS', path, args)
+  }
+
+  /**
+   * Adds a WebSocket route. An upgrade request passes through the middleware of the app, its
+   * groups, and the route, so that a middleware can refuse the upgrade with a status, and the values
+   * that the chain stores with {@link Context.set} become the `data` of the socket. A GET request to
+   * the same path without an upgrade receives a 426, unless you add a GET route to that path.
+   *
+   * @typeParam Data - You declare the shape of the values that the middleware stores during the upgrade.
+   * @param path - The rules of {@link Group.get} apply to the path.
+   * @param args - You pass any middleware for this route alone and any {@link RouteOptions}, and you
+   * pass the {@link WebSocketRoute} last.
+   * @returns The method returns this group, so that you can chain another route.
+   * @throws {@link UhttpError} with the code `INVALID_ROUTE` when the path breaks the rules of the
+   * router, when a WebSocket route of the same shape exists, when the options set `body` or
+   * `maxBodyBytes`, or when a handler or a limit of the route has the wrong type or lies outside its
+   * range.
+   */
+  ws<Data extends object = Record<string, unknown>>(path: string, ...args: WebSocketArguments<Data>): this {
+    const { registry, prefix } = stateOf(this)
+    parseRoutePath(path)
+    const whole = joinPath(prefix, path)
+    const route: unknown = args.at(-1)
+    if (!isWebSocketRoute(route)) {
+      throw new UhttpError('INVALID_ROUTE', 'Pass the handlers and limits of a WebSocket route last, as an object.')
+    }
+    const { options, middleware } = splitStack(args.slice(0, -1))
+    checkWebSocketOptions(options)
+    const checked = checkedWebSocketRoute(route)
+    registry.addWebSocket({ path: whole, segments: parseRoutePath(whole), options, middleware, route: checked })
+    return this
   }
 
   #add(method: string, path: string, args: RouteArguments): this {

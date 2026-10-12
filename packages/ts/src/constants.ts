@@ -4,11 +4,20 @@ export const MIN_PORT = 0
 /** {@link serve} throws for a port above 65535, which is the highest TCP port. */
 export const MAX_PORT = 65_535
 
+/** Before it binds a Unix socket, the package tries to connect to a socket already at the path for this many milliseconds, so that it removes only a socket on which no server answers. */
+export const UNIX_SOCKET_PROBE_MS = 1_000
+
 /** A reply can have a status from 200 upwards, because a 1xx status can only precede a final response. */
 export const MIN_REPLY_STATUS = 200
 
 /** A reply can have a status up to 599, which is the top of the 5xx range. */
 export const MAX_REPLY_STATUS = 599
+
+/** The package answers an accepted WebSocket upgrade with this status. */
+export const SWITCHING_PROTOCOLS_STATUS = 101
+
+/** The main thread answers with this status while no worker thread serves. */
+export const SERVICE_UNAVAILABLE_STATUS = 503
 
 /** Under RFC 9110, a response with one of these statuses has no content, so the package sends it without a body. */
 export const BODYLESS_STATUSES: readonly number[] = [204, 205, 304]
@@ -184,8 +193,157 @@ export const MAX_PART_HEADER_COUNT = 16
 /** `multipart()` throws for a field name longer than this many bytes. */
 export const MAX_PART_NAME_BYTES = 256
 
-/** The package writes the reason phrase from this table after each standard status code from 200 to 511. */
+/**
+ * uWebSockets.js treats a GET request as a WebSocket upgrade when its `sec-websocket-key` header
+ * has this many characters, which is the length of 16 bytes in base64.
+ */
+export const WEBSOCKET_KEY_LENGTH = 24
+
+/** Under RFC 6455, a client asks for this version of the WebSocket protocol, which is the only version that the package speaks. */
+export const WEBSOCKET_VERSION = '13'
+
+/** RFC 6455 appends this text to the key of the client before it hashes the key into `sec-websocket-accept`. */
+export const WEBSOCKET_ACCEPT_SUFFIX = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+
+/** uWebSockets.js writes these headers of a 101 itself, so the package leaves out a header of the same name that your code set. */
+export const UPGRADE_REPLY_HEADER_NAMES: readonly string[] = [
+  'upgrade',
+  'sec-websocket-accept',
+  'sec-websocket-protocol',
+  'sec-websocket-extensions',
+]
+
+/** When a route leaves out `maxMessageBytes`, the package closes a WebSocket whose message is longer than this, as uWebSockets.js does by default. */
+export const DEFAULT_WEBSOCKET_MAX_MESSAGE_BYTES = 16_384
+
+/** When a route leaves out `maxBackpressureBytes`, the package stops sending to a socket that has this many bytes waiting, as uWebSockets.js does by default. */
+export const DEFAULT_WEBSOCKET_MAX_BACKPRESSURE_BYTES = 65_536
+
+/** uWebSockets.js turns off its backpressure limit at 0, so the package throws for a smaller limit, because a slow client could then hold unbounded memory. */
+export const MIN_WEBSOCKET_BACKPRESSURE_BYTES = 1
+
+/** uWebSockets.js reads each WebSocket size limit as a signed 32-bit number, so the package throws for a larger limit. */
+export const MAX_WEBSOCKET_LIMIT_BYTES = 2_147_483_647
+
+/** When a route leaves out `idleTimeoutMs`, uWebSockets.js closes a WebSocket after this many milliseconds without a message, as it does by default. */
+export const DEFAULT_WEBSOCKET_IDLE_TIMEOUT_MS = 120_000
+
+/** uWebSockets.js aborts the process for a shorter idle time, so the package throws for one at startup. */
+export const MIN_WEBSOCKET_IDLE_TIMEOUT_MS = 8_000
+
+/** uWebSockets.js aborts the process for a longer idle time, so the package throws for one at startup. */
+export const MAX_WEBSOCKET_IDLE_TIMEOUT_MS = 960_000
+
+/** When a route leaves out `maxLifetimeMs`, a WebSocket stays open for any length of time, since 0 means no limit. */
+export const DEFAULT_WEBSOCKET_MAX_LIFETIME_MS = 0
+
+/**
+ * uWebSockets.js aborts the process for a lifetime above 240 minutes, and its binding lowers 240
+ * minutes to 239, so the package throws for any lifetime above 239 minutes.
+ */
+export const MAX_WEBSOCKET_LIFETIME_MS = 14_340_000
+
+/** uWebSockets.js counts the idle time of a WebSocket in whole seconds, so the package rounds a time limit up to the next second. */
+export const MILLISECONDS_PER_SECOND = 1_000
+
+/** uWebSockets.js counts the lifetime of a WebSocket in whole minutes, so the package rounds a lifetime up to the next minute. */
+export const MILLISECONDS_PER_MINUTE = 60_000
+
+/** RFC 6455 allows a close reason of at most this many bytes, because a control frame carries at most 125 bytes and the code takes 2. */
+export const MAX_WEBSOCKET_CLOSE_REASON_BYTES = 123
+
+/** A WebSocket can close with a code from this list, which RFC 6455 and the IANA registry define for an endpoint to send. */
+export const WEBSOCKET_CLOSE_CODES: readonly number[] = [
+  1000, 1001, 1002, 1003, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014,
+]
+
+/** A WebSocket can also close with any code from this one up to {@link MAX_APPLICATION_CLOSE_CODE}, which RFC 6455 leaves to libraries and apps. */
+export const MIN_APPLICATION_CLOSE_CODE = 3_000
+
+/** A WebSocket can close with any code up to this one from {@link MIN_APPLICATION_CLOSE_CODE}. */
+export const MAX_APPLICATION_CLOSE_CODE = 4_999
+
+/** `end()` closes a WebSocket with this code, which RFC 6455 defines for a normal closure, when your code passes none. */
+export const WEBSOCKET_NORMAL_CLOSE_CODE = 1000
+
+/** The package closes a WebSocket with this code when one of its handlers throws or rejects. */
+export const WEBSOCKET_HANDLER_ERROR_CODE = 1011
+
+/** The package writes this version byte at the start of every message that it hands to a pub/sub adapter. */
+export const PUBSUB_ENVELOPE_VERSION = 1
+
+/** Each message to a pub/sub adapter starts with the version, the flags, and this many bytes that identify the process that sent it. */
+export const PUBSUB_ORIGIN_BYTES = 16
+
+/** The flags byte of a message to a pub/sub adapter has this bit set when the message is binary. */
+export const PUBSUB_BINARY_FLAG = 1
+
+/** The flags byte of a message to a pub/sub adapter has this bit set when the sender asked for compression. */
+export const PUBSUB_COMPRESS_FLAG = 2
+
+/** By default, `serve()` serves every request on the main thread. */
+export const DEFAULT_THREADS = 0
+
+/** `serve()` throws for more worker threads than this, so that a mistyped count can't start thousands of threads, each with its own heap. */
+export const MAX_THREADS = 1_024
+
+/** The main thread starts the first replacement for a crashed worker after this many milliseconds. */
+export const FIRST_RESTART_DELAY_MS = 1_000
+
+/** The main thread doubles the delay before each replacement for a worker that keeps crashing, up to this many milliseconds. */
+export const MAX_RESTART_DELAY_MS = 60_000
+
+/** The main thread multiplies the delay before the next replacement by this factor after each replacement that it starts. */
+export const RESTART_DELAY_GROWTH_FACTOR = 2
+
+/** `serve()` throws for a heap limit below this many megabytes for each worker. */
+export const MIN_WORKER_HEAP_MB = 1
+
+/** `serve()` throws for a crash limit below this one, because the server would then exit on no crash at all. */
+export const MIN_CRASH_LIMIT = 1
+
+/** `serve()` throws for a crash window shorter than this many milliseconds. */
+export const MIN_CRASH_WINDOW_MS = 1
+
+/** `serve()` throws for a crash window longer than this many milliseconds, which is the longest delay that `setTimeout` accepts. */
+export const MAX_CRASH_WINDOW_MS = 2_147_483_647
+
+/** `serve()` throws for a watchdog timeout longer than this many milliseconds, which is the longest delay that `setTimeout` accepts. */
+export const MAX_WATCHDOG_MS = 2_147_483_647
+
+/** A worker exits with this code after it posts an error that it could not recover from to the main thread. */
+export const WORKER_FAILURE_EXIT_CODE = 1
+
+/** A worker sends the main thread at most this many nested causes of an error, so that a cycle of causes ends. */
+export const MAX_ERROR_CAUSE_DEPTH = 8
+
+/**
+ * The delay before the next replacement returns to {@link FIRST_RESTART_DELAY_MS} once a worker has
+ * served for this many milliseconds without a crash, as PM2 does.
+ */
+export const RESTART_DELAY_RESET_MS = 30_000
+
+/** By default, the server exits with an error once workers crash this many times within {@link DEFAULT_CRASH_WINDOW_MS}, which is the default start limit of systemd. */
+export const DEFAULT_CRASH_LIMIT = 5
+
+/** By default, the server counts worker crashes within a window of this many milliseconds, which is the default start limit interval of systemd. */
+export const DEFAULT_CRASH_WINDOW_MS = 10_000
+
+/** By default, the server exits with an error when a serving worker fails to answer the main thread for this many milliseconds, which is the default worker timeout of Gunicorn. */
+export const DEFAULT_WATCHDOG_MS = 30_000
+
+/** The main thread pings each serving worker this many times within the watchdog timeout. */
+export const WATCHDOG_PINGS_PER_TIMEOUT = 6
+
+/** The server exits with this code when every worker is dead, when workers crash too often, or when a worker hangs. */
+export const FATAL_EXIT_CODE = 1
+
+/** The main thread waits this many milliseconds for each healthy worker to close its connections and leave before the server exits with an error. */
+export const FATAL_LEAVE_WAIT_MS = 5_000
+
+/** The package writes the reason phrase from this table after each standard status code from 101 to 511. */
 export const STATUS_TEXT: Readonly<Record<number, string>> = {
+  101: 'Switching Protocols',
   200: 'OK',
   201: 'Created',
   202: 'Accepted',

@@ -1,5 +1,6 @@
 import type { Context } from './context.js'
 import type { Reply } from './reply.js'
+import type { PubSubAdapter } from './websocket/types.js'
 
 /**
  * A handler is a function that receives the {@link Context} of one request and returns a
@@ -149,4 +150,10 @@ export interface AppOptions {
    * you leave it out, the client receives `{ error: { code, message } }`.
    */
   readonly onError?: ErrorHandler
+  /**
+   * The package hands every message that the app or one of its sockets publishes to this adapter,
+   * such as one for Redis, so that subscribers on other servers receive it. Each worker thread
+   * builds its own app, so each one has its own adapter.
+   */
+  readonly pubsub?: PubSubAdapter
 }
