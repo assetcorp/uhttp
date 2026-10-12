@@ -100,7 +100,17 @@ Groups can nest, in which case the package calls the middleware of the outer gro
 
 ## Declare the headers that a route uses
 
-The package copies the method, the path, the query string, the path parameters, the content type, and the content length for every request. It copies any other request header only when the route or one of its middleware declares it, because the package does more work on every request of a route for each header that it copies. Pass a `RouteOptions` object before the handler to declare headers or the client address:
+The package copies the method, the path, the path parameters, and the content length for every request. It reads the query string and the content type from uWebSockets.js when your code first asks for them, because each read adds work to the request that makes it. When your handler awaits something or returns a stream, the package copies whatever your code has not read yet before uWebSockets.js frees the request, so you can read both after an `await`. When your handler returns a reply without an `await`, the package sends that reply at once and frees the request. In that case, read the query string and the content type before the handler returns, including in any task that the handler starts without waiting for it, because a first read after that throws `REQUEST_RELEASED`:
+
+```ts
+app.get('/search', c => {
+  const query = c.req.query
+  void recordSearch(query)
+  return c.json(findProducts(query))
+})
+```
+
+The package copies any other request header only when the route or one of its middleware declares it, because the package does more work on every request of a route for each header that it copies. Pass a `RouteOptions` object before the handler to declare headers or the client address:
 
 ```ts
 app.get('/me', { headers: ['authorization'] }, c => {

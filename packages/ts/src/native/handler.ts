@@ -9,12 +9,16 @@ import { lineSeparatorOf } from '../headers.js'
 import { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type PreparedRequest, type RequestChain, resolveChain } from '../resolve.js'
 import { attachBody } from './body.js'
-import { remoteAddressOf } from './close.js'
+import { remoteAddressOf, watchAbort } from './close.js'
 import { type RequestFraming, readFraming } from './framing.js'
 import { refusedRequest } from './refuse.js'
 import { writeCrash, writeFramingRejection, writeReply } from './write.js'
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
+
+interface CopiedExchange extends PreparedRequest {
+  readonly request: CopiedRequest
+}
 
 const NO_VALUES: readonly (string | undefined)[] = []
 const NO_PARAMETERS: readonly string[] = []
@@ -59,9 +63,7 @@ function copyRequest(
   path: string,
   decoded: DecodedChain,
   framing: RequestFraming,
-): PreparedRequest {
-  const query: string | undefined = req.getQuery()
-  const rawContentType = req.getHeader('content-type')
+): CopiedExchange {
   const { contentLength } = framing
   const { chain, parameters } = decoded
   const plan = chain.copyPlan
@@ -73,10 +75,9 @@ function copyRequest(
     exchange,
     method,
     path,
-    query ?? '',
+    req,
     chain.parameterNames,
     parameters,
-    rawContentType === '' ? undefined : rawContentType,
     contentLength,
     plan.headerNames,
     values,
@@ -84,7 +85,13 @@ function copyRequest(
     address,
     body.reader,
   )
-  return { context: createContext(request, exchange), chain: body.chain }
+  return { context: createContext(request, exchange), chain: body.chain, request }
+}
+
+function respondAndRelease(res: HttpResponse, exchange: Exchange, copied: CopiedExchange): boolean {
+  const ended = respond(res, exchange, copied)
+  copied.request.release(!ended)
+  return ended
 }
 
 function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange): RequestFraming | undefined {
@@ -99,12 +106,9 @@ function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange
   return framing
 }
 
-function respond(res: HttpResponse, exchange: Exchange, { context, chain }: PreparedRequest): void {
+function respond(res: HttpResponse, exchange: Exchange, { context, chain }: PreparedRequest): boolean {
   const pending = runChain(context, exchange, chain.layers, chain.handler)
-  if (pending === undefined) {
-    finish(res, exchange, context, false)
-    return
-  }
+  if (pending === undefined) return finish(res, exchange, context, false)
   const { timeoutMs } = chain.limits
   const stop =
     timeoutMs > 0 ? startDeadline(exchange, context, timeoutMs, () => finish(res, exchange, context, true)) : undefined
@@ -113,22 +117,29 @@ function respond(res: HttpResponse, exchange: Exchange, { context, chain }: Prep
     stop?.()
     finish(res, exchange, context, true)
   })
+  return false
 }
 
-function finish(res: HttpResponse, exchange: Exchange, context: Context, cork: boolean): void {
+function finish(res: HttpResponse, exchange: Exchange, context: Context, cork: boolean): boolean {
   const reply = exchange.reply
-  if (exchange.closed || reply === undefined) return
+  if (exchange.closed) return true
+  if (reply === undefined) return false
   try {
-    if (cork) res.cork(() => writeReply(res, exchange, context, reply))
-    else writeReply(res, exchange, context, reply)
+    if (!cork) return writeReply(res, exchange, context, reply)
+    let ended = false
+    res.cork(() => {
+      ended = writeReply(res, exchange, context, reply)
+    })
+    return ended
   } catch (error) {
-    crash(res, exchange, error, context.req.method, context.req.path)
+    return crash(res, exchange, error, context.req.method, context.req.path)
   }
 }
 
-function crash(res: HttpResponse, exchange: Exchange, error: unknown, method: string, path: string): void {
+function crash(res: HttpResponse, exchange: Exchange, error: unknown, method: string, path: string): boolean {
   logServerError(exchange.runtime.logger, error, method, path)
   writeCrash(res, exchange)
+  return true
 }
 
 function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
@@ -141,12 +152,17 @@ function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
 
 /**
  * Returns the uWebSockets.js handler of one route. Inside the synchronous handler, the function
- * attaches the abort handler first. It then checks the `content-length` and `transfer-encoding`
- * lines, and starts no chain for a request that uWebSockets.js answers with its own 400 or whose
- * transfer coding the package rejects. It then copies the path, the query string, the path
- * parameters, the content type, the content length, the declared headers, and, where the chain
- * declared it, the client address. Last, it attaches the body reader on a route with a body
- * reader. When that work throws, the client receives a 500.
+ * checks the `content-length` and `transfer-encoding` lines, and starts no chain for a request that
+ * uWebSockets.js answers with its own 400 or whose transfer coding the package rejects. It then
+ * copies the path parameters, the content length, the declared headers, and, where the chain
+ * declared it, the client address. On a route without parameters, uWebSockets.js calls the handler
+ * for the exact path of the route alone, so the function takes the path from the route and asks
+ * uWebSockets.js for it on a route with parameters only. It then attaches the body reader on a
+ * route with a body reader. When that work throws, the client receives a 500. The chain reads the
+ * query string and the content type from uWebSockets.js when it first asks for them. Once the chain
+ * returns, the function copies the parts that the chain has not read when the response stays open,
+ * and releases the request of uWebSockets.js. Last, it attaches the abort handler unless the
+ * response ended inside the handler.
  *
  * @param app - The package passes the compiled app.
  * @param route - The package passes the compiled route.
@@ -166,28 +182,47 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
     limits: route.limits,
   }
   const withoutParameters: DecodedChain = { chain: base, parameters: NO_PARAMETERS }
-  return (res, req) => {
-    const exchange = new Exchange(app.runtime)
-    res.onAborted(() => exchange.abort())
-    let path = ''
-    let copied: PreparedRequest
+  const answer = (res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean => {
+    let path = route.path
+    let copied: CopiedExchange
     let decoded = withoutParameters
     try {
       const framing = admittedFraming(res, req, exchange)
-      if (framing === undefined) return
-      path = req.getUrl()
+      if (framing === undefined) return false
       if (count > 0) {
+        path = req.getUrl()
         const raw: string[] = []
         for (let index = 0; index < count; index++) raw.push(req.getParameter(index) ?? '')
         decoded = decodeChain(app, { ...base, rawParameters: raw })
       }
       copied = copyRequest(res, req, exchange, method, path, decoded, framing)
     } catch (error) {
-      crash(res, exchange, error, method, path)
-      return
+      return crash(res, exchange, error, method, path)
     }
-    respond(res, exchange, copied)
+    return respondAndRelease(res, exchange, copied)
   }
+  return (res, req) => {
+    const exchange = new Exchange(app.runtime)
+    if (!answer(res, req, exchange)) watchAbort(res, exchange)
+  }
+}
+
+function answerFallback(app: CompiledApp, res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean {
+  let method = ''
+  let path = ''
+  let copied: CopiedExchange
+  try {
+    const framing = admittedFraming(res, req, exchange)
+    if (framing === undefined) return false
+    method = req.getCaseSensitiveMethod()
+    path = req.getUrl()
+    const chain = resolveChain(app, method, path)
+    if (chain.matchedRoute) warnMissedRoute(app, method, path)
+    copied = copyRequest(res, req, exchange, method, path, decodeChain(app, chain), framing)
+  } catch (error) {
+    return crash(res, exchange, error, method, path)
+  }
+  return respondAndRelease(res, exchange, copied)
 }
 
 /**
@@ -195,7 +230,8 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
  * framing checks as a route handler, the handler takes the method from the case-sensitive accessor
  * and sends the request through the JavaScript matcher. The client then receives a 404, a 405, or
  * the methods of the path for OPTIONS. When the JavaScript matcher matches a route there, the
- * handler serves it and logs a warning.
+ * handler serves it and logs a warning. Last, the handler attaches the abort handler unless the
+ * response ended inside it.
  *
  * @param app - The package passes the compiled app.
  * @returns The function returns the handler to register under `any('/*')`.
@@ -204,22 +240,6 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
 export function fallbackHandler(app: CompiledApp): NativeHandler {
   return (res, req) => {
     const exchange = new Exchange(app.runtime)
-    res.onAborted(() => exchange.abort())
-    let method = ''
-    let path = ''
-    let copied: PreparedRequest
-    try {
-      const framing = admittedFraming(res, req, exchange)
-      if (framing === undefined) return
-      method = req.getCaseSensitiveMethod()
-      path = req.getUrl()
-      const chain = resolveChain(app, method, path)
-      if (chain.matchedRoute) warnMissedRoute(app, method, path)
-      copied = copyRequest(res, req, exchange, method, path, decodeChain(app, chain), framing)
-    } catch (error) {
-      crash(res, exchange, error, method, path)
-      return
-    }
-    respond(res, exchange, copied)
+    if (!answerFallback(app, res, req, exchange)) watchAbort(res, exchange)
   }
 }

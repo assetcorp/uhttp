@@ -84,6 +84,8 @@ export class Exchange {
   body: BodyState | undefined
   /** This is `true` once the connection of the request has closed, even after the response ended. */
   disconnected = false
+  /** This is `true` once the package has attached its abort handler to the response of uWebSockets.js. */
+  watchingAbort = false
   #arrival: BodyArrival | undefined
   #reply: Reply | undefined
   #final = false

@@ -39,6 +39,9 @@
  * - The package throws `UNDECLARED_BODY` when your code reads the body on a route without a body
  *   reader.
  * - The package throws `BODY_ALREADY_READ` when your code reads a body after it streamed that body.
+ * - The package throws `REQUEST_RELEASED` when your code reads the query string or the content type
+ *   for the first time after the package has sent a reply that your handler returned without an
+ *   `await`, because uWebSockets.js frees the request once its handler returns.
  * - The package throws `INVALID_SCHEMA` when a schema lacks the Standard Schema interface, or when
  *   its validator throws, rejects, or returns something other than a Standard Schema result.
  * - The package throws `INVALID_UPLOAD` when you pass `multipart()` a limit that is not a whole
@@ -87,6 +90,7 @@ export type ErrorCode =
   | 'UNDECLARED_CLIENT_ADDRESS'
   | 'UNDECLARED_BODY'
   | 'BODY_ALREADY_READ'
+  | 'REQUEST_RELEASED'
   | 'INVALID_SCHEMA'
   | 'INVALID_UPLOAD'
   | 'INVALID_HEADER'
@@ -118,6 +122,7 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   UNDECLARED_CLIENT_ADDRESS: 500,
   UNDECLARED_BODY: 500,
   BODY_ALREADY_READ: 500,
+  REQUEST_RELEASED: 500,
   INVALID_SCHEMA: 500,
   INVALID_UPLOAD: 500,
   INVALID_HEADER: 500,

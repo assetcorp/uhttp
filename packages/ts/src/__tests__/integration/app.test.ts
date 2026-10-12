@@ -40,7 +40,7 @@ describe('app.request()', () => {
   })
 
   it('passes the method, the path, and the query string to the handler', async () => {
-    const app = createApp().get('/search', c => c.json({ ...c.req }))
+    const app = createApp().get('/search', c => c.json({ method: c.req.method, path: c.req.path, query: c.req.query }))
 
     const response = await app.request('/search?q=uhttp&page=2')
 
@@ -48,7 +48,7 @@ describe('app.request()', () => {
   })
 
   it('passes an empty query string to the handler when the target has no question mark', async () => {
-    const app = createApp().get('/search', c => c.json({ ...c.req }))
+    const app = createApp().get('/search', c => c.json({ method: c.req.method, path: c.req.path, query: c.req.query }))
 
     const response = await app.request('/search')
 

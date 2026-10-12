@@ -10,6 +10,13 @@ import type { HeaderLines } from './headers.js'
 export const JSON_CONTENT_TYPE = 'application/json'
 
 /**
+ * The package sends this content type with a text reply.
+ *
+ * @internal
+ */
+export const TEXT_CONTENT_TYPE = 'text/plain; charset=UTF-8'
+
+/**
  * Returns the error that a stream write must reject with, or `undefined` when the write can go
  * ahead.
  *

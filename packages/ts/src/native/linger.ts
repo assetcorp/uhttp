@@ -1,7 +1,7 @@
 import type { HttpResponse } from 'uWebSockets.js'
 import type { Exchange } from '../exchange.js'
 import { type Reply, statusHasBody } from '../reply.js'
-import { closeAfterLingering } from './close.js'
+import { closeAfterLingering, watchAbort } from './close.js'
 import { forEachHeaderLine, statusLine } from './head.js'
 
 const CRLF = '\r\n'
@@ -40,6 +40,8 @@ function responseBytes(exchange: Exchange, reply: Reply, head: boolean): Buffer 
  * client reads it. The function therefore writes the whole response, framed as chunks or with a
  * length, through the status line of uWebSockets.js, which leaves the response open, so that the
  * package can close the connection later. Meanwhile, the package discards the rest of the body.
+ * Because the response stays open, the function first attaches the abort handler with
+ * {@link watchAbort}.
  *
  * @param res - The package passes the response of uWebSockets.js, which the caller has corked.
  * @param exchange - The package passes the state of the request, which stores the headers.
@@ -48,6 +50,7 @@ function responseBytes(exchange: Exchange, reply: Reply, head: boolean): Buffer 
  * @internal
  */
 export function writeLingeringReply(res: HttpResponse, exchange: Exchange, reply: Reply, head: boolean): void {
+  watchAbort(res, exchange)
   res.writeStatus(responseBytes(exchange, reply, head))
   exchange.end()
   closeAfterLingering(res, exchange)

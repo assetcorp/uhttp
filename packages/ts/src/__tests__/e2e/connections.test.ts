@@ -101,7 +101,7 @@ describe('connections to a server from serve()', () => {
   it('passes the method, the path, and the query string from the network to the handler, over a connection that it keeps open', async () => {
     const server = await start(
       createApp()
-        .get('/search', c => c.json({ ...c.req }))
+        .get('/search', c => c.json({ method: c.req.method, path: c.req.path, query: c.req.query }))
         .get('/hello', c => c.text('Hello')),
     )
     const connection = await openConnection(server.port)
