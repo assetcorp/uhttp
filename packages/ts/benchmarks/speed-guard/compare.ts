@@ -8,7 +8,6 @@ import {
   CONNECTIONS,
   FLAGGED_CHANGE_FLOOR_RATIO,
   LOAD_CPUS,
-  LOAD_THREADS,
   MAX_SLOWDOWN_FROM_BARE_RATIO,
   ROUTE_PATH,
   SERVER_CPU,
@@ -65,7 +64,6 @@ interface Summary {
   consistent: boolean
   changeVsBare: number
   mainVsBare: number
-  roundsBeyondLimit: number
 }
 
 function requiredEntry(name: string): string {
@@ -147,43 +145,35 @@ function summarise(rounds: readonly Round[]): Summary {
     consistent,
     changeVsBare: median(rounds.map(round => round.changeVsBare)),
     mainVsBare: median(rounds.map(round => round.mainRate / round.bareRate - 1)),
-    roundsBeyondLimit: rounds.filter(round => beyondBareLimit(round.changeVsBare)).length,
   }
 }
 
 function mainVerdict({ moved, threshold, consistent }: Summary, roundCount: number): string {
-  const median = `Across the ${roundCount} rounds, the median speed of uhttp after this PR was ${formatGap(moved)} than its median speed before this PR.`
-  const bar = `The job counts a difference only when it is larger than ${formatShare(threshold)}, which is the median machine noise or ${formatShare(FLAGGED_CHANGE_FLOOR_RATIO)}, whichever is larger.`
+  const median = `The median moved ${formatShare(Math.abs(moved))} against a threshold of ${formatShare(threshold)}.`
   if (Math.abs(moved) <= threshold) {
-    return `**This PR changes the speed of uhttp by less than the machine noise.** ${median} ${bar}`
+    return `**This PR changes the speed of uhttp by less than the machine noise.** ${median}`
   }
   if (!consistent) {
-    return `**uhttp after this PR was faster in some rounds and slower in others, so the job treats its speed as unchanged.** ${median} ${bar}`
+    return `**uhttp after this PR was faster in some rounds and slower in others, so the job treats its speed as unchanged.** ${median}`
   }
   const direction = moved < 0 ? 'slower' : 'faster'
-  return `**This PR makes uhttp ${formatGap(moved)}.** ${median} uhttp after this PR was ${direction} in all ${roundCount} rounds. ${bar}`
+  return `**This PR makes uhttp ${formatGap(moved)}.** uhttp after this PR was ${direction} in all ${roundCount} rounds. ${median}`
 }
 
-function bareVerdict({ changeVsBare, mainVsBare, roundsBeyondLimit, noise }: Summary, roundCount: number): string {
+function bareVerdict({ changeVsBare, mainVsBare, noise }: Summary): string {
   const limit = formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)
-  const share = roundsBeyondLimit === roundCount ? `all ${roundCount}` : `${roundsBeyondLimit} of ${roundCount}`
-  const rounds =
-    roundsBeyondLimit === 0
-      ? `uhttp after this PR stayed within the limit in all ${roundCount} rounds.`
-      : `uhttp after this PR went past the limit in ${share} rounds.`
-  const noisy = `Rerun the job before you act on this result, because the median machine noise of ${formatShare(noise)} is larger than the ${limit} limit.`
-  const facts = [
-    `In the median round, uhttp after this PR was ${formatGap(changeVsBare)} than uWebSockets.js on its own, while uhttp before this PR was ${formatGap(mainVsBare)}.`,
-    rounds,
-    ...(noise > MAX_SLOWDOWN_FROM_BARE_RATIO ? [noisy] : []),
-  ].join(' ')
+  const noisy =
+    noise > MAX_SLOWDOWN_FROM_BARE_RATIO
+      ? ` Rerun the job before you act on this result, because the median machine noise of ${formatShare(noise)} is larger than the ${limit} limit.`
+      : ''
   if (!beyondBareLimit(changeVsBare)) {
-    return `**uhttp after this PR is within ${limit} of the speed of uWebSockets.js on its own.** ${facts}`
+    return `**uhttp after this PR is within ${limit} of uWebSockets.js on its own.** Before this PR, it was ${formatGap(mainVsBare)}.${noisy}`
   }
+  const figures = `After this PR, it was ${formatGap(changeVsBare)}, and before this PR, it was ${formatGap(mainVsBare)}.${noisy}`
   if (beyondBareLimit(mainVsBare)) {
-    return `**uhttp is more than ${limit} slower than uWebSockets.js on its own, both before and after this PR, so the job fails.** ${facts}`
+    return `**uhttp is more than ${limit} slower than uWebSockets.js on its own, both before and after this PR, so the job fails.** ${figures}`
   }
-  return `**This PR makes uhttp more than ${limit} slower than uWebSockets.js on its own, so the job fails.** ${facts}`
+  return `**This PR makes uhttp more than ${limit} slower than uWebSockets.js on its own, so the job fails.** ${figures}`
 }
 
 function tableRow(label: string, cells: readonly string[]): string {
@@ -225,27 +215,17 @@ function bareTable(rounds: readonly Round[], summary: Summary): string {
   return table(headings, rows)
 }
 
-function report(rounds: readonly Round[], summary: Summary, pinned: boolean): string {
+function report(rounds: readonly Round[], summary: Summary): string {
   const seconds = COMPARE_ROUND_DURATION_MS / 1_000
-  const loadCpus = new Intl.ListFormat('en-US', { type: 'conjunction' }).format(LOAD_CPUS.split(','))
-  const pinning = pinned
-    ? `The job pins every server to CPU ${SERVER_CPU} and h2load to CPUs ${loadCpus}.`
-    : 'The servers and h2load share every CPU on this machine, because the job pins processes with taskset, which Linux alone provides.'
-  const warmUp =
-    COMPARE_WARM_UP_ROUNDS === 1
-      ? '1 warm-up round and discards its figures'
-      : `${COMPARE_WARM_UP_ROUNDS} warm-up rounds and discards their figures`
   const limit = formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)
   return [
     '## Speed check',
     '',
-    `The job measures three servers that answer \`GET ${ROUTE_PATH}\`: uWebSockets.js on its own, uhttp before this PR, and uhttp after this PR. Because the job starts two identical copies of each server, each figure in the tables below is the average of those two copies, in requests per second. The job first runs ${warmUp}. In each of the ${rounds.length} rounds that follow, h2load sends requests to each of the ${COPIES.length} servers for ${seconds} s from ${LOAD_THREADS} threads over ${CONNECTIONS} connections. ${pinning}`,
-    '',
-    'Machine noise is the largest gap between the two copies of any one server in the same round. Because each pair of copies runs identical code, a difference smaller than the machine noise can come from the machine alone.',
+    `h2load sent \`GET ${ROUTE_PATH}\` to uWebSockets.js on its own, to uhttp before this PR, and to uhttp after this PR, in ${rounds.length} rounds of ${seconds} s each over ${CONNECTIONS} connections. Each figure is the average of two identical copies of a server, and machine noise is the largest gap between two copies in a round.`,
     '',
     '### Does this PR make uhttp slower?',
     '',
-    'In the Difference column, each figure is the speed of uhttp after this PR compared with uhttp before it. The job reports this comparison without failing on it.',
+    'The job never fails on this table.',
     '',
     prTable(rounds, summary),
     '',
@@ -253,11 +233,11 @@ function report(rounds: readonly Round[], summary: Summary, pinned: boolean): st
     '',
     '### How much slower is uhttp than uWebSockets.js on its own?',
     '',
-    `In the Difference column, each figure is the speed of uhttp after this PR compared with uWebSockets.js on its own. The job fails when uhttp after this PR is more than ${limit} slower than uWebSockets.js on its own in the median round. Several PRs can each slow uhttp by less than the machine noise, so the job compares uhttp with uWebSockets.js on its own to catch their total. Both servers run the uWebSockets.js version that this PR installs, so only a change to uhttp can move the gap between them.`,
+    `The job fails when uhttp after this PR is more than ${limit} slower in the median round.`,
     '',
     bareTable(rounds, summary),
     '',
-    bareVerdict(summary, rounds.length),
+    bareVerdict(summary),
     '',
   ].join('\n')
 }
@@ -274,7 +254,7 @@ async function main(): Promise<void> {
       rounds.push(toRound(await measureRound(servers, round)))
     }
     const summary = summarise(rounds)
-    const text = report(rounds, summary, pinned)
+    const text = report(rounds, summary)
     console.log(text)
     const summaryPath = process.env.GITHUB_STEP_SUMMARY
     if (summaryPath !== undefined && summaryPath !== '') appendFileSync(summaryPath, text)
