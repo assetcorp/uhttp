@@ -8,13 +8,17 @@ import { Exchange } from '../exchange.js'
 import { transferCodingError } from '../framing.js'
 import { lineSeparatorOf } from '../headers.js'
 import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.js'
-import { CopiedRequest } from '../request.js'
+import { CopiedRequest, type LiveRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type PreparedRequest, resolveChain } from '../resolve.js'
 import { attachTestBody } from './body.js'
 import { firstValue, type ParsedTestRequest, parseTestRequest, type TestRequestInit, valuesOf } from './parse.js'
 import { testStreamBody } from './stream.js'
 
 const PARSER_ERROR_BODY = '<h1>Bad Request</h1><hr><i>uWebSockets/20 Server</i>'
+
+interface CopiedTestRequest extends PreparedRequest {
+  readonly request: CopiedRequest
+}
 
 type Lines = readonly (readonly [string, string])[]
 
@@ -84,12 +88,20 @@ function toResponse(exchange: Exchange, context: Context, reply: Reply): Respons
   return new Response(head ? null : reply.body, { status, headers })
 }
 
+function liveTestRequest(parsed: ParsedTestRequest): LiveRequest {
+  const names = new TextDecoder()
+  return {
+    getQuery: () => parsed.query,
+    getHeader: name => firstValue(parsed.lines, names.decode(name)) ?? '',
+  }
+}
+
 function copyTestRequest(
   exchange: Exchange,
   parsed: ParsedTestRequest,
   decoded: DecodedChain,
   init: TestRequestInit,
-): PreparedRequest {
+): CopiedTestRequest {
   const { chain, parameters } = decoded
   const plan = chain.copyPlan
   const { lines } = parsed
@@ -99,10 +111,9 @@ function copyTestRequest(
     exchange,
     parsed.method,
     parsed.path,
-    parsed.query,
+    liveTestRequest(parsed),
     chain.parameterNames,
     parameters,
-    firstValue(lines, 'content-type'),
     firstValue(lines, 'content-length'),
     plan.headerNames,
     plan.allHeaders ? [] : declaredValues(lines, plan),
@@ -110,7 +121,14 @@ function copyTestRequest(
     plan.clientAddress ? (clientAddress ?? TEST_CLIENT_ADDRESS) : undefined,
     body.reader,
   )
-  return { context: createContext(request, exchange), chain: body.chain }
+  return { context: createContext(request, exchange), chain: body.chain, request }
+}
+
+function staysOpen(exchange: Exchange, context: Context, reply: Reply): boolean {
+  const { status, stream } = reply
+  const hasBody = statusHasBody(status)
+  if (stream !== undefined && context.req.method !== 'HEAD' && hasBody) return true
+  return exchange.lingersAfterReply(!hasBody || (stream !== undefined && stream.length === undefined))
 }
 
 async function untilReply(
@@ -160,10 +178,14 @@ export async function requestApp(app: CompiledApp, target: string, init: TestReq
   exchange.clientCloses = (firstValue(parsed.lines, 'connection') ?? '').length === CONNECTION_CLOSE_VALUE_LENGTH
   watchSignal(exchange, init.signal)
   const decoded = decodeChain(app, resolveChain(app, parsed.method, parsed.path))
-  const { context, chain } = copyTestRequest(exchange, parsed, decoded, init)
+  const { context, chain, request } = copyTestRequest(exchange, parsed, decoded, init)
   const pending = runChain(context, exchange, chain.layers, chain.handler)
-  if (pending !== undefined) await untilReply(pending, exchange, context, chain.limits.timeoutMs)
+  if (pending !== undefined) {
+    request.release(true)
+    await untilReply(pending, exchange, context, chain.limits.timeoutMs)
+  }
   const reply = exchange.reply
   if (reply === undefined) throw new UhttpError('MISSING_REPLY', 'The middleware chain ended without a reply.')
+  if (pending === undefined) request.release(staysOpen(exchange, context, reply))
   return toResponse(exchange, context, reply)
 }

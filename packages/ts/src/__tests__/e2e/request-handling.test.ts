@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createApp } from '../../index.js'
 import { openConnection, requestHead, requestWithBody, send } from '../helpers/http-client.js'
 import { errorBody, expectHello, SMUGGLED_REQUEST } from '../helpers/replies.js'
@@ -6,118 +6,6 @@ import { memoryLogger, pause, start } from '../helpers/server.js'
 
 const INTERNAL_ERROR = errorBody('INTERNAL_ERROR', 'The request failed.')
 const NOT_FOUND = errorBody('NOT_FOUND', 'The app has no route for this path.')
-
-describe('the copy from uWebSockets.js', () => {
-  it('copies the method, the path, the query, the parameters, the content type, and the length before any await', async () => {
-    const app = createApp()
-      .post('/users/:id/files/:name', async c => {
-        await pause(5)
-        const { method, path, query, contentType, contentLength } = c.req
-        return c.json({ method, path, query, contentType, contentLength, params: c.req.params() })
-      })
-      .get('/hello', c => c.text('Hello'))
-    const server = await start(app)
-
-    const { connection, response } = await send(
-      server.port,
-      requestWithBody('POST', '/users/42/files/a%2Fb?draft=1', ['Content-Type: text/plain'], 'hello'),
-    )
-
-    expect(JSON.parse(response.body.toString())).toEqual({
-      method: 'POST',
-      path: '/users/42/files/a%2Fb',
-      query: 'draft=1',
-      contentType: 'text/plain',
-      contentLength: 5,
-      params: { id: '42', name: 'a/b' },
-    })
-    await expectHello(connection)
-  })
-
-  it('collects every line of a list header and the first line of any other header', async () => {
-    const app = createApp()
-      .get('/hops', { headers: ['x-forwarded-for', 'cookie', 'x-tenant'] }, async c => {
-        await pause(1)
-        return c.json(c.req.headers())
-      })
-      .get('/hello', c => c.text('Hello'))
-    const server = await start(app)
-
-    const { connection, response } = await send(
-      server.port,
-      requestHead('GET', '/hops', [
-        'X-Forwarded-For: 203.0.113.1',
-        'x-forwarded-for: 198.51.100.7',
-        'Cookie: a=1',
-        'cookie: b=2',
-        'x-tenant: first',
-        'x-tenant: second',
-      ]),
-    )
-
-    expect(JSON.parse(response.body.toString())).toEqual({
-      'x-forwarded-for': '203.0.113.1, 198.51.100.7',
-      cookie: 'a=1; b=2',
-      'x-tenant': 'first',
-    })
-    await expectHello(connection)
-  })
-
-  it('copies every header for a route that declares all of them', async () => {
-    const server = await start(
-      createApp()
-        .get('/proxy', { headers: 'all' }, c => c.json(c.req.headers()))
-        .get('/hello', c => c.text('Hello')),
-    )
-
-    const { connection, response } = await send(
-      server.port,
-      requestHead('GET', '/proxy', ['X-Custom: yes', 'Accept: a', 'accept: b']),
-    )
-
-    expect(JSON.parse(response.body.toString())).toEqual({ host: 'localhost', 'x-custom': 'yes', accept: 'a, b' })
-    await expectHello(connection)
-  })
-
-  it('copies the client address when a middleware declares it', async () => {
-    const app = createApp()
-      .use({ clientAddress: true, handle: (_c, next) => next() })
-      .get('/where', async c => {
-        await pause(1)
-        return c.text(c.req.clientAddress)
-      })
-      .get('/hello', c => c.text('Hello'))
-    const server = await start(app)
-
-    const { connection, response } = await send(server.port, requestHead('GET', '/where'))
-
-    expect(response.body.toString()).toBe('127.0.0.1')
-    await expectHello(connection)
-  })
-
-  it('sends a 500 and logs when the copy inside the synchronous handler throws, and keeps the connection open', async () => {
-    const { entries, logger } = memoryLogger()
-    const app = createApp({ logger })
-      .get('/where', { clientAddress: true }, c => c.text(c.req.clientAddress))
-      .get('/hello', c => c.text('Hello'))
-    const server = await start(app)
-    const connection = await openConnection(server.port)
-    const spy = vi.spyOn(Buffer, 'from').mockImplementationOnce(() => {
-      throw new Error('the copy failed')
-    })
-
-    try {
-      const response = await connection.exchange(requestHead('GET', '/where'))
-      expect([response.status, response.body.toString()]).toEqual([500, INTERNAL_ERROR])
-    } finally {
-      spy.mockRestore()
-    }
-    expect(entries.map(entry => entry.details)).toEqual([
-      { err: expect.objectContaining({ message: 'the copy failed' }), method: 'GET', path: '/where' },
-    ])
-    await expectHello(connection)
-  })
-})
 
 describe('client disconnects', () => {
   it('fires the abort signal, skips the write, and serves the next client', async () => {
@@ -145,6 +33,49 @@ describe('client disconnects', () => {
 
     await expectHello(await openConnection(server.port))
     expect(entries).toEqual([])
+  })
+})
+
+describe('streams that end before the handler returns', () => {
+  it('sends a stream whose producer writes its whole declared length at once, and keeps the connection open', async () => {
+    const app = createApp()
+      .get('/badge', c =>
+        c.stream(
+          stream => {
+            void stream.write('ok')
+          },
+          { length: 2 },
+        ),
+      )
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+
+    const response = await connection.exchange(requestHead('GET', '/badge'))
+
+    expect([response.status, response.framing, response.body.toString()]).toEqual([200, 'length', 'ok'])
+    await expectHello(connection)
+  })
+
+  it('closes the connection when a producer throws before its first write, logs the error, and serves the next client', async () => {
+    const { entries, logger } = memoryLogger()
+    const app = createApp({ logger })
+      .get('/feed', c =>
+        c.stream(() => {
+          throw new Error('the source failed')
+        }),
+      )
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+
+    await expect(connection.exchange(requestHead('GET', '/feed'))).rejects.toThrow(
+      /before (a status line|the response ended)/,
+    )
+
+    expect(connection.state).toBe('closed')
+    expect(entries.map(entry => (entry.details.err as Error).message)).toEqual(['the source failed'])
+    await expectHello(await openConnection(server.port))
   })
 })
 

@@ -24,6 +24,48 @@ describe('the request context', () => {
     })
   })
 
+  it('serves the query string and the content type to a handler that replies without an await', async () => {
+    const app = createApp().get('/search', c => c.json({ query: c.req.query, contentType: c.req.contentType ?? null }))
+
+    const response = await app.request('/search?q=shoes', { headers: { 'content-type': 'text/plain' } })
+
+    expect(await response.json()).toEqual({ query: 'q=shoes', contentType: 'text/plain' })
+  })
+
+  it('copies the query string for a stream producer that reads it after the handler returned', async () => {
+    const app = createApp().get('/feed', c =>
+      c.stream(async stream => {
+        await pause(1)
+        await stream.write(c.req.query)
+      }),
+    )
+
+    expect(await (await app.request('/feed?since=7')).text()).toBe('since=7')
+  })
+
+  it('throws REQUEST_RELEASED to a task that first reads the query after the reply went out, as the network does', async () => {
+    const outcome = Promise.withResolvers<unknown[]>()
+    const app = createApp().get('/audit', c => {
+      const contentType = c.req.contentType
+      void (async () => {
+        await pause(1)
+        const results: unknown[] = [c.req.contentType]
+        try {
+          results.push(c.req.query)
+        } catch (error) {
+          results.push((error as { code?: string }).code)
+        }
+        outcome.resolve(results)
+      })()
+      return c.text(contentType ?? 'none')
+    })
+
+    const response = await app.request('/audit?page=2', { headers: { 'content-type': 'text/plain' } })
+
+    expect(await response.text()).toBe('text/plain')
+    expect(await outcome.promise).toEqual(['text/plain', 'REQUEST_RELEASED'])
+  })
+
   it('copies the headers that the route declares, and matches each name in any case', async () => {
     const app = createApp().get('/me', { headers: ['Authorization'] }, async c => {
       await pause(1)

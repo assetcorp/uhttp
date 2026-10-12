@@ -5,7 +5,7 @@ import type { UhttpError } from '../errors.js'
 import type { Exchange } from '../exchange.js'
 import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.js'
 import { followBody } from './body.js'
-import { closeConnection } from './close.js'
+import { closeConnection, watchAbort } from './close.js'
 import type { RequestFraming } from './framing.js'
 import { statusLine, writeHead } from './head.js'
 import { writeLingeringReply } from './linger.js'
@@ -18,25 +18,29 @@ import { NativeStream } from './stream.js'
  * headers and then starts the producer. For a HEAD request, it writes the headers with the length
  * of the body, and it never calls a stream producer. The package discards the part of the request
  * body that your code left unread, and it closes the connection after the reply whenever
- * {@link Exchange.closesConnection} returns `true`.
+ * {@link Exchange.closesConnection} returns `true`. Before it starts a stream, the function attaches
+ * the abort handler with {@link watchAbort}, because the response stays open.
  *
  * @param res - The package passes the response of uWebSockets.js, which the caller has corked.
  * @param exchange - The package passes the state of the request, which stores the headers.
  * @param context - The package passes the context of the request.
  * @param reply - The package passes the reply to write.
+ * @returns The function returns `true` when the response has ended, and `false` when it stays open
+ * for a stream or for a reply that closes the connection later.
  * @internal
  */
-export function writeReply(res: HttpResponse, exchange: Exchange, context: Context, reply: Reply): void {
-  if (exchange.closed) return
+export function writeReply(res: HttpResponse, exchange: Exchange, context: Context, reply: Reply): boolean {
+  if (exchange.closed) return true
   const stream = reply.stream
   const hasBody = statusHasBody(reply.status)
   const head = context.req.method === 'HEAD'
   if (stream !== undefined && !head && hasBody) {
+    watchAbort(res, exchange)
     exchange.body?.keepFlowing()
     writeHead(res, exchange, reply)
     if (exchange.serverCloses()) res.writeHeader('connection', 'close')
     new NativeStream(res, exchange, context, stream.length).start(stream.produce)
-    return
+    return false
   }
   exchange.settleBody()
   const close = exchange.closesConnection()
@@ -44,7 +48,7 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
   const lengthless = !hasBody || (stream !== undefined && streamLength === undefined)
   if (exchange.lingersAfterReply(lengthless)) {
     writeLingeringReply(res, exchange, reply, head)
-    return
+    return false
   }
   writeHead(res, exchange, reply)
   if (lengthless) res.endWithoutBody()
@@ -52,6 +56,7 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
   else if (head) res.endWithoutBody(bodyByteLength(reply.body), close)
   else res.end(reply.body ?? '', close)
   exchange.end()
+  return true
 }
 
 /**

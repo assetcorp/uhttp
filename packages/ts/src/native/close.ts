@@ -17,6 +17,21 @@ export function closeConnection(res: HttpResponse, exchange: Exchange): void {
 }
 
 /**
+ * Attaches the abort handler to a response that stays open after the handler of uWebSockets.js
+ * returns, which uWebSockets.js requires of such a response. The package attaches the handler once
+ * for each request, and it attaches none to a response that ends inside the handler.
+ *
+ * @param res - The package passes the response of uWebSockets.js, which is still open.
+ * @param exchange - The package passes the state of the request, which the abort handler aborts.
+ * @internal
+ */
+export function watchAbort(res: HttpResponse, exchange: Exchange): void {
+  if (exchange.watchingAbort) return
+  exchange.watchingAbort = true
+  res.onAborted(() => exchange.abort())
+}
+
+/**
  * Calls a function once {@link LINGERING_CLOSE_MS} has passed, unless the connection closes first.
  *
  * @param exchange - The package passes the state of the request.

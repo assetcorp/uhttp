@@ -43,6 +43,7 @@ Match on the code, because the message can change between releases.
 | `UNDECLARED_CLIENT_ADDRESS` | 500 | Your code asks for the client address, and nobody declared it. |
 | `UNDECLARED_BODY` | 500 | Your code reads the body on a route without a body reader. |
 | `BODY_ALREADY_READ` | 500 | Your code reads a body after it streamed that body. |
+| `REQUEST_RELEASED` | 500 | Your code reads the query string or the content type for the first time after the package has sent a reply that your handler returned without an `await`, such as from a task that the handler started without waiting for it. |
 | `INVALID_SCHEMA` | 500 | A schema lacks the Standard Schema interface, or its validator throws, rejects, or returns something other than a Standard Schema result. |
 | `INVALID_UPLOAD` | 500 | You pass `multipart()` a limit that is not a whole number of zero or more, its `file` callback returns something other than a writable stream, or a destination closes before the package has written the whole file. |
 | `INVALID_HEADER` | 500 | Your code sets a header name that is not an HTTP token, or a value with a control character. |

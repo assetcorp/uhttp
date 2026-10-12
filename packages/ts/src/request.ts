@@ -4,18 +4,34 @@ import { UhttpError } from './errors.js'
 import type { Exchange } from './exchange.js'
 import { isDecimalDigits } from './headers.js'
 
+const CONTENT_TYPE_NAME = Buffer.from('content-type')
+
 /**
  * The package copies these parts of the request before the first `await`, so that every
- * middleware and handler can use them after any `await`.
+ * middleware and handler can use them after any `await`. The package copies the query string and
+ * the content type only when your code first reads them, or before the first `await` when your
+ * code has not read them yet.
  */
 export interface RequestInfo {
   /** The client sent this method, such as `GET`, and the package leaves its case unchanged. */
   readonly method: string
   /** The path is the raw target of the request without its query string. */
   readonly path: string
-  /** The query string is the raw part of the target after the `?`, and it is empty when the target has none. */
+  /**
+   * The query string is the raw part of the target after the `?`, and it is empty when the target
+   * has none.
+   *
+   * @throws {@link UhttpError} with the code `REQUEST_RELEASED` when your code reads it for the first
+   * time after the package has sent a reply that your handler returned without an `await`, such as
+   * from a task that the handler started without waiting for it.
+   */
   readonly query: string
-  /** The client sent this `content-type` header, and this is `undefined` when the request has none. */
+  /**
+   * The client sent this `content-type` header, and this is `undefined` when the request has none.
+   *
+   * @throws {@link UhttpError} with the code `REQUEST_RELEASED` when your code reads it for the first
+   * time after the package has sent a reply that your handler returned without an `await`.
+   */
   readonly contentType: string | undefined
   /**
    * The client declared a body of this many bytes in `content-length`, and this is `undefined` when
@@ -74,16 +90,43 @@ export interface RequestInfo {
 }
 
 /**
+ * The package reads the query string and the content type of a request through this interface,
+ * which the request of uWebSockets.js implements.
+ *
+ * @internal
+ */
+export interface LiveRequest {
+  /**
+   * Returns the raw query string.
+   *
+   * @returns The method returns the part of the target after the `?`, or an empty string or
+   * `undefined` when the target has none.
+   */
+  getQuery(): string | undefined
+  /**
+   * Returns the value of a request header.
+   *
+   * @param lowerCaseKey - The package passes the lowercase name of the header as bytes.
+   * @returns The method returns the value, or an empty string when the request has no such header.
+   */
+  getHeader(lowerCaseKey: Uint8Array): string
+}
+
+/**
  * The package copies a request into this object, and it passes the object to every middleware and
- * handler as {@link RequestInfo}.
+ * handler as {@link RequestInfo}. The object reads the query string and the content type from the
+ * live request when your code first asks for them, until the package releases the live request.
  *
  * @internal
  */
 export class CopiedRequest implements RequestInfo {
   readonly method: string
   readonly path: string
-  readonly query: string
-  readonly contentType: string | undefined
+  #live: LiveRequest | undefined
+  #query = ''
+  #queryRead = false
+  #contentType: string | undefined
+  #contentTypeRead = false
   readonly #contentLength: string | undefined
   readonly #exchange: Exchange
   readonly #parameterNames: readonly string[]
@@ -101,10 +144,9 @@ export class CopiedRequest implements RequestInfo {
    * @param exchange - The package passes the state of the request, which creates the abort signal.
    * @param method - The client sent this method.
    * @param path - The package passes the raw path without its query string.
-   * @param query - The package passes the raw query string.
+   * @param live - The package passes the live request, from which the object reads the query string and the content type.
    * @param parameterNames - You wrote these parameter names in the route path.
    * @param parameterValues - The package passes the decoded parameter values in the same order as the names.
-   * @param contentType - The client sent this `content-type` header, and it is `undefined` when the request has none.
    * @param contentLength - The client sent this raw `content-length` header, and it is `undefined` when the request has none.
    * @param headerNames - The route and its middleware declared these header names, which the package lowercased.
    * @param headerValues - The package passes the values of the declared headers in the same order as the names.
@@ -116,10 +158,9 @@ export class CopiedRequest implements RequestInfo {
     exchange: Exchange,
     method: string,
     path: string,
-    query: string,
+    live: LiveRequest,
     parameterNames: readonly string[],
     parameterValues: readonly string[],
-    contentType: string | undefined,
     contentLength: string | undefined,
     headerNames: readonly string[],
     headerValues: readonly (string | undefined)[],
@@ -130,16 +171,56 @@ export class CopiedRequest implements RequestInfo {
     this.#exchange = exchange
     this.method = method
     this.path = path
-    this.query = query
+    this.#live = live
     this.#parameterNames = parameterNames
     this.#parameterValues = parameterValues
-    this.contentType = contentType
     this.#contentLength = contentLength
     this.#headerNames = headerNames
     this.#headerValues = headerValues
     this.#allHeaders = allHeaders
     this.#clientAddress = clientAddress
     this.#reader = reader
+  }
+
+  get query(): string {
+    if (!this.#queryRead) {
+      this.#query = this.#liveFor('query').getQuery() ?? ''
+      this.#queryRead = true
+    }
+    return this.#query
+  }
+
+  get contentType(): string | undefined {
+    if (!this.#contentTypeRead) {
+      const value = this.#liveFor('contentType').getHeader(CONTENT_TYPE_NAME)
+      this.#contentType = value === '' ? undefined : value
+      this.#contentTypeRead = true
+    }
+    return this.#contentType
+  }
+
+  /**
+   * Stops reading from the live request, which uWebSockets.js frees once its handler returns. When
+   * the response stays open, the method first copies the query string and the content type that
+   * your code has not read yet, so that your code can read them after an `await`.
+   *
+   * @param keepUnread - The package passes `true` when the response stays open after the handler of
+   * uWebSockets.js returns.
+   */
+  release(keepUnread: boolean): void {
+    if (keepUnread) {
+      void this.query
+      void this.contentType
+    }
+    this.#live = undefined
+  }
+
+  #liveFor(part: string): LiveRequest {
+    if (this.#live !== undefined) return this.#live
+    throw new UhttpError(
+      'REQUEST_RELEASED',
+      `Read c.req.${part} before your handler returns, because the package frees the request once it has sent a reply that the handler returned without an await.`,
+    )
   }
 
   get body(): RequestBody {

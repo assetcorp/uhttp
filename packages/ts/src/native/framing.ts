@@ -22,6 +22,10 @@ export interface RequestFraming extends BodyFraming {
   readonly rejection: UhttpError | undefined
 }
 
+const CONTENT_LENGTH = Buffer.from('content-length')
+const TRANSFER_ENCODING = Buffer.from('transfer-encoding')
+const CONNECTION = Buffer.from('connection')
+
 const NO_BODY: RequestFraming = {
   contentLength: undefined,
   transferEncoding: undefined,
@@ -34,18 +38,18 @@ const NO_BODY: RequestFraming = {
 
 /**
  * Returns the framing facts of a request. For a request without `content-length` and
- * `transfer-encoding`, the function makes two header lookups, and it leaves `clientCloses` false,
- * because uWebSockets.js closes such a connection after the response without help. For a request
- * with either header, it also walks every header, so that it finds repeated lines and joins every
- * `content-encoding` line into one value.
+ * `transfer-encoding`, the function makes two header lookups, with names that it built once as
+ * bytes, and it leaves `clientCloses` false, because uWebSockets.js closes such a connection after
+ * the response without help. For a request with either header, it also walks every header, so that
+ * it finds repeated lines and joins every `content-encoding` line into one value.
  *
  * @param req - The package passes the request of uWebSockets.js, which is valid until the handler returns.
  * @returns The function returns the framing facts.
  * @internal
  */
 export function readFraming(req: HttpRequest): RequestFraming {
-  const contentLength = req.getHeader('content-length')
-  const transferEncoding = req.getHeader('transfer-encoding')
+  const contentLength = req.getHeader(CONTENT_LENGTH)
+  const transferEncoding = req.getHeader(TRANSFER_ENCODING)
   if (contentLength === '' && transferEncoding === '') return NO_BODY
   const lengths: string[] = []
   const encodings: string[] = []
@@ -64,7 +68,7 @@ export function readFraming(req: HttpRequest): RequestFraming {
   return {
     ...lines,
     declaresBody: !declaresNoBody(lines),
-    clientCloses: req.getHeader('connection').length === CONNECTION_CLOSE_VALUE_LENGTH,
+    clientCloses: req.getHeader(CONNECTION).length === CONNECTION_CLOSE_VALUE_LENGTH,
     parserRejects,
     rejection: parserRejects ? undefined : transferCodingError(encodings),
   }

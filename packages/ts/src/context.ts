@@ -2,11 +2,10 @@ import { DEFAULT_REDIRECT_STATUS, REDIRECT_STATUSES } from './constants.js'
 import { UhttpError } from './errors.js'
 import type { Exchange } from './exchange.js'
 import { checkedHeaderValue, type HeaderRecord, headerLinesOf } from './headers.js'
-import { createReply, JSON_CONTENT_TYPE, type Reply, type StreamProducer } from './reply.js'
+import { createReply, JSON_CONTENT_TYPE, type Reply, type StreamProducer, TEXT_CONTENT_TYPE } from './reply.js'
 import type { RequestInfo } from './request.js'
 import { type EventStreamOptions, type EventStreamProducer, eventStreamReply } from './sse.js'
 
-const TEXT_CONTENT_TYPE = 'text/plain; charset=UTF-8'
 const BYTES_CONTENT_TYPE = 'application/octet-stream'
 
 /**
