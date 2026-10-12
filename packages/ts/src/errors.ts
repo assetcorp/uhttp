@@ -58,26 +58,28 @@
  * - The package throws `MISSING_REPLY` when the middleware chain ends without a reply.
  * - The package throws `NEXT_CALLED_TWICE` when a middleware calls `next()` a second time.
  * - The package throws `INVALID_ROUTE` when you add a route path or a group prefix that the router
- *   can't match, a route option of the wrong type, or a WebSocket limit that uWebSockets.js can't
- *   apply.
+ *   can't match, a route option of the wrong type, or a WebSocket limit outside its range.
  * - The package throws `INVALID_STATUS` when you pass a helper a status that its reply can't have.
  * - The package throws `INVALID_APP_OPTIONS` when you pass {@link createApp} an option of the wrong
  *   type, or a limit that is not a whole number of zero or more.
- * - The package throws `INVALID_SERVE_OPTIONS` when you pass {@link serve} a port outside the TCP
- *   range, or a combination of options that it can't serve, such as `threads` with an app object
- *   or with a Unix socket path.
+ * - The package throws `INVALID_SERVE_OPTIONS` when you pass {@link serve} an option of the wrong
+ *   type or a value outside its range, or when you pass `threads` together with an app object or
+ *   a Unix socket path.
  * - The package throws `LISTEN_FAILED` when the operating system can't bind the address that you
- *   chose, or when a file or a running server holds the Unix socket path.
- * - The package throws `UPGRADE_REQUIRED` for a request without a WebSocket upgrade to a WebSocket
- *   route, and for an upgrade that asks for a version of the protocol other than 13.
- * - The package throws `INVALID_UPGRADE` when an upgrade request lacks `upgrade: websocket` or
- *   declares a body.
- * - The package throws `FORBIDDEN_ORIGIN` when an upgrade request comes from an origin outside the
- *   allow-list of the route, or from the `null` origin.
- * - The package throws `INVALID_WEBSOCKET` when your code passes a socket a close code or a close
- *   reason that RFC 6455 forbids, or a topic or a message of the wrong type.
- * - The package throws `APP_START_FAILED` when the module that you pass to {@link serve} has no
- *   default export that returns an app, or when that function throws during the first start.
+ *   chose, or when the Unix socket path names a file other than a socket or a socket in use.
+ * - The package throws `UPGRADE_REQUIRED` when a client sends a request without a WebSocket upgrade
+ *   to a WebSocket route, or asks for a version of the protocol other than 13.
+ * - The package throws `INVALID_UPGRADE` when a client sends an upgrade request without
+ *   `upgrade: websocket` or `connection: upgrade`, with a malformed `sec-websocket-key`, or with a
+ *   body.
+ * - The package throws `FORBIDDEN_ORIGIN` when a client sends an upgrade request from the `null`
+ *   origin, or from an origin that fails the check of the route.
+ * - The package throws `INVALID_WEBSOCKET` when your code passes a topic or a message of the wrong
+ *   type to a socket or to `app.publish()`, or closes a socket with a code or a reason that
+ *   RFC 6455 forbids.
+ * - The package throws `APP_START_FAILED` when the module that you pass to {@link serve} throws
+ *   while it builds the app, when its default export is neither an app nor a function that returns
+ *   one, or when a worker thread crashes before every worker serves.
  *
  * The package sends `INVALID_TRANSFER_ENCODING` and `UNSUPPORTED_TRANSFER_CODING` before it calls
  * any middleware or handler, and it closes the connection after the reply. When your code throws

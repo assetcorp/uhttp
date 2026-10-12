@@ -44,7 +44,7 @@ function starts(directory: string): { time: number; thread: string; event: strin
 }
 
 describe('a server on worker threads', () => {
-  it('spreads connections over every worker, and runs the host entry once on the main thread', async () => {
+  it('spreads connections over every worker, and executes the host script once on the main thread', async () => {
     const directory = stateDirectory()
     const host = await startHost({ UHTTP_FIXTURE_DIR: directory, UHTTP_THREADS: '3' })
 
@@ -83,7 +83,50 @@ describe('a server on worker threads', () => {
     }
   })
 
-  it('keeps serving on the other workers after a worker crashes while it holds an open connection', async () => {
+  it('rejects with APP_START_FAILED when a worker crashes after it serves and before the other workers serve', async () => {
+    const directory = stateDirectory()
+    writeFileSync(join(directory, 'crash-after-start'), '')
+    writeFileSync(join(directory, 'slow-start'), '')
+    process.env.UHTTP_FIXTURE_DIR = directory
+    try {
+      await expect(
+        serve({ app: fixture('thread-app.js'), port: 0, host: '127.0.0.1', threads: 2 }),
+      ).rejects.toMatchObject({
+        code: 'APP_START_FAILED',
+        cause: expect.objectContaining({ message: 'The fixture crashed on purpose after it started.' }),
+      })
+    } finally {
+      delete process.env.UHTTP_FIXTURE_DIR
+    }
+  })
+
+  it('answers 503 while every worker that is left is still building its app', async () => {
+    const directory = stateDirectory()
+    const host = await startHost({ UHTTP_FIXTURE_DIR: directory, UHTTP_THREADS: '2' })
+    const [first, second] = [...(await threadsSeen(host.port, 4))]
+    if (first === undefined || second === undefined) throw new Error('The host started fewer than two workers.')
+
+    writeFileSync(join(directory, 'slow-start'), '')
+    await (await connectionTo(host.port, first)).exchange(requestHead('GET', '/crash'))
+    await waitFor(
+      () => (starts(directory).some(entry => entry.event === 'slow') ? true : undefined),
+      5_000,
+      'A slow start',
+    )
+    await (await connectionTo(host.port, second)).exchange(requestHead('GET', '/crash'))
+    await pause(100)
+    const response = await (await openConnection(host.port)).exchange(requestHead('GET', '/thread'))
+
+    expect(response.status).toBe(503)
+    expect(response.body.toString()).toBe('No worker thread can serve this request.')
+    await waitFor(
+      async () => ((await threadsSeen(host.port, 1)).size === 1 ? true : undefined),
+      10_000,
+      'Serving after the slow start',
+    )
+  }, 30_000)
+
+  it('keeps serving on the other workers after a worker crashes while it has an open connection', async () => {
     const directory = stateDirectory()
     const host = await startHost({ UHTTP_FIXTURE_DIR: directory, UHTTP_THREADS: '2' })
     const doomed = await openConnection(host.port)
@@ -165,7 +208,7 @@ describe('a server on worker threads', () => {
     expect(await threadsSeen(host.port, 2)).toHaveProperty('size', 1)
   }, 30_000)
 
-  it('returns the delay to 1 second once a replacement has served for 30 seconds', async () => {
+  it('resets the delay to 1 second once a replacement has served for 30 seconds', async () => {
     const directory = stateDirectory()
     const host = await startHost({ UHTTP_FIXTURE_DIR: directory, UHTTP_THREADS: '2' })
     const [first, second] = [...(await threadsSeen(host.port, 4))]
@@ -186,7 +229,7 @@ describe('a server on worker threads', () => {
     expect(gap).toBeLessThan(1_800)
   }, 60_000)
 
-  it('logs the hang and ends the process when a worker holding a connection stops answering for the watchdog timeout', async () => {
+  it('logs the hang and ends the process when a worker that has an open connection fails to answer for the watchdog timeout', async () => {
     const host = await startHost({ UHTTP_THREADS: '2', UHTTP_WATCHDOG_MS: '600' })
     const connection = await openConnection(host.port)
     const startedAt = Date.now()
@@ -211,7 +254,7 @@ describe('a server on worker threads', () => {
     expect(host.output()).not.toContain('failed to answer')
   }, 20_000)
 
-  it('ends the process when a worker holding a connection runs out of memory', async () => {
+  it('ends the process when a worker that has an open connection passes its heap limit', async () => {
     const host = await startHost({ UHTTP_THREADS: '2', UHTTP_WORKER_HEAP_MB: '32' })
     const connection = await openConnection(host.port)
 
@@ -254,7 +297,7 @@ describe('a server on worker threads', () => {
 })
 
 describe('pub/sub across worker threads', () => {
-  it('reaches subscribers on every worker, and forwards a publish only to workers with subscribers', async () => {
+  it('delivers a publish to the subscribers on every worker, and forwards it only to workers with subscribers', async () => {
     const host = await startHost({ UHTTP_THREADS: '3' })
     const sockets = await Promise.all([0, 1, 2].map(() => openSocket(host.port, '/chat/room')))
     const threads = await Promise.all(sockets.map(socket => socket.nextMessage()))
@@ -289,7 +332,7 @@ describe('pub/sub across worker threads', () => {
     expect(host.output()).not.toContain('corked callback')
   })
 
-  it('forgets the topics of a worker that crashed', async () => {
+  it('stops forwarding a publish to a worker that crashed', async () => {
     const host = await startHost({ UHTTP_THREADS: '2', UHTTP_CRASH_LIMIT: '10' })
     const listener = await openSocket(host.port, '/chat/news')
     const listenerThread = String(await listener.nextMessage()).replace('thread ', '')

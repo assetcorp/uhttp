@@ -108,8 +108,8 @@ function originAllowed(headers: HandshakeHeaders, origins: readonly string[] | u
  * the header with every upgrade and a client outside a browser can send any origin that it likes.
  *
  * @param headers - The package passes the handshake headers of the request.
- * @param origins - The package passes the allow-list of the route, or `undefined` to accept the
- * origin whose host is the `host` of the request.
+ * @param origins - The package passes the `origins` list of the route, or `undefined` to accept an
+ * origin whose host and port match the `host` header of the request.
  * @param declaresBody - The package passes `true` when body bytes follow the head of the request.
  * @returns The function returns an `INVALID_UPGRADE` error for a request that breaks RFC 6455, an
  * `UPGRADE_REQUIRED` error for a version other than 13, and a `FORBIDDEN_ORIGIN` error for the
@@ -128,17 +128,20 @@ export function handshakeError(
     )
   }
   if (!BASE64_NONCE.test(headers.key)) {
-    return new UhttpError('INVALID_UPGRADE', 'The sec-websocket-key header must hold 16 bytes in base64.')
+    return new UhttpError('INVALID_UPGRADE', 'The sec-websocket-key header must be 16 bytes in base64.')
   }
-  if (declaresBody) return new UhttpError('INVALID_UPGRADE', 'A WebSocket upgrade request must carry no body.')
+  if (declaresBody) return new UhttpError('INVALID_UPGRADE', 'Send a WebSocket upgrade request without a body.')
   if (headers.version !== WEBSOCKET_VERSION) {
     return new UhttpError(
       'UPGRADE_REQUIRED',
-      `This server speaks version ${WEBSOCKET_VERSION} of the WebSocket protocol alone.`,
+      `This server supports version ${WEBSOCKET_VERSION} of the WebSocket protocol alone.`,
     )
   }
   if (!originAllowed(headers, origins)) {
-    return new UhttpError('FORBIDDEN_ORIGIN', 'This WebSocket route refuses upgrades from the origin of the request.')
+    return new UhttpError(
+      'FORBIDDEN_ORIGIN',
+      'The origin of the request fails the origin check of this WebSocket route.',
+    )
   }
   return undefined
 }
@@ -159,7 +162,7 @@ function announceUpgrade(context: Context): void {
  */
 export const upgradeRequired: Handler = context => {
   announceUpgrade(context)
-  throw new UhttpError('UPGRADE_REQUIRED', 'This path accepts WebSocket upgrade requests alone.')
+  throw new UhttpError('UPGRADE_REQUIRED', 'Send a WebSocket upgrade request to this path.')
 }
 
 /**
@@ -174,7 +177,8 @@ export const acceptUpgrade: Handler = () => switchingReply()
 /**
  * Returns the handler that refuses an upgrade request at the end of its chain, so that every
  * middleware of the route receives the error reply after `await next()`. For an
- * `UPGRADE_REQUIRED` error, the reply names the version that the package speaks.
+ * `UPGRADE_REQUIRED` error, the reply has the version that the package supports in
+ * `sec-websocket-version`.
  *
  * @param error - The package passes the error from {@link handshakeError}.
  * @returns The function returns a handler that throws the error.

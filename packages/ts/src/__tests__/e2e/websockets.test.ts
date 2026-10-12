@@ -41,7 +41,7 @@ describe('a WebSocket route on the network', () => {
     expect(received[20]).toBe('café ☕')
   })
 
-  it('makes the values that the upgrade chain stored the data of the socket, after an await in the middleware', async () => {
+  it('copies the values that the middleware of an upgrade stored into the data of the socket, after an await in the middleware', async () => {
     const opened: unknown[] = []
     const app = createApp().ws(
       '/rooms/:room',
@@ -66,7 +66,7 @@ describe('a WebSocket route on the network', () => {
     expect(opened).toEqual([{ room: 'lobby', token: 'none' }])
   })
 
-  it('reaches every subscriber of a topic, and leaves out the socket that publishes', async () => {
+  it('delivers a publish to every subscriber of a topic, and leaves out the socket that publishes', async () => {
     const app = createApp().ws('/chat', {
       open: socket => {
         socket.subscribe('room')
@@ -296,7 +296,7 @@ describe('a WebSocket route on the network', () => {
     expect(plain.socket.extensions).toBe('')
   })
 
-  it('calls drain once a full buffer empties, while send reports the backpressure', async () => {
+  it('calls drain as uWebSockets.js sends a queued buffer, while send reports the backpressure', async () => {
     const statuses: number[] = []
     const drained = Promise.withResolvers<void>()
     const big = 'x'.repeat(64 * 1024)
@@ -318,5 +318,29 @@ describe('a WebSocket route on the network', () => {
     expect(statuses).toContain(0)
     expect(flooded?.getBufferedAmount()).toBeLessThan(1024 * 1024)
     await client.nextMessages(statuses.filter(status => status !== 2).length, 10_000)
+  })
+
+  it('closes the socket once send drops a message for backpressure, when the route sets closeOnBackpressureLimit', async () => {
+    const statuses: number[] = []
+    const closes: number[] = []
+    const big = 'x'.repeat(64 * 1024)
+    const app = createApp().ws('/flood', {
+      closeOnBackpressureLimit: true,
+      message: socket => {
+        for (let index = 0; index < 64; index++) statuses.push(socket.send(big))
+      },
+      close: (_socket, code) => {
+        closes.push(code)
+      },
+    })
+    const server = await start(app)
+    const client = await openSocket(server.port, '/flood')
+
+    client.send('go')
+
+    expect((await client.closed).code).toBe(1006)
+    await pause(20)
+    expect(statuses).toContain(2)
+    expect(closes).toEqual([1006])
   })
 })

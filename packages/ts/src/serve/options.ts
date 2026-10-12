@@ -24,48 +24,48 @@ import type { ListenAddress } from './listen.js'
 export interface ServeOptions {
   /**
    * You pass the app from {@link createApp}, or the URL of a module whose default export is the
-   * app or a function that returns the app or a promise of it. With `threads`, you pass the URL,
-   * such as `new URL('./app.js', import.meta.url)`, because each worker imports the module to build
-   * its own app.
+   * app or a function that returns the app or a promise of it. With `threads`, pass the URL, such
+   * as `new URL('./app.js', import.meta.url)`, because each worker imports the module and builds
+   * its own app from it.
    */
   app: App | URL
   /**
-   * The port must be a whole number from 0 to 65535, and with port 0 the operating system
-   * assigns a free port. You pass either a port or a Unix socket path.
+   * The port must be a whole number from 0 to 65535. With port 0, the operating system assigns a
+   * free port. Pass either a port or a Unix socket path.
    */
   port?: number
   /**
-   * The server listens on this address, such as `127.0.0.1`, and it listens on every interface
-   * when you leave the address out.
+   * The server listens on this address, such as `127.0.0.1`. When you leave the address out, the
+   * server listens on every interface.
    */
   host?: string
-  /** The server listens on this Unix socket path in place of a port, on the main thread alone. */
+  /** The server listens on this Unix socket path in place of a port, and only the main thread serves its requests. */
   path?: string
   /**
-   * The server serves requests on this many worker threads, which share the port. With 0, which is
-   * the default, the main thread serves every request.
+   * The package starts this many worker threads, which serve the requests from one port. With 0,
+   * which is the default, the main thread serves every request.
    */
   threads?: number
-  /** Each worker thread can hold at most this many megabytes in its main heap, which is the default heap limit of Node.js when you leave it out. */
+  /** The package limits the main heap of each worker thread to this many megabytes. When you leave it out, each worker has the default heap limit of Node.js. */
   workerHeapMb?: number
-  /** The server exits with an error once workers crash this many times within `crashWindowMs`, which is 5 by default. */
+  /** The server exits with an error once workers crash this many times within `crashWindowMs`. The limit is 5 by default. */
   crashLimit?: number
-  /** The server counts worker crashes within a window of this many milliseconds, which is 10 seconds by default. */
+  /** The server counts the crashes of the workers within a window of this many milliseconds, which is 10 seconds by default. */
   crashWindowMs?: number
   /**
    * The server exits with an error when a worker fails to answer the main thread for this many
-   * milliseconds, which is 30 seconds by default, and 0 switches the watchdog off.
+   * milliseconds, which is 30 seconds by default. Set it to 0 to switch the watchdog off.
    */
   watchdogMs?: number
   /**
-   * The main thread writes each crash, each hang, and each exit with an error to this logger, and it
-   * writes them to the console when you leave it out.
+   * The main thread writes each crash, each hang, and each exit with an error to this logger. When
+   * you leave it out, the main thread writes them to the console.
    */
   logger?: Logger
 }
 
 /**
- * The package checks the options of {@link serve} into this form.
+ * The package stores the options of {@link serve} in this form once it has checked them.
  *
  * @internal
  */
@@ -74,9 +74,9 @@ export interface CheckedServeOptions {
   readonly app: App | URL
   /** The server listens on this address. */
   readonly address: ListenAddress
-  /** The server serves requests on this many worker threads, or on the main thread at 0. */
+  /** The package starts this many worker threads, and the main thread serves every request at 0. */
   readonly threads: number
-  /** Each worker can hold this many megabytes in its main heap, or the default of Node.js when this is `undefined`. */
+  /** The package limits the main heap of each worker to this many megabytes, and Node.js applies its default limit when this is `undefined`. */
   readonly workerHeapMb: number | undefined
   /** The server exits with an error once workers crash this many times within the window. */
   readonly crashLimit: number
@@ -132,13 +132,14 @@ function checkedAddress(options: ServeOptions, threads: number): ListenAddress {
 }
 
 /**
- * Returns the options of {@link serve} after checking each one and the way that they combine.
+ * Returns the options of {@link serve} once the function has checked each option on its own and
+ * together with the others.
  *
  * @param options - You pass the options of the server.
  * @returns The function returns the options with every default filled in.
  * @throws {@link UhttpError} with the code `INVALID_SERVE_OPTIONS` when an option has the wrong type
- * or lies outside its range, when `threads` comes with an app object or a Unix socket path, or when
- * the options name neither a port nor a path.
+ * or a value outside its range, when you pass `threads` together with an app object or a Unix
+ * socket path, or when you pass neither a port nor a path.
  * @internal
  */
 export function checkedServeOptions(options: ServeOptions): CheckedServeOptions {
@@ -151,7 +152,7 @@ export function checkedServeOptions(options: ServeOptions): CheckedServeOptions 
     throw invalid('With threads, pass the URL of the app module, because each worker builds its own app from it.')
   }
   const heap = options.workerHeapMb
-  if (heap !== undefined && threads === 0) throw invalid('Set workerHeapMb together with threads alone.')
+  if (heap !== undefined && threads === 0) throw invalid('Set threads whenever you set workerHeapMb.')
   return {
     app,
     address: checkedAddress(options, threads),

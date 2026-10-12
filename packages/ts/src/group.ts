@@ -45,7 +45,8 @@ export class Registry implements RegistryContents {
   }
 
   /**
-   * Records a WebSocket route after checking that no other WebSocket route has the same shape.
+   * Records a WebSocket route once the method has checked that no other WebSocket route has the
+   * same shape.
    *
    * @param record - The package passes the WebSocket route to record.
    * @throws {@link UhttpError} with the code `INVALID_ROUTE` when a WebSocket route of the same
@@ -151,7 +152,7 @@ function checkWebSocketOptions(options: readonly RouteOptions[]): void {
     if (entry.body !== undefined || entry.maxBodyBytes !== undefined) {
       throw new UhttpError(
         'INVALID_ROUTE',
-        'Leave body and maxBodyBytes out of the options of a WebSocket route, because an upgrade request carries no body.',
+        'Leave body and maxBodyBytes out of the options of a WebSocket route, because the package reads no body for an upgrade request.',
       )
     }
   }
@@ -313,20 +314,21 @@ export class Group {
   }
 
   /**
-   * Adds a WebSocket route. An upgrade request passes through the middleware of the app, its
-   * groups, and the route, so that a middleware can refuse the upgrade with a status, and the values
-   * that the chain stores with {@link Context.set} become the `data` of the socket. A GET request to
-   * the same path without an upgrade receives a 426, unless you add a GET route to that path.
+   * Adds a WebSocket route. The package passes an upgrade request through the middleware of the
+   * app, of each matching group, and of the route, so that a middleware can refuse the upgrade with
+   * its own reply. The package copies the values that your middleware stores with
+   * {@link Context.set} into the `data` of the socket. When a GET request to the same path asks for
+   * no upgrade, the package answers with a 426, unless you add a GET route to that path.
    *
-   * @typeParam Data - You declare the shape of the values that the middleware stores during the upgrade.
+   * @typeParam Data - You declare the shape of the values that your middleware stores during the upgrade.
    * @param path - The rules of {@link Group.get} apply to the path.
    * @param args - You pass any middleware for this route alone and any {@link RouteOptions}, and you
    * pass the {@link WebSocketRoute} last.
    * @returns The method returns this group, so that you can chain another route.
    * @throws {@link UhttpError} with the code `INVALID_ROUTE` when the path breaks the rules of the
    * router, when a WebSocket route of the same shape exists, when the options set `body` or
-   * `maxBodyBytes`, or when a handler or a limit of the route has the wrong type or lies outside its
-   * range.
+   * `maxBodyBytes`, or when a handler or a limit of the route has the wrong type or a value outside
+   * its range.
    */
   ws<Data extends object = Record<string, unknown>>(path: string, ...args: WebSocketArguments<Data>): this {
     const { registry, prefix } = stateOf(this)

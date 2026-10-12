@@ -8,7 +8,8 @@ import { UhttpError } from '../errors.js'
  * @param url - You pass the URL of the module.
  * @returns The promise resolves to the app.
  * @throws {@link UhttpError} with the code `APP_START_FAILED` when the import or the function
- * throws, with that error as the cause, or when the default export yields no app.
+ * throws, with that error as the cause, or when the default export is neither an app nor a
+ * function that returns one.
  * @internal
  */
 export async function importApp(url: URL): Promise<App> {

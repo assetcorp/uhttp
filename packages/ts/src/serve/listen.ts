@@ -20,18 +20,18 @@ export interface ListenAddress {
 }
 
 /**
- * The package holds the listening socket of a server through this interface.
+ * The package closes the listening socket of a server through this interface.
  *
  * @internal
  */
 export interface Listener {
-  /** The server listens on this port, and it is `undefined` for a Unix socket. */
+  /** The server listens on this port, which is `undefined` for a Unix socket. */
   readonly port: number | undefined
   /**
    * Stops accepting connections, and removes the socket file of a Unix socket.
    *
-   * @returns The promise settles once the socket file has gone, and a second call returns the
-   * same promise.
+   * @returns The promise settles once the function has removed the socket file, and a second call
+   * returns the same promise.
    */
   close(): Promise<void>
 }
@@ -66,8 +66,8 @@ async function claimSocketPath(path: string): Promise<void> {
     if (errorCode(error) === 'ENOENT') return
     throw listenFailed(`The server could not inspect the Unix socket path ${path}.`, error)
   }
-  if (!isSocket) throw listenFailed(`A file that is not a socket holds the Unix socket path ${path}.`)
-  if (await serverAnswers(path)) throw listenFailed(`A running server holds the Unix socket path ${path}.`)
+  if (!isSocket) throw listenFailed(`The Unix socket path ${path} names a file that is not a socket.`)
+  if (await serverAnswers(path)) throw listenFailed(`A running server listens on the Unix socket path ${path}.`)
   try {
     await unlink(path)
   } catch (error) {
@@ -94,15 +94,15 @@ async function removeSocketFile(path: string): Promise<void> {
 
 /**
  * Starts listening on a port or on a Unix socket path. Before it listens on a Unix socket, the
- * function refuses a path that a file other than a socket holds, and a socket on which a server
- * answers within {@link UNIX_SOCKET_PROBE_MS}, and it removes a socket on which no server answers.
+ * function throws when the path names a file other than a socket, or a socket on which a server
+ * answers within {@link UNIX_SOCKET_PROBE_MS}. It removes a socket on which no server answers.
  *
  * @param uws - The package passes the module of uWebSockets.js.
  * @param native - The package passes the app of uWebSockets.js that accepts the connections.
  * @param address - The package passes the address to listen on.
  * @returns The promise resolves to the listener once the server listens.
  * @throws {@link UhttpError} with the code `LISTEN_FAILED` when the operating system can't bind the
- * address or another file or server holds the Unix socket path.
+ * address, or when the Unix socket path names a file other than a socket or a socket in use.
  * @internal
  */
 export async function listenOn(uws: Uws, native: TemplatedApp, address: ListenAddress): Promise<Listener> {

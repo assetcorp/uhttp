@@ -117,7 +117,7 @@ let constructSwitch: () => Reply
 export class Reply {
   /**
    * The HTTP status is a whole number from 200 to 599, apart from the 101 that the package sets
-   * when a WebSocket route accepts an upgrade.
+   * when it accepts the upgrade of a WebSocket route.
    */
   readonly status: number
   /** The package sends this value as the `content-type` header, and it sends none when this is `undefined`. */
@@ -184,12 +184,13 @@ export function createReply(
 }
 
 /**
- * Returns the reply with the status 101 that the terminal handler of a WebSocket route returns once
- * the upgrade request passes every check. The package switches the connection to a WebSocket when
- * the request ends with this reply, and it sends any other reply that a middleware returns in its
- * place.
+ * Returns the reply with the status 101 that the last handler of a WebSocket route returns once
+ * every check of the upgrade request has passed. When the request ends with this reply, the
+ * package switches the connection to a WebSocket. When a middleware returns another reply in its
+ * place, the package sends that reply.
  *
- * @returns The function returns a reply without a body, which no helper on the context can build.
+ * @returns The function returns a reply without a body. No helper on the context returns a reply
+ * with this status.
  * @internal
  */
 export function switchingReply(): Reply {

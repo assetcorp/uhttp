@@ -44,7 +44,7 @@ describe('an upgrade request through app.request()', () => {
     expect((await app.request('/chat', { headers: handshakeHeaders() })).status).toBe(101)
   })
 
-  it('refuses the null origin, a page on another host or port or scheme, and an origin that is not one', async () => {
+  it('refuses the null origin, a page on another host, port, or scheme, and a malformed origin', async () => {
     const app = createApp().ws('/chat', {})
 
     for (const origin of [
@@ -77,7 +77,7 @@ describe('an upgrade request through app.request()', () => {
     }
   })
 
-  it('accepts only the origins on the allow-list of the route when it has one', async () => {
+  it('accepts only the origins in the origins list of a route that sets one', async () => {
     const app = createApp().ws('/chat', { origins: ['https://app.example.com', 'http://localhost:5173'] })
 
     const listed = await app.request('/chat', {
@@ -93,7 +93,7 @@ describe('an upgrade request through app.request()', () => {
     expect([listed.status, local.status, ownHost.status]).toEqual([101, 101, 403])
   })
 
-  it('answers 426 with the version that it speaks to a client that asks for another version', async () => {
+  it('answers 426 with the supported version to a client that asks for another version', async () => {
     const app = createApp().ws('/chat', {})
 
     for (const version of ['8', '14', '']) {

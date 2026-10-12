@@ -8,9 +8,9 @@ interface Peer {
 }
 
 /**
- * The relay of one worker holds a port to every other worker. It tells the other workers which
- * topics have subscribers on this thread, and it forwards a published message only to the workers
- * that have subscribers on its topic.
+ * The relay of one worker has a port to every other worker. Through those ports, the relay posts
+ * the topics that have subscribers on this thread, and it forwards a published message only to the
+ * workers with subscribers on its topic.
  *
  * @internal
  */
@@ -30,7 +30,7 @@ export class ThreadRelay implements PeerRelay {
   }
 
   /**
-   * Adds the port to another worker, and tells that worker every topic that has subscribers on
+   * Adds the port to another worker, and posts to that worker every topic that has subscribers on
    * this thread.
    *
    * @param id - The main thread passes the number of the other worker.
@@ -50,7 +50,7 @@ export class ThreadRelay implements PeerRelay {
   }
 
   /**
-   * Closes the port to a worker that has gone, and forgets the topics of that worker.
+   * Closes the port to a worker that has gone, and deletes the topics of that worker.
    *
    * @param id - The main thread passes the number of the worker that has gone.
    */
@@ -67,7 +67,8 @@ export class ThreadRelay implements PeerRelay {
   }
 
   /**
-   * Tells every other worker that a topic gained its first subscriber or lost its last on this thread.
+   * Posts a message to every other worker when the first socket on this thread subscribes to a
+   * topic, or when the last one leaves the topic.
    *
    * @param topic - The hub passes the name of the topic.
    * @param subscribed - The hub passes `true` for the first subscriber and `false` once the last one leaves.
@@ -85,7 +86,7 @@ export class ThreadRelay implements PeerRelay {
    * @param topic - The hub passes the name of the topic.
    * @param message - The hub passes the message as text or as bytes that no other view shares.
    * @param binary - The hub passes `true` for a binary message.
-   * @param compress - The hub passes `true` when the publisher asked for compression.
+   * @param compress - The hub passes `true` when the code that published the message asked for compression.
    */
   forward(topic: string, message: string | Uint8Array, binary: boolean, compress: boolean): void {
     let envelope: PeerMessage | undefined

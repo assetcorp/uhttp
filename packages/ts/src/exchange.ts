@@ -30,7 +30,7 @@ export interface AppRuntime {
   readonly maxBodyBytes: number
   /** A handler has this many milliseconds before the package sends a 503, and 0 means no limit. */
   readonly timeoutMs: number
-  /** The package carries published messages to other servers through this adapter, when you pass one. */
+  /** The package passes each message that your code publishes to this adapter, which is `undefined` when you pass none. */
   readonly pubsub: PubSubAdapter | undefined
 }
 

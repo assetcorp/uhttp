@@ -68,7 +68,7 @@ export interface WebSocketRecord {
   readonly options: readonly RouteOptions[]
   /** You passed this middleware to the route alone. */
   readonly middleware: readonly Middleware[]
-  /** The package checked the handlers and the limits of the route into this form. */
+  /** The package stores the checked handlers and limits of the route here. */
   readonly route: CheckedWebSocketRoute
 }
 
@@ -79,8 +79,8 @@ export interface WebSocketRecord {
  */
 export interface CompiledWebSocket {
   /**
-   * The upgrade request passes through the chain of this GET route, whose handler answers 426 to a
-   * request without an upgrade.
+   * The package passes the upgrade request to the middleware of this GET route, whose handler throws
+   * `UPGRADE_REQUIRED` for a request without an upgrade.
    */
   readonly upgrade: CompiledRoute
   /** The package applies these handlers and limits to every socket of the route. */
@@ -162,8 +162,8 @@ export interface CompiledApp {
   /** Every request to the app shares these settings. */
   readonly runtime: AppRuntime
   /**
-   * You added these routes, together with a GET route for each WebSocket route whose path has no
-   * GET route of the same shape, and the list leaves out the HEAD routes that the package adds.
+   * You added these routes, and the package adds a GET route for each WebSocket route whose path
+   * has no GET route of the same shape. The list leaves out the HEAD routes that the package adds.
    */
   readonly routes: readonly CompiledRoute[]
   /** You added these WebSocket routes, in this order. */

@@ -23,12 +23,12 @@ import { firstValue, type ParsedTestRequest } from './parse.js'
 const ACCEPTED_BASE_STATUS = 200
 
 /**
- * {@link App.request} sends an upgrade request through the chain of its WebSocket route in this form.
+ * {@link App.request} passes an upgrade request to the middleware of its WebSocket route in this form.
  *
  * @internal
  */
 export interface TestUpgrade {
-  /** The request passes through this chain, which ends in the 101 or in the refusal of the handshake. */
+  /** The package passes the request through this chain, whose last handler returns the 101 or throws the error of the handshake. */
   readonly decoded: DecodedChain
   /** The test sent these handshake headers. */
   readonly handshake: HandshakeHeaders
@@ -37,7 +37,7 @@ export interface TestUpgrade {
 }
 
 /**
- * Returns the chain of a test request that uWebSockets.js would hand to the upgrade handler of a
+ * Returns the upgrade for a test request that uWebSockets.js passes to the upgrade handler of a
  * WebSocket route, which is a GET request to the path of the route whose `sec-websocket-key` has
  * 24 characters.
  *
@@ -80,9 +80,10 @@ export function testUpgradeOf(app: CompiledApp, parsed: ParsedTestRequest): Test
 }
 
 /**
- * Returns the 101 that uWebSockets.js sends for an accepted upgrade, with the headers that the
- * chain set and with `sec-websocket-accept` computed from the key as RFC 6455 defines it. The
- * response names the first subprotocol that the client offered, and it leaves out the extensions.
+ * Returns the 101 that uWebSockets.js sends for an accepted upgrade, with the headers that your
+ * middleware set and with `sec-websocket-accept` computed from the key as RFC 6455 defines it. The
+ * response has the first subprotocol that the client offered in `sec-websocket-protocol`, and no
+ * `sec-websocket-extensions` header.
  *
  * @param exchange - The package passes the state of the request, which stores the headers.
  * @param handshake - The package passes the handshake headers of the request.

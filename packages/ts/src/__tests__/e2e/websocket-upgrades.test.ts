@@ -7,7 +7,7 @@ import { expectedAccept, handshakeHeaders, rawHandshake, upgradeHead } from '../
 
 const errorCode = (body: Buffer): unknown => JSON.parse(body.toString()).error.code
 
-describe('a WebSocket upgrade on the wire', () => {
+describe('a WebSocket upgrade from a client on the network', () => {
   it('switches protocols with the accept key, the first subprotocol, and the headers of the middleware', async () => {
     const app = createApp().ws(
       '/chat',
@@ -61,7 +61,7 @@ describe('a WebSocket upgrade on the wire', () => {
     expect(connection.state).toBe('open')
   })
 
-  it('names the version that it speaks in a 426, and the protocol in a 426 to a plain GET', async () => {
+  it('sends the supported version in a 426 to an upgrade, and the protocol in a 426 to a plain GET', async () => {
     const server = await start(createApp().ws('/chat', {}))
     const connection = await openConnection(server.port)
 
@@ -75,7 +75,7 @@ describe('a WebSocket upgrade on the wire', () => {
     expect(errorCode(plain.body)).toBe('UPGRADE_REQUIRED')
   })
 
-  it('refuses an upgrade that carries a body, reads the body, and closes the connection after the 400', async () => {
+  it('refuses an upgrade with a body, reads the body, and closes the connection after the 400', async () => {
     const handled: string[] = []
     const app = createApp().ws('/chat', {
       open: () => {
@@ -122,7 +122,7 @@ describe('a WebSocket upgrade on the wire', () => {
     expect(entries.filter(entry => entry.level === 'error')).toEqual([])
   })
 
-  it('answers 503 and closes the connection when the upgrade chain passes the time limit of the route', async () => {
+  it('answers 503 and closes the connection when the middleware of an upgrade takes longer than the time limit of the route', async () => {
     const app = createApp().ws(
       '/chat',
       { timeoutMs: 30 },

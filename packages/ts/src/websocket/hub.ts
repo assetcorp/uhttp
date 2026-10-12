@@ -9,17 +9,19 @@ const FLAGS_INDEX = 1
 const ORIGIN_INDEX = 2
 const ENVELOPE_HEADER_BYTES = ORIGIN_INDEX + PUBSUB_ORIGIN_BYTES
 const ADAPTER_FAILED_MESSAGE = 'The pub/sub adapter failed.'
-const ADAPTER_MESSAGE_DROPPED = 'The package dropped a message from the pub/sub adapter that it could not read.'
+const ADAPTER_MESSAGE_DROPPED =
+  'The package dropped a message from the pub/sub adapter, because it could not parse the message.'
 
 /**
- * The hub of a worker thread hands topic changes and published messages to the other workers
+ * The hub of a worker thread passes topic changes and published messages to the other workers
  * through this interface.
  *
  * @internal
  */
 export interface PeerRelay {
   /**
-   * Tells every other worker that a topic gained its first subscriber or lost its last on this thread.
+   * Posts a message to every other worker when the first socket on this thread subscribes to a
+   * topic, or when the last one leaves the topic.
    *
    * @param topic - The hub passes the name of the topic.
    * @param subscribed - The hub passes `true` for the first subscriber and `false` once the last one leaves.
@@ -31,13 +33,13 @@ export interface PeerRelay {
    * @param topic - The hub passes the name of the topic.
    * @param message - The hub passes the message as text or as bytes that no other view shares.
    * @param binary - The hub passes `true` for a binary message.
-   * @param compress - The hub passes `true` when the publisher asked for compression.
+   * @param compress - The hub passes `true` when the code that published the message asked for compression.
    */
   forward(topic: string, message: string | Uint8Array, binary: boolean, compress: boolean): void
 }
 
 /**
- * Returns a topic after checking that it is a string.
+ * Returns a topic once the function has checked that it is a string.
  *
  * @param topic - Your code passes the topic.
  * @returns The function returns the topic unchanged.
@@ -52,7 +54,7 @@ export function checkedTopic(topic: unknown): string {
 }
 
 /**
- * Returns a message as text or as bytes, after checking its type.
+ * Returns a message as text or as bytes, once the function has checked its type.
  *
  * @param message - Your code passes the message.
  * @returns The function returns a string unchanged, and the bytes of an `ArrayBuffer` or a view
@@ -72,7 +74,7 @@ export function checkedMessage(message: unknown): string | Uint8Array {
  * their buffer, so that a structured clone copies the message alone.
  *
  * @param bytes - The package passes the bytes of a message.
- * @returns The function returns bytes whose buffer holds nothing else.
+ * @returns The function returns bytes that fill their whole buffer.
  * @internal
  */
 export function ownedBytes(bytes: Uint8Array): Uint8Array {
@@ -93,7 +95,7 @@ function sameOrigin(payload: Uint8Array, origin: Uint8Array): boolean {
  * @internal
  */
 export class Hub {
-  /** The worker bootstrap sets the relay to the other workers, and it is `undefined` on a server without threads. */
+  /** A worker thread sets this relay to the other workers when it starts. The relay is `undefined` on a server without threads. */
   relay: PeerRelay | undefined
   readonly #native: TemplatedApp
   readonly #origin: Uint8Array
@@ -131,8 +133,9 @@ export class Hub {
    * @param topic - Your code passes the topic.
    * @param message - Your code passes the message.
    * @param options - Your code can choose a binary or a text message and ask for compression.
-   * @param sender - The package passes the socket that publishes, which receives none of its own
-   * message, or `undefined` when the app publishes or the socket has never subscribed.
+   * @param sender - The package passes the socket that publishes, so that uWebSockets.js leaves that
+   * socket out. The package passes `undefined` for `app.publish()`, and for a socket that has never
+   * subscribed to a topic.
    * @throws {@link UhttpError} with the code `INVALID_WEBSOCKET` when the topic or the message has
    * the wrong type.
    */
@@ -155,15 +158,15 @@ export class Hub {
    * @param topic - The relay passes the topic.
    * @param message - The relay passes the message.
    * @param binary - The relay passes `true` for a binary message.
-   * @param compress - The relay passes `true` when the publisher asked for compression.
+   * @param compress - The relay passes `true` when the code that published the message asked for compression.
    */
   deliver(topic: string, message: string | Uint8Array, binary: boolean, compress: boolean): void {
     if (!this.#closed) this.#native.publish(topic, message, binary, compress)
   }
 
   /**
-   * Follows the subscribers of a topic on this thread, as uWebSockets.js reports them, and tells
-   * the relay and the adapter when the topic gains its first subscriber or loses its last.
+   * Calls the relay and the adapter when the first socket on this thread subscribes to a topic, or
+   * when the last one leaves the topic, as uWebSockets.js reports each change.
    *
    * @param topic - uWebSockets.js passes the topic as bytes.
    * @param newCount - uWebSockets.js passes the number of subscribers after the change.
