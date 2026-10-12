@@ -2,9 +2,9 @@ import type { BodyReader } from './body/reader.js'
 import { ReaderBody, type RequestBody } from './body/request-body.js'
 import { UhttpError } from './errors.js'
 import type { Exchange } from './exchange.js'
-import { isDecimalDigits } from './headers.js'
+import { headerBytes, isDecimalDigits } from './headers.js'
 
-const CONTENT_TYPE_NAME = Buffer.from('content-type')
+const CONTENT_TYPE_NAME = headerBytes('content-type')
 
 /**
  * The package copies these parts of the request before the first `await`, so that every
@@ -109,7 +109,7 @@ export interface LiveRequest {
    * @param lowerCaseKey - The package passes the lowercase name of the header as bytes.
    * @returns The method returns the value, or an empty string when the request has no such header.
    */
-  getHeader(lowerCaseKey: Uint8Array): string
+  getHeader(lowerCaseKey: ArrayBuffer): string
 }
 
 /**

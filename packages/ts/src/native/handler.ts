@@ -1,4 +1,5 @@
 import type { HttpRequest, HttpResponse } from 'uWebSockets.js'
+import type { BodyReader } from '../body/reader.js'
 import { logServerError, runChain } from '../chain.js'
 import type { CompiledApp, CompiledRoute, CopyPlan } from '../compile.js'
 import { LIST_HEADER_NAMES } from '../constants.js'
@@ -7,7 +8,7 @@ import { startDeadline } from '../deadline.js'
 import { Exchange } from '../exchange.js'
 import { lineSeparatorOf } from '../headers.js'
 import { CopiedRequest } from '../request.js'
-import { type DecodedChain, decodeChain, type PreparedRequest, type RequestChain, resolveChain } from '../resolve.js'
+import { type DecodedChain, decodeChain, type RequestChain, resolveChain } from '../resolve.js'
 import { attachBody } from './body.js'
 import { remoteAddressOf, watchAbort } from './close.js'
 import { type RequestFraming, readFraming } from './framing.js'
@@ -15,10 +16,6 @@ import { refusedRequest } from './refuse.js'
 import { writeCrash, writeFramingRejection, writeReply } from './write.js'
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
-
-interface CopiedExchange extends PreparedRequest {
-  readonly request: CopiedRequest
-}
 
 const NO_VALUES: readonly (string | undefined)[] = []
 const NO_PARAMETERS: readonly string[] = []
@@ -63,34 +60,37 @@ function copyRequest(
   path: string,
   decoded: DecodedChain,
   framing: RequestFraming,
-): CopiedExchange {
-  const { contentLength } = framing
+  reader: BodyReader | undefined,
+): CopiedRequest {
   const { chain, parameters } = decoded
   const plan = chain.copyPlan
   const all = plan.allHeaders ? copyAllHeaders(req) : undefined
   const values = plan.allHeaders || plan.headerNames.length === 0 ? NO_VALUES : copyDeclaredHeaders(req, plan)
   const address = plan.clientAddress ? remoteAddressOf(res) : undefined
-  const body = attachBody(res, exchange, chain, framing)
-  const request = new CopiedRequest(
+  return new CopiedRequest(
     exchange,
     method,
     path,
     req,
     chain.parameterNames,
     parameters,
-    contentLength,
+    framing.contentLength,
     plan.headerNames,
     values,
     all,
     address,
-    body.reader,
+    reader,
   )
-  return { context: createContext(request, exchange), chain: body.chain, request }
 }
 
-function respondAndRelease(res: HttpResponse, exchange: Exchange, copied: CopiedExchange): boolean {
-  const ended = respond(res, exchange, copied)
-  copied.request.release(!ended)
+function respondAndRelease(
+  res: HttpResponse,
+  exchange: Exchange,
+  request: CopiedRequest,
+  chain: RequestChain,
+): boolean {
+  const ended = respond(res, exchange, createContext(request, exchange), chain)
+  request.release(!ended)
   return ended
 }
 
@@ -106,33 +106,47 @@ function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange
   return framing
 }
 
-function respond(res: HttpResponse, exchange: Exchange, { context, chain }: PreparedRequest): boolean {
+function respond(res: HttpResponse, exchange: Exchange, context: Context, chain: RequestChain): boolean {
   const pending = runChain(context, exchange, chain.layers, chain.handler)
-  if (pending === undefined) return finish(res, exchange, context, false)
-  const { timeoutMs } = chain.limits
-  const stop =
-    timeoutMs > 0 ? startDeadline(exchange, context, timeoutMs, () => finish(res, exchange, context, true)) : undefined
-  pending.then(() => {
-    if (exchange.timedOut) return
-    stop?.()
-    finish(res, exchange, context, true)
-  })
+  if (pending === undefined) return finish(res, exchange, context)
+  finishLater(res, exchange, context, chain.limits.timeoutMs, pending)
   return false
 }
 
-function finish(res: HttpResponse, exchange: Exchange, context: Context, cork: boolean): boolean {
+function finishLater(
+  res: HttpResponse,
+  exchange: Exchange,
+  context: Context,
+  timeoutMs: number,
+  pending: Promise<void>,
+): void {
+  const stop =
+    timeoutMs > 0 ? startDeadline(exchange, context, timeoutMs, () => finishCorked(res, exchange, context)) : undefined
+  pending.then(() => {
+    if (exchange.timedOut) return
+    stop?.()
+    finishCorked(res, exchange, context)
+  })
+}
+
+function finish(res: HttpResponse, exchange: Exchange, context: Context): boolean {
   const reply = exchange.reply
   if (exchange.closed) return true
   if (reply === undefined) return false
   try {
-    if (!cork) return writeReply(res, exchange, context, reply)
-    let ended = false
-    res.cork(() => {
-      ended = writeReply(res, exchange, context, reply)
-    })
-    return ended
+    return writeReply(res, exchange, context, reply)
   } catch (error) {
     return crash(res, exchange, error, context.req.method, context.req.path)
+  }
+}
+
+function finishCorked(res: HttpResponse, exchange: Exchange, context: Context): void {
+  const reply = exchange.reply
+  if (exchange.closed || reply === undefined) return
+  try {
+    res.cork(() => writeReply(res, exchange, context, reply))
+  } catch (error) {
+    crash(res, exchange, error, context.req.method, context.req.path)
   }
 }
 
@@ -184,7 +198,8 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
   const withoutParameters: DecodedChain = { chain: base, parameters: NO_PARAMETERS }
   const answer = (res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean => {
     let path = route.path
-    let copied: CopiedExchange
+    let request: CopiedRequest
+    let chain: RequestChain
     let decoded = withoutParameters
     try {
       const framing = admittedFraming(res, req, exchange)
@@ -195,11 +210,13 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
         for (let index = 0; index < count; index++) raw.push(req.getParameter(index) ?? '')
         decoded = decodeChain(app, { ...base, rawParameters: raw })
       }
-      copied = copyRequest(res, req, exchange, method, path, decoded, framing)
+      const opened = attachBody(res, exchange, decoded.chain, framing)
+      chain = opened?.chain ?? decoded.chain
+      request = copyRequest(res, req, exchange, method, path, decoded, framing, opened?.reader)
     } catch (error) {
       return crash(res, exchange, error, method, path)
     }
-    return respondAndRelease(res, exchange, copied)
+    return respondAndRelease(res, exchange, request, chain)
   }
   return (res, req) => {
     const exchange = new Exchange(app.runtime)
@@ -210,19 +227,23 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
 function answerFallback(app: CompiledApp, res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean {
   let method = ''
   let path = ''
-  let copied: CopiedExchange
+  let request: CopiedRequest
+  let chain: RequestChain
   try {
     const framing = admittedFraming(res, req, exchange)
     if (framing === undefined) return false
     method = req.getCaseSensitiveMethod()
     path = req.getUrl()
-    const chain = resolveChain(app, method, path)
-    if (chain.matchedRoute) warnMissedRoute(app, method, path)
-    copied = copyRequest(res, req, exchange, method, path, decodeChain(app, chain), framing)
+    const resolved = resolveChain(app, method, path)
+    if (resolved.matchedRoute) warnMissedRoute(app, method, path)
+    const decoded = decodeChain(app, resolved)
+    const opened = attachBody(res, exchange, decoded.chain, framing)
+    chain = opened?.chain ?? decoded.chain
+    request = copyRequest(res, req, exchange, method, path, decoded, framing, opened?.reader)
   } catch (error) {
     return crash(res, exchange, error, method, path)
   }
-  return respondAndRelease(res, exchange, copied)
+  return respondAndRelease(res, exchange, request, chain)
 }
 
 /**

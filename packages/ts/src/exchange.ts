@@ -341,6 +341,16 @@ export class Exchange {
   }
 
   /**
+   * Returns `true` when the current reply carries headers or your code set a header, so that
+   * {@link Exchange.forEachResponseHeader} can have lines to pass on.
+   *
+   * @returns The method returns `false` when that method has no line to pass on.
+   */
+  hasResponseHeaders(): boolean {
+    return this.#reply?.headers !== undefined || this.#headers !== undefined
+  }
+
+  /**
    * Calls a function for each line of every response header that goes out with the current reply,
    * apart from `content-type`. For a header that both the reply and your code set, the one that
    * your code or the reply set later goes out, and an appended line follows the lines of the reply.

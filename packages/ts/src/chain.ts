@@ -81,13 +81,30 @@ export function replyForError(context: Context, exchange: Exchange, error: unkno
   return result.then(value => (value instanceof Reply ? value : fallBack(missingReply())), fallBack)
 }
 
+function assignLater(exchange: Exchange, reply: Promise<Reply>): Promise<void> {
+  return reply.then(value => exchange.assign(value))
+}
+
 function fail(context: Context, exchange: Exchange, error: unknown): undefined | Promise<void> {
   const reply = replyForError(context, exchange, error)
   if (reply instanceof Reply) {
     exchange.assign(reply)
     return undefined
   }
-  return reply.then(value => exchange.assign(value))
+  return assignLater(exchange, reply)
+}
+
+function settleHandler(context: Context, exchange: Exchange, result: Promise<unknown>): Promise<void> {
+  return result.then(
+    value => {
+      if (value instanceof Reply) {
+        exchange.assign(value)
+        return undefined
+      }
+      return fail(context, exchange, missingReply())
+    },
+    error => fail(context, exchange, error),
+  )
 }
 
 function callHandler(context: Context, exchange: Exchange, handler: Handler): undefined | Promise<void> {
@@ -102,16 +119,7 @@ function callHandler(context: Context, exchange: Exchange, handler: Handler): un
     return undefined
   }
   if (!(result instanceof Promise)) return fail(context, exchange, missingReply())
-  return result.then(
-    value => {
-      if (value instanceof Reply) {
-        exchange.assign(value)
-        return undefined
-      }
-      return fail(context, exchange, missingReply())
-    },
-    error => fail(context, exchange, error),
-  )
+  return settleHandler(context, exchange, result)
 }
 
 function dispatch(
@@ -123,6 +131,17 @@ function dispatch(
 ): undefined | Promise<void> {
   const layer = layers[index]
   if (layer === undefined) return callHandler(context, exchange, handler)
+  return callLayer(context, exchange, layers, handler, index, layer)
+}
+
+function callLayer(
+  context: Context,
+  exchange: Exchange,
+  layers: readonly MiddlewareHandler[],
+  handler: Handler,
+  index: number,
+  layer: MiddlewareHandler,
+): undefined | Promise<void> {
   let called = false
   const next: Next = () => {
     if (called) return Promise.reject(new UhttpError('NEXT_CALLED_TWICE', NEXT_CALLED_TWICE_MESSAGE))
@@ -174,5 +193,9 @@ export function runChain(
 ): undefined | Promise<void> {
   const result = dispatch(context, exchange, layers, handler, 0)
   if (result === undefined) return ensureReply(context, exchange)
-  return result.then(() => ensureReply(context, exchange))
+  return ensureReplyLater(context, exchange, result)
+}
+
+function ensureReplyLater(context: Context, exchange: Exchange, chain: Promise<void>): Promise<void> {
+  return chain.then(() => ensureReply(context, exchange))
 }
