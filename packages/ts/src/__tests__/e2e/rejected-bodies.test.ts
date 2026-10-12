@@ -188,6 +188,26 @@ describe('request bodies that the package rejects', () => {
     await expectClosedAfterReply(connection, response)
   })
 
+  it('closes the connection after a body above the limit even when the handler catches the error and replies 200', async () => {
+    const app = createApp({ maxBodyBytes: 10 }).post('/lenient', async c => {
+      await pause(50)
+      try {
+        return c.text(await c.req.body.text())
+      } catch {
+        return c.text('ignored the body')
+      }
+    })
+    const server = await start(app)
+
+    const { connection, response } = await send(
+      server.port,
+      chunkedRequest('POST', '/lenient', ['Content-Type: text/plain'], [Buffer.alloc(12, 97)]),
+    )
+
+    expect([response.status, response.body.toString()]).toEqual([200, 'ignored the body'])
+    await expectClosedAfterReply(connection, response)
+  })
+
   it('closes the connection after a 413 for a form with more than 1,000 parameters, whose whole body the package read', async () => {
     const app = createApp().post('/form', async c => {
       await c.req.body.form()

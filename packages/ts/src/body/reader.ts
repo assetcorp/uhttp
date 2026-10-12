@@ -140,7 +140,8 @@ export class BodyReader implements BodyState {
 
   /**
    * Adds a copied chunk of the body. The reader fails with `PAYLOAD_TOO_LARGE` once the count passes
-   * the limit, and from then on it discards the rest of the body as it arrives. It pauses the source
+   * the limit, and from then on it discards the rest of the body as it arrives and makes the package
+   * close the connection after the reply, whatever reply your code sends. It pauses the source
    * once it holds {@link BODY_HIGH_WATER_MARK_BYTES} bytes that the handler hasn't read.
    *
    * @param chunk - The source passes a copy of the bytes, which the reader keeps.
@@ -216,6 +217,7 @@ export class BodyReader implements BodyState {
     if (this.#received > this.limit) {
       this.fail(tooLarge(this.limit))
       this.#discarding = true
+      this.#exchange.closeAfterReply = true
       return
     }
     if (chunk.byteLength > 0) {
