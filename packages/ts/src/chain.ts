@@ -54,7 +54,9 @@ function missingReply(): UhttpError {
 /**
  * Returns the reply for an error: the reply of the app's error handler, or the default error reply
  * when the app has none or when that handler throws, rejects, or returns something other than a
- * reply. The function logs every error for which the client receives a 500.
+ * reply. The function logs every error for which the client receives a 500. For a
+ * `PAYLOAD_TOO_LARGE` error, it makes the package close the connection after the reply, whatever
+ * the error handler returns.
  *
  * @param context - The package passes the context of the request.
  * @param exchange - The package passes the state of the request, from which the function takes the error handler.
@@ -64,6 +66,7 @@ function missingReply(): UhttpError {
  */
 export function replyForError(context: Context, exchange: Exchange, error: unknown): Reply | Promise<Reply> {
   const { logger, onError } = exchange.runtime
+  if (error instanceof UhttpError && error.code === 'PAYLOAD_TOO_LARGE') exchange.closeAfterReply = true
   logFor(logger, error, context)
   if (onError === undefined) return defaultErrorReply(error)
   const fallBack = (handlerError: unknown): Reply => {

@@ -172,6 +172,42 @@ describe('request bodies that the package rejects', () => {
     },
   )
 
+  it('closes the connection after a 413 for a chunked body that ended before the handler read it', async () => {
+    const app = createApp({ maxBodyBytes: 10 }).post('/late', async c => {
+      await pause(50)
+      return c.text(await c.req.body.text())
+    })
+    const server = await start(app)
+
+    const { connection, response } = await send(
+      server.port,
+      chunkedRequest('POST', '/late', ['Content-Type: text/plain'], [Buffer.alloc(12, 97)]),
+    )
+
+    expect([response.status, response.body.toString()]).toEqual([413, tooLarge(10)])
+    await expectClosedAfterReply(connection, response)
+  })
+
+  it('closes the connection after a 413 for a form with more than 1,000 parameters, whose whole body the package read', async () => {
+    const app = createApp().post('/form', async c => {
+      await c.req.body.form()
+      return c.text('stored')
+    })
+    const server = await start(app)
+    const form = Array.from({ length: 1_001 }, (_, index) => `field${index}=1`).join('&')
+
+    const { connection, response } = await send(
+      server.port,
+      requestWithBody('POST', '/form', ['Content-Type: application/x-www-form-urlencoded'], form),
+    )
+
+    expect([response.status, response.body.toString()]).toEqual([
+      413,
+      errorBody('PAYLOAD_TOO_LARGE', 'The form has more than 1000 parameters.'),
+    ])
+    await expectClosedAfterReply(connection, response)
+  })
+
   it('answers 503 with HANDLER_TIMEOUT once the time limit passes, and then closes the connection itself', async () => {
     const server = await start(hangingApp())
     const connection = await openConnection(server.port)

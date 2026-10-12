@@ -54,6 +54,10 @@ export interface RequestInfo {
   /**
    * You read the request body through this object, on a POST, PUT, or PATCH route, or on a route
    * that sets `body: true`.
+   *
+   * @throws {@link UhttpError} with the code `REQUEST_RELEASED` when your code first reads it after
+   * the package has sent a reply that your handler returned without an `await`, because the body
+   * needs the content type.
    */
   readonly body: RequestBody
   /**
@@ -78,13 +82,18 @@ export interface RequestInfo {
    * @param name - You can pass the header name in any case.
    * @returns The method returns the value, or `undefined` when the request has no such header or
    * an empty one.
-   * @throws {@link UhttpError} with the code `UNDECLARED_HEADER` when nobody declared the header.
+   * @throws {@link UhttpError} with the code `UNDECLARED_HEADER` when nobody declared the header,
+   * or with the code `REQUEST_RELEASED` when your code first asks for `content-type` after the
+   * package has sent a reply that your handler returned without an `await`.
    */
   header(name: string): string | undefined
   /**
    * Returns every request header that the package copied for the route.
    *
    * @returns The method returns a new object whose keys are the lowercase header names.
+   * @throws {@link UhttpError} with the code `REQUEST_RELEASED` when your code first calls it after
+   * the package has sent a reply that your handler returned without an `await`, because the object
+   * includes the content type.
    */
   headers(): Record<string, string>
 }
@@ -184,7 +193,7 @@ export class CopiedRequest implements RequestInfo {
 
   get query(): string {
     if (!this.#queryRead) {
-      this.#query = this.#liveFor('query').getQuery() ?? ''
+      this.#query = this.#liveFor('the query string with c.req.query').getQuery() ?? ''
       this.#queryRead = true
     }
     return this.#query
@@ -192,7 +201,9 @@ export class CopiedRequest implements RequestInfo {
 
   get contentType(): string | undefined {
     if (!this.#contentTypeRead) {
-      const value = this.#liveFor('contentType').getHeader(CONTENT_TYPE_NAME)
+      const value = this.#liveFor(
+        'the content type with c.req.contentType, c.req.header(), c.req.headers(), or c.req.body',
+      ).getHeader(CONTENT_TYPE_NAME)
       this.#contentType = value === '' ? undefined : value
       this.#contentTypeRead = true
     }
@@ -219,7 +230,7 @@ export class CopiedRequest implements RequestInfo {
     if (this.#live !== undefined) return this.#live
     throw new UhttpError(
       'REQUEST_RELEASED',
-      `Read c.req.${part} before your handler returns, because the package frees the request once it has sent a reply that the handler returned without an await.`,
+      `Read ${part} before your handler returns, because the package frees the request once it has sent a reply that the handler returned without an await.`,
     )
   }
 

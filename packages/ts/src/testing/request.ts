@@ -124,11 +124,9 @@ function copyTestRequest(
   return { context: createContext(request, exchange), chain: body.chain, request }
 }
 
-function staysOpen(exchange: Exchange, context: Context, reply: Reply): boolean {
-  const { status, stream } = reply
-  const hasBody = statusHasBody(status)
-  if (stream !== undefined && context.req.method !== 'HEAD' && hasBody) return true
-  return exchange.lingersAfterReply(!hasBody || (stream !== undefined && stream.length === undefined))
+function keepsUnread(exchange: Exchange, reply: Reply): boolean {
+  if (reply.stream !== undefined) return true
+  return exchange.lingersAfterReply(!statusHasBody(reply.status))
 }
 
 async function untilReply(
@@ -186,6 +184,6 @@ export async function requestApp(app: CompiledApp, target: string, init: TestReq
   }
   const reply = exchange.reply
   if (reply === undefined) throw new UhttpError('MISSING_REPLY', 'The middleware chain ended without a reply.')
-  if (pending === undefined) request.release(staysOpen(exchange, context, reply))
+  if (pending === undefined) request.release(keepsUnread(exchange, reply))
   return toResponse(exchange, context, reply)
 }

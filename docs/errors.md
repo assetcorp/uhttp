@@ -27,7 +27,7 @@ Match on the code, because the message can change between releases.
 | `INVALID_PATH_PARAMETER` | 400 | A path parameter contains a percent sequence that fails to decode. |
 | `NOT_FOUND` | 404 | A path has no route. You can throw it yourself for a missing record. |
 | `METHOD_NOT_ALLOWED` | 405 | A path has routes, but none for the method of the request. |
-| `PAYLOAD_TOO_LARGE` | 413 | A request body, a form, or an upload passes one of its limits. |
+| `PAYLOAD_TOO_LARGE` | 413 | A request body, a form, or an upload passes one of its limits. The package closes the connection after the reply. |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A body parser receives a content type or a charset that it can't parse, or the client compresses a request body. |
 | `INVALID_JSON` | 400 | `json()` can't parse a body, or the body contains a `__proto__` key or a `constructor` key with a `prototype` key. |
 | `VALIDATION_FAILED` | 400 | A schema rejects a JSON body. The package lists the first 10 problems under `issues`. |
@@ -43,7 +43,7 @@ Match on the code, because the message can change between releases.
 | `UNDECLARED_CLIENT_ADDRESS` | 500 | Your code asks for the client address, and nobody declared it. |
 | `UNDECLARED_BODY` | 500 | Your code reads the body on a route without a body reader. |
 | `BODY_ALREADY_READ` | 500 | Your code reads a body after it streamed that body. |
-| `REQUEST_RELEASED` | 500 | Your code reads the query string or the content type for the first time after the package has sent a reply that your handler returned without an `await`, such as from a task that the handler started without waiting for it. |
+| `REQUEST_RELEASED` | 500 | Your code reads the query string or the content type for the first time after the package has sent a reply that your handler returned without an `await`, such as from a task that the handler started without waiting for it. `c.req.header('content-type')`, `c.req.headers()`, and `c.req.body` read the content type too. |
 | `INVALID_SCHEMA` | 500 | A schema lacks the Standard Schema interface, or its validator throws, rejects, or returns something other than a Standard Schema result. |
 | `INVALID_UPLOAD` | 500 | You pass `multipart()` a limit that is not a whole number of zero or more, its `file` callback returns something other than a writable stream, or a destination closes before the package has written the whole file. |
 | `INVALID_HEADER` | 500 | Your code sets a header name that is not an HTTP token, or a value with a control character. |

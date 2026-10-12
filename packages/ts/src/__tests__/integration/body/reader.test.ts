@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createApp } from '../../../index.js'
 import { MIB } from '../../helpers/apps.js'
 import { errorCodeOf } from '../../helpers/body.js'
+import { pause } from '../../helpers/server.js'
 
 async function* chunksOf(sizes: readonly number[]): AsyncGenerator<Uint8Array> {
   for (const size of sizes) yield new Uint8Array(size).fill(120)
@@ -90,6 +91,24 @@ describe('body limits through app.request()', () => {
     expect(response.status).toBe(413)
     expect(response.headers.get('connection')).toBe('close')
     expect(response.headers.get('transfer-encoding')).toBe('chunked')
+  })
+
+  it('closes the connection after a 413 that the error handler replaces, for a body that ended before the handler read it', async () => {
+    const app = createApp({ maxBodyBytes: 10, onError: (_error, c) => c.text('too big', 400) }).post(
+      '/late',
+      async c => {
+        await pause(20)
+        return c.text(await c.req.body.text())
+      },
+    )
+
+    const response = await app.request('/late', { method: 'POST', body: chunksOf([12]) })
+
+    expect([response.status, await response.text(), response.headers.get('connection')]).toEqual([
+      400,
+      'too big',
+      'close',
+    ])
   })
 
   it('keeps the connection open after a reply that leaves up to 256 KiB of a declared body unread', async () => {

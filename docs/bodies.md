@@ -108,7 +108,7 @@ const app = createApp({ maxBodyBytes: 64 * 1024 })
   .post('/imports', { maxBodyBytes: 50 * 1024 * 1024 }, async c => c.text(await c.req.body.text()))
 ```
 
-Because a chunked body declares no length, the package counts the bytes of the body as it receives them. Once the count passes the limit, every read throws a `UhttpError` with the code `PAYLOAD_TOO_LARGE`, which the client receives as a 413.
+Because a chunked body declares no length, the package counts the bytes of the body as it receives them. Once the count passes the limit, every read throws a `UhttpError` with the code `PAYLOAD_TOO_LARGE`, which the client receives as a 413. After any `PAYLOAD_TOO_LARGE` error, including one from a form or an upload, the package closes the connection once the reply has gone out, as nginx, Apache httpd, and Go's HTTP server do after a body above their limits. Your error handler can change the reply, but the connection still closes.
 
 When the client declares a `Content-Length` above the limit, the package answers 413 before it reads any of the body. It skips the handler of the route for that request, but it still calls the middleware of the route around the 413, so a CORS middleware can add its headers to it.
 

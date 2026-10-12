@@ -43,6 +43,33 @@ describe('the request context', () => {
     expect(await (await app.request('/feed?since=7')).text()).toBe('since=7')
   })
 
+  it('copies the query for a task on a stream route for HEAD as for GET', async () => {
+    const reads: unknown[] = []
+    const settled = Promise.withResolvers<void>()
+    const app = createApp().get('/feed', c => {
+      void (async () => {
+        await pause(1)
+        try {
+          reads.push(c.req.query)
+        } catch (error) {
+          reads.push((error as { code?: string }).code)
+        }
+        if (reads.length === 2) settled.resolve()
+      })()
+      return c.stream(async stream => {
+        await stream.write('event')
+      })
+    })
+
+    const head = await app.request('/feed?topic=a', { method: 'HEAD' })
+    const get = await app.request('/feed?topic=b')
+    await get.text()
+    await settled.promise
+
+    expect([head.status, get.status]).toEqual([200, 200])
+    expect(reads.sort()).toEqual(['topic=a', 'topic=b'])
+  })
+
   it('throws REQUEST_RELEASED to a task that first reads the query after the reply went out, as the network does', async () => {
     const outcome = Promise.withResolvers<unknown[]>()
     const app = createApp().get('/audit', c => {

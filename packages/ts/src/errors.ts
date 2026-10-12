@@ -15,7 +15,7 @@
  * - The package throws `METHOD_NOT_ALLOWED` when a path has routes, but none for the method of the
  *   request.
  * - The package throws `PAYLOAD_TOO_LARGE` when a request body, a form, or an upload passes one of
- *   its limits.
+ *   its limits, and it closes the connection after the reply.
  * - The package throws `UNSUPPORTED_MEDIA_TYPE` when a body parser receives a content type or a
  *   charset that it can't parse, or when the client compresses a request body.
  * - The package throws `INVALID_JSON` when `json()` can't parse a body, or when the body contains a
@@ -41,7 +41,8 @@
  * - The package throws `BODY_ALREADY_READ` when your code reads a body after it streamed that body.
  * - The package throws `REQUEST_RELEASED` when your code reads the query string or the content type
  *   for the first time after the package has sent a reply that your handler returned without an
- *   `await`, because uWebSockets.js frees the request once its handler returns.
+ *   `await`, because uWebSockets.js frees the request once its handler returns. Reading
+ *   `header('content-type')`, `headers()`, or `body` also reads the content type.
  * - The package throws `INVALID_SCHEMA` when a schema lacks the Standard Schema interface, or when
  *   its validator throws, rejects, or returns something other than a Standard Schema result.
  * - The package throws `INVALID_UPLOAD` when you pass `multipart()` a limit that is not a whole
