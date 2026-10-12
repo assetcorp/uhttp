@@ -7,7 +7,7 @@ import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.
 import { followBody } from './body.js'
 import { closeConnection, watchAbort } from './close.js'
 import type { RequestFraming } from './framing.js'
-import { statusLine, writeHead } from './head.js'
+import { writeHead } from './head.js'
 import { writeLingeringReply } from './linger.js'
 import { refuseLaterRequests } from './refuse.js'
 import { NativeStream } from './stream.js'
@@ -32,9 +32,8 @@ import { NativeStream } from './stream.js'
 export function writeReply(res: HttpResponse, exchange: Exchange, context: Context, reply: Reply): boolean {
   if (exchange.closed) return true
   const stream = reply.stream
-  const hasBody = statusHasBody(reply.status)
   const head = context.req.method === 'HEAD'
-  if (stream !== undefined && !head && hasBody) {
+  if (stream !== undefined && !head && statusHasBody(reply.status)) {
     watchAbort(res, exchange)
     exchange.body?.keepFlowing()
     writeHead(res, exchange, reply)
@@ -42,10 +41,15 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
     new NativeStream(res, exchange, context, stream.length).start(stream.produce)
     return false
   }
+  return endReply(res, exchange, reply, head)
+}
+
+function endReply(res: HttpResponse, exchange: Exchange, reply: Reply, head: boolean): boolean {
   exchange.settleBody()
   const close = exchange.closesConnection()
+  const { stream } = reply
   const streamLength = stream?.length
-  const lengthless = !hasBody || (stream !== undefined && streamLength === undefined)
+  const lengthless = !statusHasBody(reply.status) || (stream !== undefined && streamLength === undefined)
   if (exchange.lingersAfterReply(lengthless)) {
     writeLingeringReply(res, exchange, reply, head)
     return false
@@ -54,7 +58,8 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
   if (lengthless) res.endWithoutBody()
   else if (streamLength !== undefined) res.endWithoutBody(streamLength, close)
   else if (head) res.endWithoutBody(bodyByteLength(reply.body), close)
-  else res.end(reply.body ?? '', close)
+  else if (close) res.end(reply.body ?? '', true)
+  else res.end(reply.body ?? '')
   exchange.end()
   return true
 }
@@ -100,24 +105,31 @@ export function writeFramingRejection(
 }
 
 /**
- * Writes the default 500 when the package fails before the chain can start. When even that write
+ * Writes the default 500 when the package fails before the chain can start, while nothing of the
+ * response has gone out. The function writes the 500 as {@link writeReply} writes a reply without a stream: it sends
+ * no body to a HEAD request, it discards the rest of the request body, and it closes the connection
+ * after the reply whenever {@link Exchange.closesConnection} returns `true`. When even that write
  * fails, the function closes the connection.
  *
  * @param res - The package passes the response of uWebSockets.js.
  * @param exchange - The package passes the state of the request.
+ * @param head - The package passes `true` for a HEAD request, whose reply carries the length of the body alone.
+ * @returns The function returns `true` when the response has ended or the connection has closed,
+ * and `false` when the response stays open for a reply that closes the connection later.
  * @internal
  */
-export function writeCrash(res: HttpResponse, exchange: Exchange): void {
-  if (exchange.closed) return
+export function writeCrash(res: HttpResponse, exchange: Exchange, head: boolean): boolean {
+  if (exchange.closed) return true
   const reply = defaultErrorReply(undefined)
+  exchange.assign(reply)
+  let ended = true
   try {
     res.cork(() => {
-      res.writeStatus(statusLine(reply.status))
-      if (reply.contentType !== undefined) res.writeHeader('content-type', reply.contentType)
-      res.end(reply.body ?? '')
+      ended = endReply(res, exchange, reply, head)
     })
-    exchange.end()
   } catch {
     closeConnection(res, exchange)
+    return true
   }
+  return ended
 }

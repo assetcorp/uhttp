@@ -40,7 +40,7 @@ The package keeps only the basename of a filename, so `../../etc/passwd` becomes
 
 ## Limits
 
-Every limit of an upload has a finite default. Once an upload passes one of them, the package answers 413 with the code `PAYLOAD_TOO_LARGE`. Pass any of these four to `multipart()`:
+Every limit of an upload has a finite default. Once an upload passes one of them, the package answers 413 with the code `PAYLOAD_TOO_LARGE` and closes the connection after the reply. Pass any of these four to `multipart()`:
 
 | Option | What it limits | Default |
 | --- | --- | --- |

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../../index.js'
+import { KIB, MIB } from '../helpers/apps.js'
 import { openConnection, requestHead, requestWithBody, send } from '../helpers/http-client.js'
-import { errorBody, expectHello } from '../helpers/replies.js'
+import { errorBody, expectClosedAfterReply, expectHello } from '../helpers/replies.js'
 import { memoryLogger, pause, start } from '../helpers/server.js'
 
 const INTERNAL_ERROR = errorBody('INTERNAL_ERROR', 'The request failed.')
@@ -116,6 +117,55 @@ describe('the copy from uWebSockets.js', () => {
     ])
     await expectHello(connection)
   })
+
+  it('sends a 500 without a body to a HEAD request whose copy throws, and keeps the connection open', async () => {
+    const app = createApp({ logger: memoryLogger().logger })
+      .get('/where', { clientAddress: true }, c => c.text(c.req.clientAddress))
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+    const spy = vi.spyOn(Buffer, 'from').mockImplementationOnce(() => {
+      throw new Error('the copy failed')
+    })
+
+    try {
+      void connection.write(requestHead('HEAD', '/where'))
+      const response = await connection.response({ method: 'HEAD' })
+      expect([response.status, response.headers.get('content-length'), response.body.byteLength]).toEqual([
+        500,
+        [String(Buffer.byteLength(INTERNAL_ERROR))],
+        0,
+      ])
+    } finally {
+      spy.mockRestore()
+    }
+    await expectHello(connection)
+  })
+
+  it('closes the connection after the 500 when the copy throws while more of the body is on its way than the package discards', async () => {
+    const app = createApp({ logger: memoryLogger().logger }).post(
+      '/where',
+      { clientAddress: true, maxBodyBytes: 2 * MIB },
+      c => c.text(c.req.clientAddress),
+    )
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+    const head = requestHead('POST', '/where', ['Content-Type: text/plain', `Content-Length: ${MIB}`])
+    const firstPart = Buffer.alloc(KIB, 97)
+    const spy = vi.spyOn(Buffer, 'from').mockImplementationOnce(() => {
+      throw new Error('the copy failed')
+    })
+
+    try {
+      void connection.write(head)
+      void connection.write(firstPart)
+      const response = await connection.response()
+      expect([response.status, response.body.toString()]).toEqual([500, INTERNAL_ERROR])
+      await expectClosedAfterReply(connection, response)
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })
 
 describe('the query string and the content type, which the package reads when code first asks', () => {
@@ -151,6 +201,38 @@ describe('the query string and the content type, which the package reads when co
     )
 
     expect(response.body.toString()).toBe('since=7 text/plain')
+    await expectHello(connection)
+  })
+
+  it('copies the query for a task on a stream route whether the client sends GET or HEAD, so the method decides nothing', async () => {
+    const reads: unknown[] = []
+    const settled = Promise.withResolvers<void>()
+    const app = createApp()
+      .get('/feed', c => {
+        void (async () => {
+          await pause(5)
+          try {
+            reads.push(c.req.query)
+          } catch (error) {
+            reads.push((error as { code?: string }).code)
+          }
+          if (reads.length === 2) settled.resolve()
+        })()
+        return c.stream(async stream => {
+          await stream.write('event')
+        })
+      })
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+
+    void connection.write(requestHead('HEAD', '/feed?topic=a') + requestHead('GET', '/feed?topic=b'))
+    const head = await connection.response({ method: 'HEAD' })
+    const get = await connection.response()
+    await settled.promise
+
+    expect([head.status, get.status, get.body.toString()]).toEqual([200, 200, 'event'])
+    expect(reads.sort()).toEqual(['topic=a', 'topic=b'])
     await expectHello(connection)
   })
 

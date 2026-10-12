@@ -72,7 +72,8 @@ export class Exchange {
   timedOut = false
   /**
    * When this is `true`, the package closes the connection after the response, which it does after
-   * an early rejection, after a time limit, and for a request whose `transfer-encoding` it rejects.
+   * an early rejection, after a `PAYLOAD_TOO_LARGE` error, after a time limit, and for a request
+   * whose `transfer-encoding` it rejects.
    */
   closeAfterReply = false
   /**
@@ -178,8 +179,8 @@ export class Exchange {
   /**
    * Returns `true` when the package closes the connection after the response for a reason of its
    * own, which the reply then announces with `Connection: close`. The reason is an early rejection,
-   * a time limit, a rejected `transfer-encoding`, or more of the body on its way than the package
-   * discards to keep the connection open.
+   * a `PAYLOAD_TOO_LARGE` error, a time limit, a rejected `transfer-encoding`, or more of the body on
+   * its way than the package discards to keep the connection open.
    *
    * @returns The method returns `false` when only the client can ask for the close.
    */

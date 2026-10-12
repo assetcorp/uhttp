@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../../index.js'
 import { openConnection, requestHead, requestWithBody, send } from '../helpers/http-client.js'
 import { errorBody, expectHello, SMUGGLED_REQUEST } from '../helpers/replies.js'
@@ -194,6 +194,29 @@ describe('HEAD over the network', () => {
     expect([head.status, head.headers.get('content-length')]).toEqual([401, ['6']])
     expect([get.status, get.body.toString()]).toEqual([401, 'denied'])
     expect(handled).toEqual([])
+  })
+
+  it('closes the connection and logs when writing the reply fails after the status line, and serves the next connection', async () => {
+    const { entries, logger } = memoryLogger()
+    const server = await start(createApp({ logger }).get('/hello', c => c.text('Hello')))
+    const connection = await openConnection(server.port)
+    const request = Buffer.from(requestHead('HEAD', '/hello'))
+    const spy = vi.spyOn(Buffer, 'byteLength').mockImplementationOnce(() => {
+      throw new Error('the write failed')
+    })
+
+    try {
+      void connection.write(request)
+      await expect(connection.response({ method: 'HEAD' })).rejects.toThrow()
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(connection.state).not.toBe('open')
+    expect(entries.map(entry => entry.details)).toEqual([
+      { err: expect.objectContaining({ message: 'the write failed' }), method: 'HEAD', path: '/hello' },
+    ])
+    await expectHello(await openConnection(server.port))
   })
 })
 

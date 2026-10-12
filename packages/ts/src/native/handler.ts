@@ -10,7 +10,7 @@ import { lineSeparatorOf } from '../headers.js'
 import { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type RequestChain, resolveChain } from '../resolve.js'
 import { attachBody } from './body.js'
-import { remoteAddressOf, watchAbort } from './close.js'
+import { closeConnection, remoteAddressOf, watchAbort } from './close.js'
 import { type RequestFraming, readFraming } from './framing.js'
 import { refusedRequest } from './refuse.js'
 import { writeCrash, writeFramingRejection, writeReply } from './write.js'
@@ -90,7 +90,7 @@ function respondAndRelease(
   chain: RequestChain,
 ): boolean {
   const ended = respond(res, exchange, createContext(request, exchange), chain)
-  request.release(!ended)
+  request.release(!ended || exchange.reply?.stream !== undefined)
   return ended
 }
 
@@ -136,7 +136,7 @@ function finish(res: HttpResponse, exchange: Exchange, context: Context): boolea
   try {
     return writeReply(res, exchange, context, reply)
   } catch (error) {
-    return crash(res, exchange, error, context.req.method, context.req.path)
+    return abandon(res, exchange, error, context)
   }
 }
 
@@ -146,13 +146,18 @@ function finishCorked(res: HttpResponse, exchange: Exchange, context: Context): 
   try {
     res.cork(() => writeReply(res, exchange, context, reply))
   } catch (error) {
-    crash(res, exchange, error, context.req.method, context.req.path)
+    abandon(res, exchange, error, context)
   }
 }
 
 function crash(res: HttpResponse, exchange: Exchange, error: unknown, method: string, path: string): boolean {
   logServerError(exchange.runtime.logger, error, method, path)
-  writeCrash(res, exchange)
+  return writeCrash(res, exchange, method === 'HEAD')
+}
+
+function abandon(res: HttpResponse, exchange: Exchange, error: unknown, context: Context): boolean {
+  logServerError(exchange.runtime.logger, error, context.req.method, context.req.path)
+  closeConnection(res, exchange)
   return true
 }
 
@@ -230,9 +235,9 @@ function answerFallback(app: CompiledApp, res: HttpResponse, req: HttpRequest, e
   let request: CopiedRequest
   let chain: RequestChain
   try {
+    method = req.getCaseSensitiveMethod()
     const framing = admittedFraming(res, req, exchange)
     if (framing === undefined) return false
-    method = req.getCaseSensitiveMethod()
     path = req.getUrl()
     const resolved = resolveChain(app, method, path)
     if (resolved.matchedRoute) warnMissedRoute(app, method, path)
