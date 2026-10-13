@@ -49,7 +49,7 @@ export class Exchange {
   disconnected = false
   /** This is `true` once the package has attached its abort handler to the response of uWebSockets.js. */
   watchingAbort = false
-  /** This is `true` once the package has sent a whole reply and keeps the connection open until it closes the connection itself. */
+  /** This is `true` once the package sends a whole reply on a connection that the package closes itself later. */
   lingering = false
   readonly #drain: Drain | undefined
   #counted = false
@@ -80,8 +80,9 @@ export class Exchange {
   }
 
   /**
-   * Counts the request in the drain of its app once its response stays open after the handler of
-   * uWebSockets.js returns, unless the response has already ended or the connection has closed.
+   * Counts the request in the drain of its app when its response stays open after the handler of
+   * uWebSockets.js returns. The method skips the request when the connection is closed. It also
+   * skips a request whose response is over, unless the package closes that connection itself later.
    */
   countOpenResponse(): void {
     const drain = this.#drain
@@ -165,10 +166,10 @@ export class Exchange {
 
   /**
    * Returns `true` when the package closes the connection after the response for a reason of its
-   * own, which the reply then announces with `Connection: close`. The reason is an early rejection,
-   * a `PAYLOAD_TOO_LARGE` error, a time limit, a rejected `transfer-encoding`, more of the body on
-   * its way than the package discards to keep the connection open, or a server that is closing or
-   * reloading.
+   * own, in which case the reply contains `Connection: close`. The reason is an early rejection, a
+   * `PAYLOAD_TOO_LARGE` error, a time limit, a rejected `transfer-encoding`, an unread rest of the
+   * body that is longer than the package discards to keep the connection open, or a server that is
+   * closing or reloading.
    *
    * @returns The method returns `false` when only the client can ask for the close.
    */

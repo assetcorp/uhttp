@@ -24,7 +24,8 @@ import type { ListenAddress } from './listen.js'
 import { type CheckedTls, checkedTls, type TlsOptions } from './tls-options.js'
 
 /**
- * You pass these options to {@link serve} to choose the app, the address, and the worker threads.
+ * You pass these options to {@link serve} to choose the app, the address, the certificates, and the
+ * worker threads.
  */
 export interface ServeOptions {
   /**
@@ -44,7 +45,7 @@ export interface ServeOptions {
    * server listens on every interface.
    */
   host?: string
-  /** The server listens on this Unix socket path in place of a port, and only the main thread serves its requests. */
+  /** The server listens on this Unix socket path in place of a port. Only the main thread serves the requests on that socket. */
   path?: string
   /**
    * By default, the server binds its port exclusively, so a second server on the same port fails
@@ -53,20 +54,20 @@ export interface ServeOptions {
    */
   reusePort?: boolean
   /**
-   * The package sets the mode of the Unix socket file to this one once the server listens, such as
-   * `0o660` for the group of the process. The mode is `0o600` by default, so that only the user who
-   * owns the process can connect. Pass it with a path alone.
+   * Once the server listens, the package sets the mode of the Unix socket file to this mode, such
+   * as `0o660` to let the group of the process connect. The mode is `0o600` by default, so that only
+   * the user who owns the process can connect. Pass it with a path alone.
    */
   socketMode?: number
   /**
    * `server.close()` waits this many milliseconds for the requests in progress and the WebSockets
-   * before it closes the connections that are left, and `server.reload()` gives the old
-   * connections as long. The grace period is 10 seconds by default.
+   * before it closes the connections that are left. `server.reload()` waits as long before it
+   * closes the old connections that are left. The grace period is 10 seconds by default.
    */
   gracePeriodMs?: number
   /**
-   * With this option, the server serves HTTPS with the key and the certificate in these files,
-   * and with the certificate of each hostname for a client that names it.
+   * With this option, the server serves HTTPS with the key and the certificate in these files. It
+   * sends the certificate of a hostname under `hostnames` to a client that sends that hostname.
    */
   tls?: TlsOptions
   /**
@@ -81,8 +82,8 @@ export interface ServeOptions {
   /** The server counts the crashes of the workers within a window of this many milliseconds, which is 10 seconds by default. */
   crashWindowMs?: number
   /**
-   * The server exits with an error when a worker fails to answer the main thread for this many
-   * milliseconds, which is 30 seconds by default. Set it to 0 to switch the watchdog off.
+   * The server exits with an error when a worker sends no reply to a ping from the main thread for
+   * this many milliseconds, which is 30 seconds by default. Set it to 0 to switch the watchdog off.
    */
   watchdogMs?: number
   /**
@@ -93,24 +94,24 @@ export interface ServeOptions {
 }
 
 /**
- * The package stores the options of {@link serve} in this form once it has checked them.
+ * The package stores the options of {@link serve} in this form once it checks them.
  *
  * @internal
  */
 export interface CheckedServeOptions {
-  /** You passed this app or the URL of its module. */
+  /** You pass this app or the URL of its module. */
   readonly app: App | URL
   /** The server listens on this address. */
   readonly address: ListenAddress
-  /** The package starts this many worker threads, and the main thread serves every request at 0. */
+  /** The package starts this many worker threads. At 0, the main thread serves every request. */
   readonly threads: number
-  /** The package limits the main heap of each worker to this many megabytes, and Node.js applies its default limit when this is `undefined`. */
+  /** The package limits the main heap of each worker to this many megabytes. Node.js applies its default limit when this is `undefined`. */
   readonly workerHeapMb: number | undefined
   /** The server exits with an error once workers crash this many times within the window. */
   readonly crashLimit: number
   /** The server counts crashes within a window of this many milliseconds. */
   readonly crashWindowMs: number
-  /** A worker has this many milliseconds to answer the main thread, and 0 switches the watchdog off. */
+  /** A worker has this many milliseconds to reply to a ping from the main thread. A value of 0 switches the watchdog off. */
   readonly watchdogMs: number
   /** The main thread writes its events to this logger. */
   readonly logger: Logger
@@ -153,7 +154,9 @@ function checkedLogger(logger: Logger | undefined): Logger {
 function checkedReusePort(reusePort: unknown, port: number): boolean {
   if (reusePort === undefined) return false
   if (typeof reusePort !== 'boolean') throw invalid('Set reusePort to true or false.')
-  if (reusePort && port === 0) throw invalid('Pass reusePort with a port above 0, because port 0 binds a new port.')
+  if (reusePort && port === 0) {
+    throw invalid('Pass reusePort with a port above 0, because the operating system assigns a new port for port 0.')
+  }
   return reusePort
 }
 
@@ -186,14 +189,14 @@ function checkedAddress(options: ServeOptions, threads: number): ListenAddress {
 }
 
 /**
- * Returns the options of {@link serve} once the function has checked each option on its own and
+ * Returns the options of {@link serve} after the function checks each option on its own and
  * together with the others.
  *
- * @param options - You pass the options of the server.
+ * @param options - The package passes the options that you gave to {@link serve}.
  * @returns The function returns the options with every default filled in.
  * @throws {@link UhttpError} with the code `INVALID_SERVE_OPTIONS` when an option has the wrong type
- * or a value outside its range, when you pass `threads` together with an app object or a Unix
- * socket path, or when you pass neither a port nor a path.
+ * or a value outside its range, when you pass options that the package can't use together, such
+ * as `threads` with an app object, or when you pass neither a port nor a path.
  * @internal
  */
 export function checkedServeOptions(options: ServeOptions): CheckedServeOptions {

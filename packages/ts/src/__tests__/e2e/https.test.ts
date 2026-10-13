@@ -40,7 +40,7 @@ async function get(port: number, servername: string, target: string) {
 }
 
 describe('a server with tls', () => {
-  it('serves HTTPS with the default certificate to a client that names no hostname that the server registered', async () => {
+  it('serves HTTPS with the default certificate to a client that sends a hostname outside tls.hostnames', async () => {
     const { fallback } = certificates()
     const server = track(await serve({ app: routedApp(), port: 0, host: HOST, tls: fallback }))
 
@@ -51,7 +51,7 @@ describe('a server with tls', () => {
     })
   })
 
-  it('answers with the certificate of each hostname and serves every route under it', async () => {
+  it('serves every route under each hostname with the certificate of that hostname', async () => {
     const { fallback, api, www } = certificates()
     const tls = { ...fallback, hostnames: { 'api.test': api, 'WWW.Test': www } }
     const server = track(await serve({ app: routedApp(), port: 0, host: HOST, tls }))
@@ -67,7 +67,7 @@ describe('a server with tls', () => {
     })
   })
 
-  it('accepts a WebSocket upgrade under a hostname', async () => {
+  it('switches a connection under a hostname to a WebSocket', async () => {
     const { fallback, api } = certificates()
     const server = track(
       await serve({ app: routedApp(), port: 0, host: HOST, tls: { ...fallback, hostnames: { 'api.test': api } } }),
@@ -79,7 +79,7 @@ describe('a server with tls', () => {
     expect(await connection.http.interim()).toBe(101)
   })
 
-  it('reads a key that a passphrase encrypts', async () => {
+  it('loads a key that a passphrase encrypts', async () => {
     const directory = certificateDirectory()
     const locked = writeCertificate(directory, 'locked', 'locked.test', 'open sesame')
     const server = track(
@@ -89,7 +89,7 @@ describe('a server with tls', () => {
     expect(await get(server.port, 'locked.test', '/name')).toMatchObject({ commonName: 'locked.test', body: 'named' })
   })
 
-  it('answers no plain HTTP request on a port that serves HTTPS', async () => {
+  it('sends no HTTP response to a plain HTTP request on a port that serves HTTPS', async () => {
     const { fallback } = certificates()
     const server = track(await serve({ app: routedApp(), port: 0, host: HOST, tls: fallback }))
     const connection = await openConnection(server.port)
@@ -170,7 +170,7 @@ describe('the certificates of a server with tls', () => {
 })
 
 describe('server.reload() on the main thread', () => {
-  it('answers new connections with the renewed certificate, lets a request on an old connection finish, and closes the idle old ones', async () => {
+  it('serves new connections with the renewed certificate, lets a request on an old connection finish, and closes the idle old ones', async () => {
     const { directory, fallback } = certificates()
     const server = await serve({ app: routedApp(), port: 0, host: HOST, tls: fallback })
     const port = server.port ?? 0

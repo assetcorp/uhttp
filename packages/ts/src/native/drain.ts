@@ -8,16 +8,16 @@ import { WEBSOCKET_GOING_AWAY_CODE, WEBSOCKET_GOING_AWAY_REASON } from '../const
 export const SERVING = 0
 
 /**
- * The app of uWebSockets.js serves the requests on its open connections in this mode and closes
- * each connection after its reply, because a reload has replaced the app.
+ * In this mode, the app of uWebSockets.js serves the requests on its open connections and closes
+ * each connection after its reply, because a reload replaces the app.
  *
  * @internal
  */
 export const RETIRING = 1
 
 /**
- * The app of uWebSockets.js answers every new request on its open connections with a 503 in this
- * mode, because the server is closing.
+ * In this mode, the app of uWebSockets.js sends a 503 in response to every new request on its open
+ * connections, because the server is closing.
  *
  * @internal
  */
@@ -31,14 +31,14 @@ export const CLOSING = 2
 export type DrainMode = typeof SERVING | typeof RETIRING | typeof CLOSING
 
 /**
- * The package moves an app of uWebSockets.js that no longer serves as usual to one of these modes.
+ * The package moves an app of uWebSockets.js out of {@link SERVING} to one of these modes.
  *
  * @internal
  */
 export type LeavingMode = typeof RETIRING | typeof CLOSING
 
 /**
- * The drain closes each WebSocket through this interface.
+ * The `Drain` class closes each WebSocket through this interface.
  *
  * @internal
  */
@@ -46,8 +46,8 @@ export interface ClosableSocket {
   /**
    * Closes the socket with a close frame.
    *
-   * @param code - The drain passes {@link WEBSOCKET_GOING_AWAY_CODE}.
-   * @param reason - The drain passes {@link WEBSOCKET_GOING_AWAY_REASON}.
+   * @param code - The `Drain` class passes {@link WEBSOCKET_GOING_AWAY_CODE}.
+   * @param reason - The `Drain` class passes {@link WEBSOCKET_GOING_AWAY_REASON}.
    */
   end(code: number, reason: string): void
 }
@@ -55,12 +55,12 @@ export interface ClosableSocket {
 /**
  * The package counts the responses that stay open after the handler of uWebSockets.js returns,
  * and the WebSockets that are open, on one app of uWebSockets.js, so that the package can wait
- * until they have all ended before it closes that app during a close or a reload.
+ * until they all end before it closes that app during a close or a reload.
  *
  * @internal
  */
 export class Drain {
-  /** The app serves requests in this mode, which only ever moves from {@link SERVING} towards {@link CLOSING}. */
+  /** The app is in this mode, which the package changes only from {@link SERVING} towards {@link CLOSING}. */
   mode: DrainMode = SERVING
   readonly #sockets = new Set<ClosableSocket>()
   #pending = 0
@@ -71,16 +71,17 @@ export class Drain {
     this.#pending++
   }
 
-  /** Records that a response that {@link Drain.started} counted has ended or lost its connection. */
+  /** Records that a response that {@link Drain.started} counted ends or loses its connection. */
   finished(): void {
     this.#pending--
     this.#settle()
   }
 
   /**
-   * Records a WebSocket that has opened, and closes it with 1001 at once when the app no longer serves.
+   * Records a WebSocket that opens while the app serves, and closes the WebSocket with 1001 at once
+   * in any other mode.
    *
-   * @param socket - The package passes the socket that has opened.
+   * @param socket - The package passes the socket that opens.
    */
   opened(socket: ClosableSocket): void {
     if (this.mode === SERVING) this.#sockets.add(socket)
@@ -88,21 +89,21 @@ export class Drain {
   }
 
   /**
-   * Records that a WebSocket has closed.
+   * Records that a WebSocket closes.
    *
-   * @param socket - The package passes the socket that has closed.
+   * @param socket - The package passes the socket that closes.
    */
   closed(socket: ClosableSocket): void {
     if (this.#sockets.delete(socket)) this.#settle()
   }
 
   /**
-   * Moves the app to a mode in which it no longer serves as usual, and closes every open WebSocket
-   * with 1001. A later call can move a retiring app on to {@link CLOSING}.
+   * Moves the app to {@link RETIRING} or {@link CLOSING}, and closes every open WebSocket with
+   * 1001. A later call can move a retiring app on to {@link CLOSING}.
    *
    * @param mode - The package passes {@link RETIRING} for a reload and {@link CLOSING} for a close.
-   * @returns The promise resolves once every counted response has ended and every WebSocket has
-   * closed, and every call returns the same promise.
+   * @returns The promise resolves once every counted response ends and every WebSocket closes.
+   * Every call returns the same promise.
    */
   start(mode: LeavingMode): Promise<void> {
     if (mode > this.mode) this.mode = mode

@@ -17,8 +17,8 @@ export interface WorkerSetup {
   /** The worker serves HTTPS with these certificates, or plain HTTP when this is `undefined`. */
   readonly tls: CheckedTls | undefined
   /**
-   * The worker sets the first element of this shared array to 1 once it has closed its connections
-   * and is about to exit, so that the exit hook of the main thread can wait for it.
+   * The worker sets the first element of this shared array to 1 after it closes its connections
+   * and before it exits, so that the main thread can wait for the worker in its exit hook.
    */
   readonly exitFlag: Int32Array
 }

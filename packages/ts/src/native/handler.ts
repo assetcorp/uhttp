@@ -20,7 +20,7 @@ import { writeCrash, writeFramingRejection, writeReply, writeWholeReply } from '
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
 
-const SERVER_CLOSING_MESSAGE = 'The server is closing, so send the request again.'
+const SERVER_CLOSING_MESSAGE = 'The server is closing, so send the request again on a new connection.'
 const NO_VALUES: readonly (string | undefined)[] = []
 const NO_PARAMETERS: readonly string[] = []
 const MISSED_ROUTE_MESSAGE =
@@ -227,7 +227,7 @@ function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
  * and releases the request of uWebSockets.js. Last, it attaches the abort handler unless the
  * response ended inside the handler.
  *
- * While the server closes, the handler answers every request through {@link answerWhileClosing}.
+ * While the server closes, the handler passes every request to {@link answerWhileClosing}.
  *
  * @param app - The package passes the compiled app.
  * @param route - The package passes the compiled route.
@@ -305,7 +305,7 @@ function answerFallback(app: CompiledApp, res: HttpResponse, req: HttpRequest, e
  * and sends the request through the JavaScript matcher. The client then receives a 404, a 405, or
  * the methods of the path for OPTIONS. When the JavaScript matcher matches a route there, the
  * handler serves it and logs a warning. Last, the handler attaches the abort handler unless the
- * response ended inside it. While the server closes, the handler answers every request through
+ * response ended inside it. While the server closes, the handler passes every request to
  * {@link answerWhileClosing}.
  *
  * @param app - The package passes the compiled app.
@@ -323,15 +323,16 @@ export function fallbackHandler(app: CompiledApp, drain: Drain): NativeHandler {
 }
 
 /**
- * Answers a request that arrives while the server closes with a 503 and the code `SERVER_CLOSING`,
- * after the same framing checks as a route handler, and closes the connection after the reply. The
- * package calls no middleware for such a request. It counts the chunks of a body that the client
- * declared, so that the reply waits for the rest of the body as {@link writeReply} does.
+ * Sends a 503 with the code `SERVER_CLOSING` in response to a request that the client sends while
+ * the server closes. The package closes the connection after that reply. The function makes the
+ * same framing checks as a route handler, but it calls no middleware for such a request. It records the end of a body that the client declares, so that the package
+ * can write the reply in the way that {@link writeReply} writes it while the client is still
+ * sending the body.
  *
  * @param res - The package passes the response of uWebSockets.js, inside the synchronous handler.
  * @param req - The package passes the request of uWebSockets.js.
  * @param exchange - The package passes the state of the request.
- * @returns The function returns `true` when the response has ended or the connection has closed.
+ * @returns The function returns `true` when the response ends or the connection closes.
  * @internal
  */
 export function answerWhileClosing(res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean {

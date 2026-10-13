@@ -3,18 +3,18 @@ import { EXIT_HOOK_WAIT_MS } from '../constants.js'
 import type { MainMessage } from './messages.js'
 
 /**
- * The exit hook reads these facts about each worker thread.
+ * The exit hook uses these values of each worker thread.
  *
  * @internal
  */
 export interface ExitingWorker {
   /** The main thread posts the `exit` message to this worker. */
   readonly worker: Worker
-  /** The worker sets the first element of this shared array to 1 once it has closed its connections. */
+  /** The worker sets the first element of this shared array to 1 once it closes its connections. */
   readonly exitFlag: Int32Array
-  /** This is `true` once the worker has exited. */
+  /** This is `true` once the worker exits. */
   readonly gone: boolean
-  /** This is `true` once the watchdog has found that the worker fails to answer. */
+  /** This is `true` once the main thread marks the worker as hung. */
   readonly hung: boolean
 }
 
@@ -30,11 +30,11 @@ function waitForWorkers(workers: Iterable<ExitingWorker>): void {
 }
 
 /**
- * Adds a listener for the `exit` event of the process, which asks every worker that has neither
- * exited nor hung to close its connections and then blocks the main thread until each one has done
- * so, for up to {@link EXIT_HOOK_WAIT_MS} in total. Node.js aborts the process when it exits while
- * a worker still holds the sockets of uWebSockets.js, and a worker can still close them while the
- * main thread waits, because each thread has its own event loop.
+ * Adds a listener for the `exit` event of the process. The listener posts the `exit` message to
+ * every worker that is alive and not hung, and then it blocks the main thread until each of those
+ * workers closes its connections, for up to {@link EXIT_HOOK_WAIT_MS} in total. Node.js aborts the
+ * process when it exits while a worker has sockets of uWebSockets.js open. A worker can close its
+ * sockets while the main thread blocks, because each thread has its own event loop.
  *
  * @param workers - The package passes a function that returns the current workers.
  * @returns The function returns a function that removes the listener.

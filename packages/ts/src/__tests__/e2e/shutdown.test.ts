@@ -103,7 +103,7 @@ describe('server.close() on the main thread', () => {
     await closing
   })
 
-  it('answers a new request on an open connection with 503 and Connection: close while a request is in progress', async () => {
+  it('sends a 503 with Connection: close in response to a new request on an open connection while a request is in progress', async () => {
     const { app, hold } = holdingApp()
     const server = await serve({ app, port: 0, host: HOST })
     const port = await servedPort(server)
@@ -122,7 +122,10 @@ describe('server.close() on the main thread', () => {
       expect(response.status).toBe(503)
       expect(response.headers.get('connection')).toEqual(['close'])
       expect(JSON.parse(response.body.toString())).toEqual({
-        error: { code: 'SERVER_CLOSING', message: 'The server is closing, so send the request again.' },
+        error: {
+          code: 'SERVER_CLOSING',
+          message: 'The server is closing, so send the request again on a new connection.',
+        },
       })
     }
     expect(await plain.waitForClose()).toBe('closed')

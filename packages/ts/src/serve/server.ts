@@ -1,8 +1,8 @@
 import { UhttpError } from '../errors.js'
 
 /**
- * You get a `Server` from {@link serve}, and you can find its port, close it, or renew its
- * certificates through this object.
+ * {@link serve} resolves to a `Server`, through which you can find the port, close the server, and
+ * renew its certificates.
  */
 export interface Server {
   /**
@@ -11,31 +11,31 @@ export interface Server {
    */
   readonly port: number | undefined
   /**
-   * Closes the server without dropping a request in progress. The server stops accepting
-   * connections and closes every WebSocket with the code 1001. It answers every new request on an
-   * open connection with a 503 and `Connection: close`, and it closes the idle connections of a
-   * thread once no request is in progress on that thread. Once `gracePeriodMs` has passed, it closes
-   * every connection that is left, and then it stops every worker thread. The package installs no signal handler, so call
-   * this method from a handler of your own, such as one for `SIGTERM`.
+   * Closes the server without dropping a request in progress. The server closes its listening
+   * socket and closes every WebSocket with the code 1001. It sends a 503 with `Connection: close`
+   * in response to every new request on an open connection. It closes the idle connections of a
+   * thread once no request is in progress on that thread. Once `gracePeriodMs` passes, it closes
+   * every connection that is left and then stops every worker thread. The package installs no
+   * signal handler, so call this method from a handler of your own, such as one for `SIGTERM`.
    *
-   * @returns The promise settles once the server has closed, and a second call returns the same
-   * promise.
+   * @returns The promise settles once the server is closed. A second call returns the same promise.
    */
   close(): Promise<void>
   /**
-   * Reads the key and the certificate files of `tls` again and serves every new connection with
-   * them. The server builds new apps with the renewed certificates before it stops sending new
-   * connections to the old ones. It then closes each old connection after its next reply, closes
-   * the idle old connections once no old request is in progress, and closes every old connection
-   * that is left once `gracePeriodMs` has passed. With worker threads, the server starts a new set
-   * of workers and lets the old ones finish. A second call waits until the first one has finished.
+   * Loads the key file and the certificate file of `tls` again, and serves every new connection
+   * with the renewed certificates. The server builds new apps with the renewed certificates before
+   * it stops sending new connections to the old apps. It then closes each old connection after its
+   * next reply. It closes the idle old connections of a thread once no old request is in progress
+   * on that thread. Once `gracePeriodMs` passes, it closes every old connection that is left. With
+   * worker threads, the server starts a new set of workers and lets the old workers finish their
+   * requests. A second call waits until the first call finishes.
    *
    * @returns The promise resolves once the server sends the renewed certificates to every new client.
-   * @throws {@link UhttpError} with the code `INVALID_CERTIFICATE` when the package can't use a
-   * renewed file, in which case the server goes on serving with the old certificates. It throws
-   * the code `INVALID_SERVE_OPTIONS` on a server without `tls`, the code `SERVER_CLOSING` once
-   * {@link Server.close} has started, and the code `APP_START_FAILED` when a new worker fails to
-   * build the app.
+   * @throws {@link UhttpError} with the code `INVALID_CERTIFICATE` when the package fails to load a
+   * renewed file, in which case the server goes on serving with the old certificates. The method
+   * throws the code `INVALID_SERVE_OPTIONS` on a server without `tls`, and the code
+   * `SERVER_CLOSING` once {@link Server.close} starts. It throws the code `APP_START_FAILED` when a
+   * new worker fails to build the app.
    */
   reload(): Promise<void>
 }
@@ -46,20 +46,20 @@ export interface Server {
  * @internal
  */
 export interface ServerControl {
-  /** Closes the server, and the package calls this method once. */
+  /** Closes the server. The package calls this method once. */
   close(): Promise<void>
-  /** Renews the certificates, and the package calls this method for one reload at a time. */
+  /** Renews the certificates. The package calls this method for one reload at a time. */
   reload(): Promise<void>
 }
 
 /**
- * Returns the error that {@link Server.reload} throws once the server has started to close.
+ * Returns the error that {@link Server.reload} throws once the server starts to close.
  *
  * @returns The function returns a new `SERVER_CLOSING` error.
  * @internal
  */
 export function closingError(): UhttpError {
-  return new UhttpError('SERVER_CLOSING', 'The server is closing, so it renews no certificate.')
+  return new UhttpError('SERVER_CLOSING', 'Call server.reload() before server.close(), because the server is closing.')
 }
 
 /**
@@ -76,8 +76,8 @@ export function reloadWithoutTlsError(): UhttpError {
 }
 
 /**
- * Returns the server that {@link serve} resolves to, which closes once and runs one reload at a
- * time.
+ * Returns the server that {@link serve} resolves to, which closes only once and performs one reload
+ * at a time.
  *
  * @param port - The package passes the port that the server listens on.
  * @param control - The package passes the functions that close and reload this kind of server.

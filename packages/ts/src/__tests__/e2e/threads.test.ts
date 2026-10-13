@@ -239,7 +239,7 @@ describe('a server on worker threads', () => {
 
     expect(exit).toEqual({ code: null, signal: 'SIGABRT' })
     expect(Date.now() - startedAt).toBeLessThan(10_000)
-    expect(host.output()).toContain('A worker thread failed to answer for 600 ms.')
+    expect(host.output()).toContain('A worker thread sent no reply to a ping for 600 ms.')
     expect(host.output()).toContain('A worker thread hangs. The server exits with an error.')
   }, 20_000)
 
@@ -251,7 +251,7 @@ describe('a server on worker threads', () => {
     const outcome = await Promise.race([host.exited, pause(3_000).then(() => 'alive')])
 
     expect(outcome).toBe('alive')
-    expect(host.output()).not.toContain('failed to answer')
+    expect(host.output()).not.toContain('sent no reply to a ping')
   }, 20_000)
 
   it('ends the process when a worker that has an open connection passes its heap limit', async () => {

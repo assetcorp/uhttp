@@ -113,9 +113,9 @@ export function writeFramingRejection(
  *
  * @param res - The package passes the response of uWebSockets.js.
  * @param exchange - The package passes the state of the request.
- * @param head - The package passes `true` for a HEAD request, whose reply carries the length of the body alone.
- * @returns The function returns `true` when the response has ended or the connection has closed,
- * and `false` when the response stays open for a reply that closes the connection later.
+ * @param head - The package passes `true` for a HEAD request, whose reply contains the length of the body and no body.
+ * @returns The function returns `true` when the response ends or the connection closes, and `false`
+ * when the response stays open for a reply that closes the connection later.
  * @internal
  */
 export function writeCrash(res: HttpResponse, exchange: Exchange, head: boolean): boolean {
@@ -123,15 +123,16 @@ export function writeCrash(res: HttpResponse, exchange: Exchange, head: boolean)
 }
 
 /**
- * Writes a reply that the package builds itself before any middleware runs, as {@link writeReply}
- * writes a reply without a stream, and closes the connection when even that write fails.
+ * Writes a reply that the package builds before it calls any middleware, in the way that
+ * {@link writeReply} writes a reply without a stream. When that write fails, the function closes
+ * the connection.
  *
  * @param res - The package passes the response of uWebSockets.js.
  * @param exchange - The package passes the state of the request.
- * @param reply - The package passes the reply, which carries no stream.
- * @param head - The package passes `true` for a HEAD request, whose reply carries the length of the body alone.
- * @returns The function returns `true` when the response has ended or the connection has closed,
- * and `false` when the response stays open for a reply that closes the connection later.
+ * @param reply - The package passes the reply, which has no stream.
+ * @param head - The package passes `true` for a HEAD request, whose reply contains the length of the body and no body.
+ * @returns The function returns `true` when the response ends or the connection closes, and `false`
+ * when the response stays open for a reply that closes the connection later.
  * @internal
  */
 export function writeWholeReply(res: HttpResponse, exchange: Exchange, reply: Reply, head: boolean): boolean {

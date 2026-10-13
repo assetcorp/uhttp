@@ -128,8 +128,8 @@ export class Hub {
   }
 
   /**
-   * Publishes through another app of uWebSockets.js from now on, which the package does once a
-   * reload has replaced the app on this thread.
+   * Sets the hub to publish through another app of uWebSockets.js. The package calls this method
+   * once a reload replaces the app on this thread.
    *
    * @param native - The package passes the app of uWebSockets.js that serves from now on.
    */

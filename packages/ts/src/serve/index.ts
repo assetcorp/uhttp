@@ -43,23 +43,24 @@ async function serveOnWorkers(uws: Uws, options: CheckedServeOptions, module: UR
 }
 
 /**
- * Returns a server that listens on the address that you choose, once the package has registered
- * the routes of the app with uWebSockets.js. With `threads`, each worker thread imports the module
- * at the URL that you pass and builds its own app from it. The main thread accepts each connection
- * and passes it to a worker, and it replaces a worker that crashes. The server exits with an error
+ * Returns a server that listens on the address that you choose, once the package registers the
+ * routes of the app with uWebSockets.js. With `threads`, each worker thread imports the module at
+ * the URL that you pass and builds its own app from it. The main thread receives each connection
+ * and passes it to a worker. It also replaces a worker that crashes. The server exits with an error
  * when no worker is left, when workers crash `crashLimit` times within `crashWindowMs`, or when a
  * worker hangs. Before it exits, it closes the healthy workers as {@link Server.close} does. When
- * your code calls `process.exit()`, the process waits until each worker has closed its connections.
+ * your code calls `process.exit()`, the main thread waits up to 5 seconds until each worker closes
+ * its connections.
  *
  * @param options - You choose the app, the address, the certificates, and the worker threads here.
  * @returns The promise resolves to the server once the server listens.
  * @throws {@link UhttpError} with the code `INVALID_SERVE_OPTIONS` when an option has the wrong type
  * or a value outside its range, or when you pass options that the package can't use together. It
- * throws the code `INVALID_CERTIFICATE` when the package can't read a key file or a certificate
+ * throws the code `INVALID_CERTIFICATE` when the package fails to load a key file or a certificate
  * file, or when a key fails to decrypt or to match its certificate. It throws the code
  * `APP_START_FAILED` when the app module fails to build the app or a worker crashes during the
- * start, and the code `LISTEN_FAILED` when the operating system can't bind the address or the Unix
- * socket path names a file in use.
+ * start. It throws the code `LISTEN_FAILED` when the operating system fails to bind the address, or
+ * when a file other than a socket, or a socket on which a server listens, is at the Unix socket path.
  */
 export async function serve(options: ServeOptions): Promise<Server> {
   const checked = checkedServeOptions(options)

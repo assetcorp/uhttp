@@ -7,31 +7,31 @@ export const MAX_PORT = 65_535
 /** Before it binds a Unix socket, the package tries to connect to a socket already at the path for this many milliseconds, so that it removes only a socket on which no server answers. */
 export const UNIX_SOCKET_PROBE_MS = 1_000
 
-/** uWebSockets.js binds a port with this option so that the operating system refuses a second server on it, which is what {@link serve} does unless you set `reusePort`. */
+/** Unless you set `reusePort`, {@link serve} passes this option to uWebSockets.js, so that the operating system lets only one server bind the port. */
 export const LISTEN_EXCLUSIVE_PORT = 1
 
-/** uWebSockets.js binds a port with this option so that the operating system lets every server that sets `reusePort` share it. */
+/** When you set `reusePort`, {@link serve} passes this option to uWebSockets.js, so that every server that sets `reusePort` can bind the same port. */
 export const LISTEN_SHARED_PORT = 0
 
-/** By default, the package sets the mode of a Unix socket file to this one, so that only the user who owns the process can connect. */
+/** By default, the package sets the mode of a Unix socket file to this value, so that only the user who owns the process can connect to the socket. */
 export const DEFAULT_SOCKET_MODE = 0o600
 
-/** {@link serve} throws for a socket mode above this one, which grants every permission to every user. */
+/** {@link serve} throws for a socket mode above this value, which lets every user read, write, and execute the socket file. */
 export const MAX_SOCKET_MODE = 0o777
 
-/** By default, `server.close()` waits this many milliseconds for the requests in progress and the WebSockets before it closes the connections that are left. */
+/** By default, `server.close()` waits this many milliseconds for the requests in progress and the open WebSockets to end before it closes the rest of the connections. */
 export const DEFAULT_GRACE_PERIOD_MS = 10_000
 
-/** {@link serve} throws for a grace period longer than this many milliseconds, which is the longest delay that `setTimeout` accepts. */
+/** {@link serve} throws for a grace period longer than this many milliseconds, because Node.js sets a longer `setTimeout` delay to 1 millisecond. */
 export const MAX_GRACE_PERIOD_MS = 2_147_483_647
 
-/** Node.js fires a timer after 1 millisecond when its delay is longer than this many milliseconds, so the package caps the delay of every grace timer here. */
+/** Node.js sets a `setTimeout` delay longer than this many milliseconds to 1 millisecond, so the package limits the delay of every grace timer to this value. */
 export const LONGEST_TIMER_DELAY_MS = 2_147_483_647
 
-/** A hostname under `tls.hostnames` can have at most this many characters, which is the limit of RFC 1035. */
+/** A hostname under `tls.hostnames` can have at most this many characters, because section 2.3.4 of RFC 1035 limits a name to 255 octets in its encoded form, which leaves 253 characters in text. */
 export const MAX_HOSTNAME_LENGTH = 253
 
-/** A hostname under `tls.hostnames` can have at most this many labels, because uWebSockets.js finds no certificate for a hostname with more. */
+/** A hostname under `tls.hostnames` can have at most this many labels, because uWebSockets.js matches no certificate to a hostname with more labels. */
 export const MAX_HOSTNAME_LABELS = 10
 
 /** A reply can have a status from 200 upwards, because a 1xx status can only precede a final response. */
@@ -296,7 +296,7 @@ export const WEBSOCKET_NORMAL_CLOSE_CODE = 1000
 /** The package closes a WebSocket with this code when one of its handlers throws or rejects. */
 export const WEBSOCKET_HANDLER_ERROR_CODE = 1011
 
-/** The package closes every WebSocket with this code when the server closes or reloads, since RFC 6455 defines it for an endpoint that goes away. */
+/** The package closes every WebSocket with this code when the server closes or reloads, because under section 7.4.1 of RFC 6455, the code means that an endpoint is going away. */
 export const WEBSOCKET_GOING_AWAY_CODE = 1001
 
 /** The package sends this reason with {@link WEBSOCKET_GOING_AWAY_CODE}. */
@@ -371,10 +371,10 @@ export const WATCHDOG_PINGS_PER_TIMEOUT = 6
 /** The server exits with this code when no worker is left, when workers reach the crash limit, or when a worker hangs. */
 export const FATAL_EXIT_CODE = 1
 
-/** When the server closes, the main thread waits up to this many milliseconds past the grace period for every worker to exit, so that a worker that hangs during the close can't hold the close up forever. */
+/** When the server closes, the main thread waits up to this many milliseconds past the grace period for every worker to exit, so that the close ends even when a worker hangs. */
 export const WORKER_EXIT_WAIT_MS = 5_000
 
-/** When your code calls `process.exit()`, the exit hook of {@link serve} waits up to this many milliseconds in total for the workers to close their connections. */
+/** When your code calls `process.exit()`, the main thread waits up to this many milliseconds in total for the workers to close their connections. */
 export const EXIT_HOOK_WAIT_MS = 5_000
 
 /** The package writes the reason phrase from this table after each standard status code from 101 to 511. */
