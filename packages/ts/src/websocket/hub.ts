@@ -97,7 +97,8 @@ function sameOrigin(payload: Uint8Array, origin: Uint8Array): boolean {
 export class Hub {
   /** A worker thread sets this relay to the other workers when it starts. The relay is `undefined` on a server without threads. */
   relay: PeerRelay | undefined
-  readonly #native: TemplatedApp
+  #native: TemplatedApp
+  readonly #appsByTopic = new Map<string, number>()
   readonly #origin: Uint8Array
   readonly #adapter: PubSubAdapter | undefined
   readonly #logger: Logger | undefined
@@ -124,6 +125,16 @@ export class Hub {
     this.#origin = origin
     this.#adapter = adapter
     this.#logger = logger
+  }
+
+  /**
+   * Publishes through another app of uWebSockets.js from now on, which the package does once a
+   * reload has replaced the app on this thread.
+   *
+   * @param native - The package passes the app of uWebSockets.js that serves from now on.
+   */
+  useNative(native: TemplatedApp): void {
+    this.#native = native
   }
 
   /**
@@ -166,17 +177,24 @@ export class Hub {
 
   /**
    * Calls the relay and the adapter when the first socket on this thread subscribes to a topic, or
-   * when the last one leaves the topic, as uWebSockets.js reports each change.
+   * when the last one leaves the topic, as uWebSockets.js reports each change. During a reload, two
+   * apps of uWebSockets.js serve on the thread, so the hub counts the apps with subscribers to each
+   * topic.
    *
    * @param topic - uWebSockets.js passes the topic as bytes.
-   * @param newCount - uWebSockets.js passes the number of subscribers after the change.
-   * @param oldCount - uWebSockets.js passes the number of subscribers before the change.
+   * @param newCount - uWebSockets.js passes the number of subscribers on its app after the change.
+   * @param oldCount - uWebSockets.js passes the number of subscribers on its app before the change.
    */
   subscriptionChanged(topic: ArrayBuffer, newCount: number, oldCount: number): void {
     const first = oldCount === 0 && newCount > 0
     const last = newCount === 0 && oldCount > 0
     if ((!first && !last) || this.#closed) return
     const name = this.#topics.decode(topic)
+    const apps = this.#appsByTopic.get(name) ?? 0
+    const remaining = first ? apps + 1 : apps - 1
+    if (remaining > 0) this.#appsByTopic.set(name, remaining)
+    else this.#appsByTopic.delete(name)
+    if (apps > 0 && remaining > 0) return
     this.relay?.announce(name, first)
     const adapter = this.#adapter
     if (adapter === undefined) return

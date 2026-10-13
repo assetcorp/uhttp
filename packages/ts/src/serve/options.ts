@@ -2,10 +2,14 @@ import { App } from '../app.js'
 import {
   DEFAULT_CRASH_LIMIT,
   DEFAULT_CRASH_WINDOW_MS,
+  DEFAULT_GRACE_PERIOD_MS,
+  DEFAULT_SOCKET_MODE,
   DEFAULT_THREADS,
   DEFAULT_WATCHDOG_MS,
   MAX_CRASH_WINDOW_MS,
+  MAX_GRACE_PERIOD_MS,
   MAX_PORT,
+  MAX_SOCKET_MODE,
   MAX_THREADS,
   MAX_WATCHDOG_MS,
   MIN_CRASH_LIMIT,
@@ -17,6 +21,7 @@ import { UhttpError } from '../errors.js'
 import { checkedWholeNumber } from '../limits.js'
 import type { Logger } from '../types.js'
 import type { ListenAddress } from './listen.js'
+import { type CheckedTls, checkedTls, type TlsOptions } from './tls-options.js'
 
 /**
  * You pass these options to {@link serve} to choose the app, the address, and the worker threads.
@@ -41,6 +46,29 @@ export interface ServeOptions {
   host?: string
   /** The server listens on this Unix socket path in place of a port, and only the main thread serves its requests. */
   path?: string
+  /**
+   * By default, the server binds its port exclusively, so a second server on the same port fails
+   * with `LISTEN_FAILED`. With `true`, the operating system lets every server that sets
+   * `reusePort` share the port. Pass it with a port above 0 alone.
+   */
+  reusePort?: boolean
+  /**
+   * The package sets the mode of the Unix socket file to this one once the server listens, such as
+   * `0o660` for the group of the process. The mode is `0o600` by default, so that only the user who
+   * owns the process can connect. Pass it with a path alone.
+   */
+  socketMode?: number
+  /**
+   * `server.close()` waits this many milliseconds for the requests in progress and the WebSockets
+   * before it closes the connections that are left, and `server.reload()` gives the old
+   * connections as long. The grace period is 10 seconds by default.
+   */
+  gracePeriodMs?: number
+  /**
+   * With this option, the server serves HTTPS with the key and the certificate in these files,
+   * and with the certificate of each hostname for a client that names it.
+   */
+  tls?: TlsOptions
   /**
    * The package starts this many worker threads, which serve the requests from one port. With 0,
    * which is the default, the main thread serves every request.
@@ -86,6 +114,10 @@ export interface CheckedServeOptions {
   readonly watchdogMs: number
   /** The main thread writes its events to this logger. */
   readonly logger: Logger
+  /** During a close or a reload, the server waits this many milliseconds before it closes the connections that are left. */
+  readonly gracePeriodMs: number
+  /** The server serves HTTPS with these certificates, or plain HTTP when this is `undefined`. */
+  readonly tls: CheckedTls | undefined
 }
 
 const consoleLogger: Logger = {
@@ -118,17 +150,39 @@ function checkedLogger(logger: Logger | undefined): Logger {
   return logger
 }
 
+function checkedReusePort(reusePort: unknown, port: number): boolean {
+  if (reusePort === undefined) return false
+  if (typeof reusePort !== 'boolean') throw invalid('Set reusePort to true or false.')
+  if (reusePort && port === 0) throw invalid('Pass reusePort with a port above 0, because port 0 binds a new port.')
+  return reusePort
+}
+
 function checkedAddress(options: ServeOptions, threads: number): ListenAddress {
-  const { port, host, path } = options
+  const { port, host, path, reusePort, socketMode } = options
   if (path !== undefined) {
     if (typeof path !== 'string' || path === '') throw invalid('Set path to the file path of a Unix socket.')
     if (port !== undefined || host !== undefined) throw invalid('Pass either a Unix socket path or a port and a host.')
     if (threads > 0) throw invalid('Leave out threads when the server listens on a Unix socket path.')
-    return { port: undefined, host: undefined, path }
+    if (reusePort !== undefined) throw invalid('Leave out reusePort when the server listens on a Unix socket path.')
+    return {
+      port: undefined,
+      host: undefined,
+      path,
+      reusePort: false,
+      socketMode: wholeNumberIn(socketMode, 'socketMode', DEFAULT_SOCKET_MODE, 0, MAX_SOCKET_MODE),
+    }
   }
   if (port === undefined) throw invalid('Pass the port or the Unix socket path for the server to listen on.')
   if (host !== undefined && typeof host !== 'string') throw invalid('Set host to an address such as 127.0.0.1.')
-  return { port: wholeNumberIn(port, 'the port', MIN_PORT, MIN_PORT, MAX_PORT), host, path: undefined }
+  if (socketMode !== undefined) throw invalid('Pass socketMode with a Unix socket path alone.')
+  const checkedPort = wholeNumberIn(port, 'the port', MIN_PORT, MIN_PORT, MAX_PORT)
+  return {
+    port: checkedPort,
+    host,
+    path: undefined,
+    reusePort: checkedReusePort(reusePort, checkedPort),
+    socketMode: DEFAULT_SOCKET_MODE,
+  }
 }
 
 /**
@@ -174,5 +228,13 @@ export function checkedServeOptions(options: ServeOptions): CheckedServeOptions 
     ),
     watchdogMs: wholeNumberIn(options.watchdogMs, 'watchdogMs', DEFAULT_WATCHDOG_MS, 0, MAX_WATCHDOG_MS),
     logger: checkedLogger(options.logger),
+    gracePeriodMs: wholeNumberIn(
+      options.gracePeriodMs,
+      'gracePeriodMs',
+      DEFAULT_GRACE_PERIOD_MS,
+      0,
+      MAX_GRACE_PERIOD_MS,
+    ),
+    tls: checkedTls(options.tls),
   }
 }
