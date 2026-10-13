@@ -100,6 +100,10 @@ The package passes every handler a socket with these members:
 
 Each method throws `INVALID_WEBSOCKET` for a topic or a message of the wrong type. `end` also throws it for a code or a reason outside those limits.
 
+## Close and reload the server
+
+`server.close()` closes every socket with the code 1001 and the reason 'The server is going away.', and the package then calls the `close` handler of each socket. `server.reload()` closes every socket on the old connections in the same way, so that each client can connect again and receive the renewed certificate. From the start of a close, the package answers each new upgrade request with a 503 and the code `SERVER_CLOSING`. You can read about both methods in [Start and stop a server](start-and-stop.md) and [Serve HTTPS](https.md).
+
 ## Set the limits of a route
 
 | Option | Default | What the option limits |

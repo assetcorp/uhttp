@@ -41,7 +41,7 @@ export class Context {
 export function createApp(options?: AppOptions): App;
 
 // @public
-export type ErrorCode = 'INVALID_PATH_PARAMETER' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED' | 'PAYLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' | 'INVALID_JSON' | 'VALIDATION_FAILED' | 'INVALID_MULTIPART' | 'REQUEST_ABORTED' | 'HANDLER_TIMEOUT' | 'INVALID_TRANSFER_ENCODING' | 'UNSUPPORTED_TRANSFER_CODING' | 'INTERNAL_ERROR' | 'MISSING_REPLY' | 'NEXT_CALLED_TWICE' | 'UNDECLARED_HEADER' | 'UNDECLARED_CLIENT_ADDRESS' | 'UNDECLARED_BODY' | 'BODY_ALREADY_READ' | 'REQUEST_RELEASED' | 'INVALID_SCHEMA' | 'INVALID_UPLOAD' | 'INVALID_HEADER' | 'INVALID_EVENT' | 'INVALID_STREAM' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_APP_OPTIONS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED' | 'UPGRADE_REQUIRED' | 'INVALID_UPGRADE' | 'FORBIDDEN_ORIGIN' | 'INVALID_WEBSOCKET' | 'APP_START_FAILED';
+export type ErrorCode = 'INVALID_PATH_PARAMETER' | 'NOT_FOUND' | 'METHOD_NOT_ALLOWED' | 'PAYLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' | 'INVALID_JSON' | 'VALIDATION_FAILED' | 'INVALID_MULTIPART' | 'REQUEST_ABORTED' | 'HANDLER_TIMEOUT' | 'INVALID_TRANSFER_ENCODING' | 'UNSUPPORTED_TRANSFER_CODING' | 'INTERNAL_ERROR' | 'MISSING_REPLY' | 'NEXT_CALLED_TWICE' | 'UNDECLARED_HEADER' | 'UNDECLARED_CLIENT_ADDRESS' | 'UNDECLARED_BODY' | 'BODY_ALREADY_READ' | 'REQUEST_RELEASED' | 'INVALID_SCHEMA' | 'INVALID_UPLOAD' | 'INVALID_HEADER' | 'INVALID_EVENT' | 'INVALID_STREAM' | 'INVALID_ROUTE' | 'INVALID_STATUS' | 'INVALID_APP_OPTIONS' | 'INVALID_SERVE_OPTIONS' | 'LISTEN_FAILED' | 'UPGRADE_REQUIRED' | 'INVALID_UPGRADE' | 'FORBIDDEN_ORIGIN' | 'INVALID_WEBSOCKET' | 'APP_START_FAILED' | 'INVALID_CERTIFICATE' | 'SERVER_CLOSING';
 
 // @public
 export type ErrorHandler = (error: unknown, context: Context) => Reply | Promise<Reply>;
@@ -222,11 +222,15 @@ export interface ServeOptions {
     app: App | URL;
     crashLimit?: number;
     crashWindowMs?: number;
+    gracePeriodMs?: number;
     host?: string;
     logger?: Logger;
     path?: string;
     port?: number;
+    reusePort?: boolean;
+    socketMode?: number;
     threads?: number;
+    tls?: TlsOptions;
     watchdogMs?: number;
     workerHeapMb?: number;
 }
@@ -235,6 +239,7 @@ export interface ServeOptions {
 export interface Server {
     close(): Promise<void>;
     readonly port: number | undefined;
+    reload(): Promise<void>;
 }
 
 // @public
@@ -315,6 +320,18 @@ export interface TestRequestInit {
     readonly headers?: TestHeaders;
     readonly method?: string;
     readonly signal?: AbortSignal;
+}
+
+// @public
+export interface TlsCertificate {
+    certFile: string;
+    keyFile: string;
+    passphrase?: string;
+}
+
+// @public
+export interface TlsOptions extends TlsCertificate {
+    hostnames?: Record<string, TlsCertificate>;
 }
 
 // @public

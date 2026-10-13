@@ -119,8 +119,23 @@ export function writeFramingRejection(
  * @internal
  */
 export function writeCrash(res: HttpResponse, exchange: Exchange, head: boolean): boolean {
+  return writeWholeReply(res, exchange, defaultErrorReply(undefined), head)
+}
+
+/**
+ * Writes a reply that the package builds itself before any middleware runs, as {@link writeReply}
+ * writes a reply without a stream, and closes the connection when even that write fails.
+ *
+ * @param res - The package passes the response of uWebSockets.js.
+ * @param exchange - The package passes the state of the request.
+ * @param reply - The package passes the reply, which carries no stream.
+ * @param head - The package passes `true` for a HEAD request, whose reply carries the length of the body alone.
+ * @returns The function returns `true` when the response has ended or the connection has closed,
+ * and `false` when the response stays open for a reply that closes the connection later.
+ * @internal
+ */
+export function writeWholeReply(res: HttpResponse, exchange: Exchange, reply: Reply, head: boolean): boolean {
   if (exchange.closed) return true
-  const reply = defaultErrorReply(undefined)
   exchange.assign(reply)
   let ended = true
   try {

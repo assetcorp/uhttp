@@ -163,7 +163,7 @@ describe('a server on worker threads', () => {
     await host.close()
 
     expect(await host.exited).toEqual({ code: 0, signal: null })
-    expect((await socket.closed).code).toBe(1006)
+    expect((await socket.closed).code).toBe(1001)
     expect(await Promise.all(connections.map(connection => connection.waitForClose()))).toEqual([
       'closed',
       'closed',

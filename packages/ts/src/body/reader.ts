@@ -1,7 +1,8 @@
 import { BODY_HIGH_WATER_MARK_BYTES, BODY_PAUSE_TIMEOUT_MS } from '../constants.js'
 import { UhttpError } from '../errors.js'
-import type { BodyState, Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange.js'
 import { isDecimalDigits } from '../headers.js'
+import type { BodyState } from '../runtime.js'
 
 const IDENTITY = 'identity'
 

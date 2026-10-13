@@ -7,8 +7,8 @@
  * `REQUEST_ABORTED`, `INVALID_TRANSFER_ENCODING`, and `INVALID_UPGRADE` correspond to 400,
  * `FORBIDDEN_ORIGIN` to 403, `NOT_FOUND` to 404, `METHOD_NOT_ALLOWED` to 405, `PAYLOAD_TOO_LARGE`
  * to 413, `UNSUPPORTED_MEDIA_TYPE` to 415, `UPGRADE_REQUIRED` to 426, `UNSUPPORTED_TRANSFER_CODING`
- * to 501, and `HANDLER_TIMEOUT` to 503. Every other code corresponds to 500. The package throws
- * each code in one situation:
+ * to 501, and `HANDLER_TIMEOUT` and `SERVER_CLOSING` to 503. Every other code corresponds to 500.
+ * The package throws each code in one situation:
  *
  * - The package throws `INVALID_PATH_PARAMETER` when a path parameter contains a percent sequence
  *   that fails to decode.
@@ -63,10 +63,17 @@
  * - The package throws `INVALID_APP_OPTIONS` when you pass {@link createApp} an option of the wrong
  *   type, or a limit that is not a whole number of zero or more.
  * - The package throws `INVALID_SERVE_OPTIONS` when you pass {@link serve} an option of the wrong
- *   type or a value outside its range, or when you pass `threads` together with an app object or
- *   a Unix socket path.
+ *   type or a value outside its range, when you pass `threads` together with an app object or a
+ *   Unix socket path, or when you call `server.reload()` on a server without `tls`.
  * - The package throws `LISTEN_FAILED` when the operating system can't bind the address that you
- *   chose, or when the Unix socket path names a file other than a socket or a socket in use.
+ *   chose, when the Unix socket path names a file other than a socket or a socket in use, or when
+ *   the package can't set the mode of the socket file.
+ * - The package throws `INVALID_CERTIFICATE` when {@link serve} or `server.reload()` can't read a
+ *   key file or a certificate file, or when a key fails to decrypt with its passphrase or to match
+ *   its certificate.
+ * - The package sends `SERVER_CLOSING` when a request arrives on an open connection after
+ *   `server.close()` has started, and it closes the connection after the reply. `server.reload()`
+ *   throws it once `server.close()` has started.
  * - The package throws `UPGRADE_REQUIRED` when a client sends a request without a WebSocket upgrade
  *   to a WebSocket route, or asks for a version of the protocol other than 13.
  * - The package throws `INVALID_UPGRADE` when a client sends an upgrade request without
@@ -82,9 +89,10 @@
  *   one, or when a worker thread crashes before every worker serves.
  *
  * The package sends `INVALID_TRANSFER_ENCODING` and `UNSUPPORTED_TRANSFER_CODING` before it calls
- * any middleware or handler, and it closes the connection after the reply. When your code throws
- * any error apart from a `UhttpError` below 500 or a `HANDLER_TIMEOUT`, the client receives
- * `INTERNAL_ERROR`.
+ * any middleware or handler, and it closes the connection after the reply. It sends
+ * `SERVER_CLOSING` before it calls any middleware or handler too. When your code throws any error
+ * apart from a `UhttpError` below 500, a `HANDLER_TIMEOUT`, or a `SERVER_CLOSING`, the client
+ * receives `INTERNAL_ERROR`.
  */
 export type ErrorCode =
   | 'INVALID_PATH_PARAMETER'
@@ -122,6 +130,8 @@ export type ErrorCode =
   | 'FORBIDDEN_ORIGIN'
   | 'INVALID_WEBSOCKET'
   | 'APP_START_FAILED'
+  | 'INVALID_CERTIFICATE'
+  | 'SERVER_CLOSING'
 
 const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   INVALID_PATH_PARAMETER: 400,
@@ -159,6 +169,8 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   FORBIDDEN_ORIGIN: 403,
   INVALID_WEBSOCKET: 500,
   APP_START_FAILED: 500,
+  INVALID_CERTIFICATE: 500,
+  SERVER_CLOSING: 503,
 }
 
 /**
@@ -187,9 +199,9 @@ export interface UhttpErrorOptions extends ErrorOptions {
  * that corresponds to the code.
  *
  * @remarks
- * When code throws a `UhttpError` whose status is below 500, or one with the code
- * `HANDLER_TIMEOUT`, the client receives that status together with the code, the message, and any
- * validation problems. For every other error, the client receives a 500 with the message 'The
+ * When code throws a `UhttpError` whose status is below 500, or one with the code `HANDLER_TIMEOUT`
+ * or `SERVER_CLOSING`, the client receives that status together with the code, the message, and
+ * any validation problems. For every other error, the client receives a 500 with the message 'The
  * request failed.'
  */
 export class UhttpError extends Error {
@@ -208,7 +220,7 @@ export class UhttpError extends Error {
    *
    * @param code - You choose the code, and the constructor sets the HTTP status that corresponds to it.
    * @param message - You write this message for a developer, and the package sends it to the
-   * client only when the status is below 500 or the code is `HANDLER_TIMEOUT`.
+   * client only when the status is below 500 or the code is `HANDLER_TIMEOUT` or `SERVER_CLOSING`.
    * @param options - You can pass the standard error options here, such as `cause`, together with
    * a list of validation problems.
    */
@@ -223,12 +235,15 @@ export class UhttpError extends Error {
 
 /**
  * Returns `true` when the package sends the code and the message of an error to the client, which
- * it does for a `UhttpError` below 500 and for `HANDLER_TIMEOUT`.
+ * it does for a `UhttpError` below 500, for `HANDLER_TIMEOUT`, and for `SERVER_CLOSING`.
  *
  * @param error - The function checks this error.
  * @returns The function returns `false` for every other error, which the client receives as a 500.
  * @internal
  */
 export function isClientError(error: unknown): error is UhttpError {
-  return error instanceof UhttpError && (error.status < 500 || error.code === 'HANDLER_TIMEOUT')
+  return (
+    error instanceof UhttpError &&
+    (error.status < 500 || error.code === 'HANDLER_TIMEOUT' || error.code === 'SERVER_CLOSING')
+  )
 }

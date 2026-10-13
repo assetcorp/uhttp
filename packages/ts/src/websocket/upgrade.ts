@@ -8,7 +8,8 @@ import { Exchange } from '../exchange.js'
 import { headerBytes } from '../headers.js'
 import { attachBody } from '../native/body.js'
 import { closeConnection, watchAbort } from '../native/close.js'
-import { admittedFraming, copyRequest, crash } from '../native/handler.js'
+import { type Drain, SERVING } from '../native/drain.js'
+import { admittedFraming, answerWhileClosing, copyRequest, crash, serverClosingReply } from '../native/handler.js'
 import { statusLine } from '../native/head.js'
 import { writeReply } from '../native/write.js'
 import type { CopiedRequest } from '../request.js'
@@ -30,6 +31,7 @@ interface Upgrade {
   readonly handshake: HandshakeHeaders
   readonly socketContext: us_socket_context_t
   readonly hub: Hub
+  readonly drain: Drain
 }
 
 function switchProtocols(upgrade: Upgrade): void {
@@ -56,6 +58,11 @@ function finish(upgrade: Upgrade): boolean {
   if (reply === undefined) return false
   try {
     if (reply.status !== SWITCHING_PROTOCOLS_STATUS) return writeReply(res, exchange, context, reply)
+    if (upgrade.drain.mode !== SERVING) {
+      const refusal = serverClosingReply()
+      exchange.assign(refusal)
+      return writeReply(res, exchange, context, refusal)
+    }
     switchProtocols(upgrade)
     return true
   } catch (error) {
@@ -102,15 +109,18 @@ function respond(upgrade: Upgrade, request: CopiedRequest, chain: RequestChain):
  * Once every middleware has returned, the package switches the connection inside a cork, with the
  * values that your middleware stored as the `data` of the socket. When a middleware has returned
  * another reply in place of the 101, the package writes that reply. The handler attaches the abort
- * handler before it returns to uWebSockets.js, unless the response has already ended.
+ * handler before it returns to uWebSockets.js, unless the response has already ended. Once the
+ * server closes or reloads, the client receives a 503 with the code `SERVER_CLOSING` in place of
+ * the 101.
  *
  * @param app - The package passes the compiled app.
  * @param socket - The package passes the compiled WebSocket route.
  * @param hub - The package passes the hub of the thread, which publishes the messages of every socket.
+ * @param drain - The package passes the drain of the app of uWebSockets.js.
  * @returns The function returns the handler to pass as `upgrade` to uWebSockets.js.
  * @internal
  */
-export function upgradeHandler(app: CompiledApp, socket: CompiledWebSocket, hub: Hub): UpgradeHandler {
+export function upgradeHandler(app: CompiledApp, socket: CompiledWebSocket, hub: Hub, drain: Drain): UpgradeHandler {
   const route = socket.upgrade
   const count = route.parameterNames.length
   const base: RequestChain = {
@@ -151,10 +161,12 @@ export function upgradeHandler(app: CompiledApp, socket: CompiledWebSocket, hub:
       return crash(res, exchange, error, UPGRADE_METHOD, path)
     }
     const context = createContext(request, exchange)
-    return respond({ res, exchange, context, handshake, socketContext, hub }, request, chain)
+    return respond({ res, exchange, context, handshake, socketContext, hub, drain }, request, chain)
   }
   return (res, req, socketContext) => {
-    const exchange = new Exchange(app.runtime)
-    if (!answer(res, req, socketContext, exchange)) watchAbort(res, exchange)
+    const exchange = new Exchange(app.runtime, drain)
+    const ended =
+      drain.mode === SERVING ? answer(res, req, socketContext, exchange) : answerWhileClosing(res, req, exchange)
+    if (!ended) watchAbort(res, exchange)
   }
 }

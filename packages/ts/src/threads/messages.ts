@@ -1,6 +1,8 @@
 import type { AppDescriptor } from 'uWebSockets.js'
 import { MessagePort } from 'node:worker_threads'
 import { MAX_ERROR_CAUSE_DEPTH } from '../constants.js'
+import { CLOSING, type LeavingMode, RETIRING } from '../native/drain.js'
+import type { CheckedTls } from '../serve/tls-options.js'
 
 /**
  * The main thread passes each worker these values when it starts the worker.
@@ -12,6 +14,13 @@ export interface WorkerSetup {
   readonly module: string
   /** These bytes identify the process to the pub/sub adapter. */
   readonly origin: Uint8Array
+  /** The worker serves HTTPS with these certificates, or plain HTTP when this is `undefined`. */
+  readonly tls: CheckedTls | undefined
+  /**
+   * The worker sets the first element of this shared array to 1 once it has closed its connections
+   * and is about to exit, so that the exit hook of the main thread can wait for it.
+   */
+  readonly exitFlag: Int32Array
 }
 
 /**
@@ -20,11 +29,10 @@ export interface WorkerSetup {
  * @internal
  */
 export type WorkerMessage =
-  | { readonly type: 'ready'; readonly descriptor: AppDescriptor }
+  | { readonly type: 'ready'; readonly descriptor: AppDescriptor; readonly secure: boolean }
   | { readonly type: 'failed'; readonly error: SerializedError }
   | { readonly type: 'crashed'; readonly error: SerializedError }
   | { readonly type: 'pong' }
-  | { readonly type: 'leaving' }
 
 /**
  * The main thread posts these messages to a worker.
@@ -33,8 +41,8 @@ export type WorkerMessage =
  */
 export type MainMessage =
   | { readonly type: 'ping' }
-  | { readonly type: 'leave' }
-  | { readonly type: 'left' }
+  | { readonly type: 'drain'; readonly mode: LeavingMode; readonly graceMs: number }
+  | { readonly type: 'exit' }
   | { readonly type: 'peer'; readonly id: number; readonly port: MessagePort }
   | { readonly type: 'peer-gone'; readonly id: number }
 
@@ -133,7 +141,7 @@ function typeOf(value: unknown): unknown {
  */
 export function isWorkerMessage(value: unknown): value is WorkerMessage {
   const type = typeOf(value)
-  return type === 'ready' || type === 'failed' || type === 'crashed' || type === 'pong' || type === 'leaving'
+  return type === 'ready' || type === 'failed' || type === 'crashed' || type === 'pong'
 }
 
 /**
@@ -146,8 +154,13 @@ export function isWorkerMessage(value: unknown): value is WorkerMessage {
  */
 export function isMainMessage(value: unknown): value is MainMessage {
   const type = typeOf(value)
-  if (type === 'ping' || type === 'leave' || type === 'left') return true
-  if ((type !== 'peer' && type !== 'peer-gone') || typeof value !== 'object' || value === null) return false
+  if (type === 'ping' || type === 'exit') return true
+  if (typeof value !== 'object' || value === null) return false
+  if (type === 'drain') {
+    const mode: unknown = Reflect.get(value, 'mode')
+    return (mode === RETIRING || mode === CLOSING) && typeof Reflect.get(value, 'graceMs') === 'number'
+  }
+  if (type !== 'peer' && type !== 'peer-gone') return false
   if (typeof Reflect.get(value, 'id') !== 'number') return false
   return type === 'peer-gone' || Reflect.get(value, 'port') instanceof MessagePort
 }

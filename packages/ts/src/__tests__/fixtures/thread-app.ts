@@ -75,6 +75,15 @@ export default async function buildApp() {
       setTimeout(blockForever, 0)
       return c.text('hanging')
     })
+    .get('/stall/:ms', async c => {
+      await new Promise(resolve => setTimeout(resolve, Number(c.req.param('ms'))))
+      blockForever()
+      return c.text('stalled')
+    })
+    .get('/slow/:ms', async c => {
+      await new Promise(resolve => setTimeout(resolve, Number(c.req.param('ms'))))
+      return c.text(`slow from thread ${threadId}`)
+    })
     .post('/publish/:topic', c => {
       const before = portMessages
       app.publish(c.req.param('topic') ?? '', `from thread ${threadId}`)
