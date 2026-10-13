@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -58,6 +58,38 @@ describe('the built package', () => {
     try {
       const response = await fetch(`http://127.0.0.1:${server.port}/hello`)
       expect(await response.text()).toBe('built')
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('serves a WebSocket route on worker threads that start from the built files', async () => {
+    const { serve } = (await import(pathToFileURL(join(OUT_DIR, 'index.js')).href)) as typeof Uhttp
+    const module = join(OUT_DIR, 'echo-app.js')
+    writeFileSync(
+      module,
+      [
+        "import { threadId } from 'node:worker_threads'",
+        "import { createApp } from './index.js'",
+        'export default () => createApp()',
+        '  .get("/thread", c => c.text(String(threadId)))',
+        '  .ws("/echo", { message: (socket, message) => { socket.send(message) } })',
+      ].join('\n'),
+    )
+    const server = await serve({ app: pathToFileURL(module), port: 0, host: '127.0.0.1', threads: 2 })
+
+    try {
+      const thread = await (await fetch(`http://127.0.0.1:${server.port}/thread`)).text()
+      const socket = new WebSocket(`ws://127.0.0.1:${server.port}/echo`)
+      const echoed = new Promise<unknown>((resolve, reject) => {
+        socket.addEventListener('message', event => resolve(event.data), { once: true })
+        socket.addEventListener('error', () => reject(new Error('The WebSocket failed.')), { once: true })
+      })
+      socket.addEventListener('open', () => socket.send('built echo'), { once: true })
+
+      expect(thread).not.toBe('0')
+      expect(await echoed).toBe('built echo')
+      socket.close()
     } finally {
       await server.close()
     }

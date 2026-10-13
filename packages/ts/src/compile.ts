@@ -2,6 +2,8 @@ import { ALLOW_METHOD_ORDER, BODY_METHODS, LIST_HEADER_NAMES } from './constants
 import type { AppRuntime } from './exchange.js'
 import { Matcher, prefixCoverage, prefixMatches, type Segment, splitPath } from './router/index.js'
 import type { Handler, Middleware, MiddlewareHandler, RouteOptions } from './types.js'
+import { upgradeRequired } from './websocket/handshake.js'
+import type { CheckedWebSocketRoute } from './websocket/route.js'
 
 /**
  * The package records each route in this form when you add it.
@@ -48,6 +50,41 @@ export interface RegistryContents {
   readonly guards: readonly GuardRecord[]
   /** You added these routes, in this order. */
   readonly routes: readonly RouteRecord[]
+  /** You added these WebSocket routes, in this order. */
+  readonly webSockets: readonly WebSocketRecord[]
+}
+
+/**
+ * The package records each WebSocket route in this form when you add it.
+ *
+ * @internal
+ */
+export interface WebSocketRecord {
+  /** The package matches this whole path, which starts with the group prefix. */
+  readonly path: string
+  /** The package split the whole path into these segments. */
+  readonly segments: readonly Segment[]
+  /** You passed these options objects to the route. */
+  readonly options: readonly RouteOptions[]
+  /** You passed this middleware to the route alone. */
+  readonly middleware: readonly Middleware[]
+  /** The package stores the checked handlers and limits of the route here. */
+  readonly route: CheckedWebSocketRoute
+}
+
+/**
+ * The package builds this form of each WebSocket route at startup.
+ *
+ * @internal
+ */
+export interface CompiledWebSocket {
+  /**
+   * The package passes the upgrade request to the middleware of this GET route, whose handler throws
+   * `UPGRADE_REQUIRED` for a request without an upgrade.
+   */
+  readonly upgrade: CompiledRoute
+  /** The package applies these handlers and limits to every socket of the route. */
+  readonly route: CheckedWebSocketRoute
 }
 
 /**
@@ -124,8 +161,15 @@ export interface CompiledGuard {
 export interface CompiledApp {
   /** Every request to the app shares these settings. */
   readonly runtime: AppRuntime
-  /** You added these routes, and the list leaves out the HEAD routes that the package adds. */
+  /**
+   * You added these routes, and the package adds a GET route for each WebSocket route whose path
+   * has no GET route of the same shape. The list leaves out the HEAD routes that the package adds.
+   */
   readonly routes: readonly CompiledRoute[]
+  /** You added these WebSocket routes, in this order. */
+  readonly webSockets: readonly CompiledWebSocket[]
+  /** This matcher has every WebSocket route under the method `GET`. */
+  readonly upgradeMatcher: Matcher<CompiledWebSocket>
   /** The JavaScript matcher has every route, with a HEAD route beside every GET route. */
   readonly matcher: Matcher<CompiledRoute>
   /** At least one route uses each of these methods, which follow the order of the `Allow` header. */
@@ -271,10 +315,24 @@ export function compileApp(runtime: AppRuntime, contents: RegistryContents): Com
     if (route.method === 'GET') matcher.add('HEAD', record.segments, headRouteOf(route))
     return route
   })
+  const upgradeMatcher = new Matcher<CompiledWebSocket>()
+  const webSockets = contents.webSockets.map(record => {
+    const routeRecord: RouteRecord = { ...record, method: 'GET', handler: upgradeRequired }
+    const upgrade = compileRoute(routeRecord, contents.middleware, guards, runtime)
+    const socket: CompiledWebSocket = { upgrade, route: record.route }
+    upgradeMatcher.add('GET', record.segments, socket)
+    if (matcher.add('GET', record.segments, upgrade)) {
+      matcher.add('HEAD', record.segments, headRouteOf(upgrade))
+      routes.push(upgrade)
+    }
+    return socket
+  })
   const methods = matcher.methods().sort((left, right) => methodRank(left) - methodRank(right))
   return {
     runtime,
     routes,
+    webSockets,
+    upgradeMatcher,
     matcher,
     methods,
     appMiddleware: [...contents.middleware],

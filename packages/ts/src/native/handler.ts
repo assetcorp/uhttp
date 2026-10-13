@@ -52,7 +52,22 @@ function copyDeclaredHeaders(req: HttpRequest, plan: CopyPlan): (string | undefi
   return values
 }
 
-function copyRequest(
+/**
+ * Copies the parts of a request that its chain declared, inside the synchronous handler of
+ * uWebSockets.js.
+ *
+ * @param res - The package passes the response of uWebSockets.js, from which it reads the client address.
+ * @param req - The package passes the request of uWebSockets.js.
+ * @param exchange - The package passes the state of the request.
+ * @param method - The client sent this method.
+ * @param path - The package passes the raw path without its query string.
+ * @param decoded - The package passes the chain of the request with its decoded parameter values.
+ * @param framing - The package passes the framing headers that it read from the request.
+ * @param reader - The package passes the body reader, or `undefined` on a route without one.
+ * @returns The function returns the copy of the request.
+ * @internal
+ */
+export function copyRequest(
   res: HttpResponse,
   req: HttpRequest,
   exchange: Exchange,
@@ -94,7 +109,20 @@ function respondAndRelease(
   return ended
 }
 
-function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange): RequestFraming | undefined {
+/**
+ * Returns the framing facts of a request that the package serves. The function returns `undefined`
+ * when the package has refused the connection, when uWebSockets.js answers the request with its own
+ * 400, or when the package rejects the transfer coding of the request. In each of those cases, the
+ * function answers the request or leaves it alone before it returns.
+ *
+ * @param res - The package passes the response of uWebSockets.js.
+ * @param req - The package passes the request of uWebSockets.js.
+ * @param exchange - The package passes the state of the request.
+ * @returns The function returns the framing facts, or `undefined` when the package calls no
+ * middleware for the request.
+ * @internal
+ */
+export function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange): RequestFraming | undefined {
   if (refusedRequest(res, exchange)) return undefined
   const framing = readFraming(req)
   if (framing.parserRejects) return undefined
@@ -150,7 +178,19 @@ function finishCorked(res: HttpResponse, exchange: Exchange, context: Context): 
   }
 }
 
-function crash(res: HttpResponse, exchange: Exchange, error: unknown, method: string, path: string): boolean {
+/**
+ * Logs an error that the package caught before it called any middleware, and answers with the
+ * default 500.
+ *
+ * @param res - The package passes the response of uWebSockets.js.
+ * @param exchange - The package passes the state of the request.
+ * @param error - The package passes the error that it caught.
+ * @param method - The client sent this method.
+ * @param path - The package passes the path of the request.
+ * @returns The function returns `true` when the response has ended or the connection has closed.
+ * @internal
+ */
+export function crash(res: HttpResponse, exchange: Exchange, error: unknown, method: string, path: string): boolean {
   logServerError(exchange.runtime.logger, error, method, path)
   return writeCrash(res, exchange, method === 'HEAD')
 }

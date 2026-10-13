@@ -2,8 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { type App, createApp } from '../../index.js'
 import { openConnection, requestHead } from '../helpers/http-client.js'
 import { memoryLogger, start } from '../helpers/server.js'
+import { bodyOf, handshakeHeaders, rawHandshake, upgradeHead } from '../helpers/websocket.js'
 
-const ROUTES: readonly (readonly [method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'options', path: string])[] = [
+type RouteMethod = 'get' | 'post' | 'put' | 'patch' | 'delete' | 'options' | 'ws'
+
+const ROUTES: readonly (readonly [method: RouteMethod, path: string])[] = [
+  ['ws', '/live'],
+  ['ws', '/live/:room'],
+  ['ws', '/users/:id/socket'],
+  ['ws', '/admin'],
+  ['ws', '/pages/:slug/edit'],
   ['get', '/'],
   ['get', '/users'],
   ['get', '/users/'],
@@ -45,10 +53,26 @@ const CONNECTION_COUNT = 40
 function buildApp(logger: ReturnType<typeof memoryLogger>['logger']): App {
   const app = createApp({ logger })
   for (const [method, path] of ROUTES) {
+    if (method === 'ws') {
+      app.ws(path, {
+        open: socket => {
+          socket.end()
+        },
+      })
+      continue
+    }
     app[method](path, c => c.json({ route: `${method} ${path}`, params: c.req.params() }))
   }
   return app
 }
+
+const UPGRADE_VARIANTS: readonly Record<string, string>[] = [
+  {},
+  { origin: 'null' },
+  { origin: 'http://127.0.0.1' },
+  { 'sec-websocket-version': '8' },
+  { upgrade: 'h2c' },
+]
 
 function samplePaths(): string[] {
   const paths = new Set<string>([
@@ -129,6 +153,42 @@ describe('the native router and the JavaScript matcher', () => {
     }
 
     expect(cases.length).toBeGreaterThan(1_000)
+    expect(disagreements).toEqual([])
+    expect(entries.filter(entry => entry.level === 'warn')).toEqual([])
+  })
+
+  it('give the same status and body for an upgrade request to every sample path, each on its own connection', async () => {
+    const { entries, logger } = memoryLogger()
+    const app = buildApp(logger)
+    const server = await start(app)
+    const paths = samplePaths().filter((_path, index) => index % 3 === 0)
+    const cases = paths.flatMap(path => UPGRADE_VARIANTS.map(variant => ({ path, variant })))
+
+    const disagreements: string[] = []
+    let upgrades = 0
+    for (let index = 0; index < cases.length; index += CONNECTION_COUNT) {
+      const batch = cases.slice(index, index + CONNECTION_COUNT)
+      const results = await Promise.all(
+        batch.map(async ({ path, variant }) => {
+          const headers = handshakeHeaders({ host: `127.0.0.1:${server.port}`, ...variant })
+          const native = await rawHandshake(server.port, upgradeHead(path, headers))
+          const matcher = await app.request(path, { headers })
+          const nativeBody = native.status === 101 ? '' : await bodyOf(native)
+          native.socket.destroy()
+          return { path, variant, native: [native.status, nativeBody], matcher: [matcher.status, await matcher.text()] }
+        }),
+      )
+      for (const result of results) {
+        if (result.native[0] === 101) upgrades++
+        if (JSON.stringify(result.native) !== JSON.stringify(result.matcher)) {
+          disagreements.push(
+            `${result.path} ${JSON.stringify(result.variant)}: native ${JSON.stringify(result.native)}, matcher ${JSON.stringify(result.matcher)}`,
+          )
+        }
+      }
+    }
+
+    expect(upgrades).toBeGreaterThan(5)
     expect(disagreements).toEqual([])
     expect(entries.filter(entry => entry.level === 'warn')).toEqual([])
   })

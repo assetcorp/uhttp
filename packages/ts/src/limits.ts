@@ -20,6 +20,28 @@ export function checkedLimit(value: unknown, code: ErrorCode, name: string): num
 }
 
 /**
+ * Returns a number once the function has checked that it is a whole number within a range.
+ *
+ * @param value - The function checks this value.
+ * @param code - The function throws an error with this code.
+ * @param name - The function puts this option name in the message of the error.
+ * @param low - The value can be this number or more.
+ * @param high - The value can be this number or less.
+ * @returns The function returns the number unchanged.
+ * @throws {@link UhttpError} with the code that you pass for a value that is not a whole number from `low` to `high`.
+ * @internal
+ */
+export function checkedWholeNumber(value: unknown, code: ErrorCode, name: string, low: number, high: number): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < low || value > high) {
+    throw new UhttpError(
+      code,
+      `Set ${name} to a whole number from ${low} to ${high}, and your code passed ${String(value)}.`,
+    )
+  }
+  return value
+}
+
+/**
  * Returns a time limit after checking that it is a whole number of milliseconds from 0 to the
  * longest delay that you can pass to `setTimeout`.
  *
