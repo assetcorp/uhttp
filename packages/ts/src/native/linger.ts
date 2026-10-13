@@ -52,6 +52,7 @@ function responseBytes(exchange: Exchange, reply: Reply, head: boolean): Buffer 
 export function writeLingeringReply(res: HttpResponse, exchange: Exchange, reply: Reply, head: boolean): void {
   watchAbort(res, exchange)
   res.writeStatus(responseBytes(exchange, reply, head))
+  exchange.lingering = true
   exchange.end()
   closeAfterLingering(res, exchange)
 }
