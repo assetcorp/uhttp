@@ -28,27 +28,28 @@
  *   the body ends.
  * - The package throws `HANDLER_TIMEOUT` when a handler passes the time limit of its route, and it
  *   closes the connection after the reply.
- * - The package sends `INVALID_TRANSFER_ENCODING` when a client lists `chunked` more than once in
+ * - The package sends `INVALID_TRANSFER_ENCODING` when a client sends `chunked` more than once in
  *   the `transfer-encoding` lines of a request, or ends those lines with a coding other than
  *   `chunked`.
  * - The package sends `UNSUPPORTED_TRANSFER_CODING` when a client applies a transfer coding before
  *   `chunked`, such as `gzip, chunked`, because the package decodes `chunked` alone.
- * - The package throws `UNDECLARED_HEADER` when your code asks for a header that neither the route
- *   nor its middleware declared.
- * - The package throws `UNDECLARED_CLIENT_ADDRESS` when your code asks for the client address and
- *   nobody declared it.
+ * - The package throws `UNDECLARED_HEADER` when your code reads a header that neither the route nor
+ *   its middleware declared.
+ * - The package throws `UNDECLARED_CLIENT_ADDRESS` when your code reads the client address, but
+ *   neither the route nor its middleware declared it.
  * - The package throws `UNDECLARED_BODY` when your code reads the body on a route without a body
  *   reader.
  * - The package throws `BODY_ALREADY_READ` when your code reads a body after it streamed that body.
  * - The package throws `REQUEST_RELEASED` when your code reads the query string or the content type
- *   for the first time after the package has sent a reply that your handler returned without an
- *   `await`, because uWebSockets.js frees the request once its handler returns. Reading
- *   `header('content-type')`, `headers()`, or `body` also reads the content type.
- * - The package throws `INVALID_SCHEMA` when a schema lacks the Standard Schema interface, or when
- *   its validator throws, rejects, or returns something other than a Standard Schema result.
+ *   for the first time after the package sends a reply that your handler returned without an
+ *   `await`, because uWebSockets.js frees the request once its handler returns. Your code also
+ *   reads the content type when it calls `header('content-type')` or `headers()`, or reads `body`.
+ * - The package throws `INVALID_SCHEMA` when you pass a schema without the Standard Schema
+ *   interface, or when its validator throws, rejects, or returns something other than a Standard
+ *   Schema result.
  * - The package throws `INVALID_UPLOAD` when you pass `multipart()` a limit that is not a whole
  *   number of zero or more, when its `file` callback returns something other than a writable
- *   stream, or when a destination closes before the package has written the whole file.
+ *   stream, or when a destination closes before the package writes the whole file.
  * - The package throws `INVALID_HEADER` when your code sets a header name or a header value that
  *   HTTP forbids.
  * - The package throws `INVALID_EVENT` when a server-sent event has a line break in its name or its
@@ -66,16 +67,16 @@
  *   type or a value outside its range, when you pass `threads` together with an app object or a
  *   Unix socket path, or when you call `server.reload()` on a server without `tls`.
  * - The package throws `LISTEN_FAILED` when the operating system can't bind the address that you
- *   chose, when the Unix socket path names a file other than a socket or a socket in use, or when
- *   the package can't set the mode of the socket file.
- * - The package throws `INVALID_CERTIFICATE` when {@link serve} or `server.reload()` can't read a
+ *   chose, when the file at the Unix socket path is not a socket, when another server listens on
+ *   that path, or when the package can't set the mode of the socket file.
+ * - The package throws `INVALID_CERTIFICATE` when {@link serve} or `server.reload()` can't load a
  *   key file or a certificate file, or when a key fails to decrypt with its passphrase or to match
  *   its certificate.
- * - The package sends `SERVER_CLOSING` when a request arrives on an open connection after
- *   `server.close()` has started, and it closes the connection after the reply. `server.reload()`
- *   throws it once `server.close()` has started.
+ * - The package sends `SERVER_CLOSING` in response to a request that a client sends on an open
+ *   connection after `server.close()` starts, and then it closes that connection. `server.reload()`
+ *   throws it once `server.close()` starts.
  * - The package throws `UPGRADE_REQUIRED` when a client sends a request without a WebSocket upgrade
- *   to a WebSocket route, or asks for a version of the protocol other than 13.
+ *   to a WebSocket route, or sends a version of the protocol other than 13.
  * - The package throws `INVALID_UPGRADE` when a client sends an upgrade request without
  *   `upgrade: websocket` or `connection: upgrade`, with a malformed `sec-websocket-key`, or with a
  *   body.
@@ -174,7 +175,7 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
 }
 
 /**
- * The package lists each problem that a validator found with a body in this shape.
+ * The package stores each problem that a validator finds with a body in this shape.
  */
 export interface ValidationIssue {
   /** The validator wrote this message, which the package cuts to 256 characters. */

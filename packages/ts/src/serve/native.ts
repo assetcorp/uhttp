@@ -72,16 +72,16 @@ export async function hubOf(native: TemplatedApp, app: CompiledApp, origin: Uint
 /**
  * Registers every route of an app with uWebSockets.js: each WebSocket route under `ws()`, each
  * route of the app with a HEAD route beside every GET route, and the fallback under `any('/*')`.
- * uWebSockets.js picks the routes of a request by the hostname that the client names in TLS, so the
- * function registers the whole table once more under each hostname.
+ * uWebSockets.js matches a request against the routes of the hostname that the client sends during
+ * the TLS handshake, so the function registers the whole table once more under each hostname.
  *
  * @param uws - The package passes the module of uWebSockets.js.
  * @param native - The package passes the app of uWebSockets.js on this thread.
  * @param app - The package passes the compiled app.
  * @param hub - The package passes the hub of the thread, or `undefined` when the app has none.
  * @param drain - The package passes the drain of the app of uWebSockets.js.
- * @param tls - The package passes the checked `tls` option, whose hostnames each get the whole table,
- * or `undefined` for a plain app.
+ * @param tls - The package passes the checked `tls` option, under whose hostnames the function
+ * registers the whole table again, or `undefined` for a plain app.
  * @internal
  */
 export async function registerApp(
@@ -115,17 +115,17 @@ export async function registerApp(
 }
 
 /**
- * Returns a new app of uWebSockets.js for one thread, which serves HTTPS with `tls` once the
- * package has checked every key file and every certificate file, or plain HTTP without `tls`. The
- * package loads the code of TLS only for a server with `tls`.
+ * Returns a new app of uWebSockets.js for one thread. With `tls`, the app serves HTTPS, after the
+ * function checks every key file and every certificate file. Without `tls`, the app serves plain
+ * HTTP. The function loads the code of TLS only for a server with `tls`.
  *
  * @param uws - The package passes the module of uWebSockets.js.
  * @param tls - The package passes the checked `tls` option, or `undefined` for plain HTTP.
- * @param withHostnames - The package passes `false` for the app that only accepts connections and
+ * @param withHostnames - The package passes `false` for the app that only receives connections and
  * passes them to other apps.
- * @returns The promise resolves to the app, on which the package has registered no route.
- * @throws {@link UhttpError} with the code `INVALID_CERTIFICATE` when the package can't use a key
- * file or a certificate file.
+ * @returns The promise resolves to the app, which has no route yet.
+ * @throws {@link UhttpError} with the code `INVALID_CERTIFICATE` when the function fails to load a
+ * key file or a certificate file.
  * @internal
  */
 export async function nativeAppOf(

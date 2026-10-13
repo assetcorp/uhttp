@@ -76,7 +76,7 @@ describe('a server on a Unix socket', () => {
     await server.close()
   })
 
-  it('sets the mode that socketMode names once it listens', async () => {
+  it('sets the mode from socketMode once it listens', async () => {
     const path = socketPath()
     const server = await serve({ app: named('unix'), path, socketMode: 0o660 })
 

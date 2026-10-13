@@ -40,7 +40,7 @@ async function listenerClosed(port: number): Promise<void> {
 }
 
 describe('server.close() on worker threads', () => {
-  it('lets a request in progress on a worker finish, answers a new request with 503, and exits with code 0', async () => {
+  it('lets a request in progress on a worker finish, sends a 503 in response to a new request, and exits with code 0', async () => {
     const host = await startHost({ UHTTP_THREADS: '1' })
     const busy = await openConnection(host.port)
     const idle = await openConnection(host.port)
@@ -78,7 +78,7 @@ describe('server.close() on worker threads', () => {
     expect(['closed', 'reset']).toContain(await busy.waitForClose())
   }, 20_000)
 
-  it('waits for a request in progress on a worker under the longest grace period that serve() accepts', async () => {
+  it('waits for a request in progress on a worker when the grace period is at its maximum of 2147483647 ms', async () => {
     const host = await startHost({ UHTTP_THREADS: '1', UHTTP_GRACE_PERIOD_MS: '2147483647' })
     const busy = await openConnection(host.port)
     void busy.write(requestHead('GET', '/slow/1000'))
@@ -96,7 +96,7 @@ describe('server.close() on worker threads', () => {
     expect(host.output()).not.toContain('TimeoutOverflowWarning')
   }, 20_000)
 
-  it('lets the process end after the grace period and the exit wait when a worker stops answering during the close', async () => {
+  it('lets the process end after the grace period and the exit wait when a worker blocks its thread during the close', async () => {
     const host = await startHost({ UHTTP_THREADS: '1', UHTTP_WATCHDOG_MS: '0', UHTTP_GRACE_PERIOD_MS: '300' })
     const busy = await openConnection(host.port)
     void busy.write(requestHead('GET', '/stall/200'))
@@ -108,12 +108,14 @@ describe('server.close() on worker threads', () => {
 
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(5_000)
     expect(host.output()).toContain('closed')
-    expect(host.output()).toContain('A worker thread failed to exit after the close, so the process ends without it.')
+    expect(host.output()).toContain(
+      'A worker thread is alive after the close, so the main thread stops waiting for it.',
+    )
   }, 20_000)
 })
 
 describe('the process exit hook of a server on worker threads', () => {
-  it('waits until every worker has closed its connections when the app calls process.exit()', async () => {
+  it('waits until every worker closes its connections when the host process calls process.exit()', async () => {
     const host = await startHost({ UHTTP_THREADS: '2' })
     const [first, second] = await twoThreads(host.port)
     const socket = await openSocket(host.port, '/chat/lobby')
@@ -127,7 +129,7 @@ describe('the process exit hook of a server on worker threads', () => {
     expect((await socket.closed).code).toBe(1006)
   }, 20_000)
 
-  it('drains the healthy workers before it exits with an error when a worker hangs, and waits for no hung worker', async () => {
+  it('drains the healthy workers before it exits with an error when a worker hangs, without waiting for the hung worker', async () => {
     const host = await startHost({ UHTTP_THREADS: '2', UHTTP_WATCHDOG_MS: '600', UHTTP_GRACE_PERIOD_MS: '6000' })
     const [healthy, doomed] = await twoThreads(host.port)
     const startedAt = Date.now()
@@ -141,7 +143,7 @@ describe('the process exit hook of a server on worker threads', () => {
     expect(finished.headers.get('connection')).toEqual(['close'])
     expect(exit).toEqual({ code: null, signal: 'SIGABRT' })
     expect(Date.now() - startedAt).toBeLessThan(5_000)
-    expect(host.output()).toContain('A worker thread failed to answer for 600 ms.')
+    expect(host.output()).toContain('A worker thread sent no reply to a ping for 600 ms.')
     expect(host.output()).toContain('A worker thread hangs. The server exits with an error.')
   }, 20_000)
 })

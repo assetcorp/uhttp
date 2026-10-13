@@ -18,9 +18,9 @@ export function closeConnection(res: HttpResponse, exchange: Exchange): void {
 
 /**
  * Attaches the abort handler to a response that stays open after the handler of uWebSockets.js
- * returns, which uWebSockets.js requires of such a response, and counts the response in the drain
- * of its app. The package attaches the handler once for each request, and it attaches none to a
- * response that ends inside the handler.
+ * returns, because uWebSockets.js requires one on such a response. The function also counts the
+ * response in the drain of its app. The package attaches the handler only to a response that stays
+ * open, and only once for each request.
  *
  * @param res - The package passes the response of uWebSockets.js, which is still open.
  * @param exchange - The package passes the state of the request, which the abort handler aborts.

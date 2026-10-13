@@ -109,7 +109,7 @@ function respond(upgrade: Upgrade, request: CopiedRequest, chain: RequestChain):
  * Once every middleware has returned, the package switches the connection inside a cork, with the
  * values that your middleware stored as the `data` of the socket. When a middleware has returned
  * another reply in place of the 101, the package writes that reply. The handler attaches the abort
- * handler before it returns to uWebSockets.js, unless the response has already ended. Once the
+ * handler before it returns to uWebSockets.js, unless the response has already ended. While the
  * server closes or reloads, the client receives a 503 with the code `SERVER_CLOSING` in place of
  * the 101.
  *

@@ -11,11 +11,11 @@ export interface AppRuntime {
   readonly logger: Logger | undefined
   /** The package calls this handler for a path that has no route. */
   readonly notFound: Handler | undefined
-  /** The package calls this handler for every error that the chain throws. */
+  /** The package calls this handler for every error that a middleware or a handler throws. */
   readonly onError: ErrorHandler | undefined
-  /** The package accepts a request body of up to this many bytes, unless the route sets its own limit. */
+  /** The package receives a request body of up to this many bytes, unless you set another limit on the route. */
   readonly maxBodyBytes: number
-  /** A handler has this many milliseconds before the package sends a 503, and 0 means no limit. */
+  /** The package sends a 503 when a handler takes longer than this many milliseconds, unless the value is 0. */
   readonly timeoutMs: number
   /** The package passes each message that your code publishes to this adapter, which is `undefined` when you pass none. */
   readonly pubsub: PubSubAdapter | undefined
@@ -29,15 +29,15 @@ export interface AppRuntime {
  */
 export interface BodyState {
   /**
-   * Makes the reader discard the rest of the body as it arrives, and resumes a paused source, so
-   * that the rest of the body keeps arriving after the response starts.
+   * Sets the reader to discard the rest of the body, and resumes a paused source so that the
+   * client can send the rest of the body after the response starts.
    */
   settle(): void
   /**
    * Stops pausing the source for the rest of the request. uWebSockets.js stops writing to a paused
    * socket as well as reading from it, so the package calls this method when a streamed reply
-   * starts. The reader can then hold up to the body limit of the route in chunks that your code
-   * hasn't read.
+   * starts. The reader can then store chunks that your code is yet to read, up to the body limit
+   * of the route.
    */
   keepFlowing(): void
 }

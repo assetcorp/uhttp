@@ -128,14 +128,15 @@ async function startApp(uws: Uws, compiled: CompiledApp, tls: CheckedTls | undef
 }
 
 /**
- * Starts a server whose main thread serves every request. With `tls`, an app of uWebSockets.js
- * accepts each connection and passes it to a second app on the same thread that serves it, so that
- * the package can swap the second app for one with renewed certificates during a reload.
+ * Starts a server whose main thread serves every request. With `tls`, one app of uWebSockets.js
+ * receives each connection and passes it to a second app on the same thread, which serves the
+ * connection, so that the package can swap the second app for one with renewed certificates during
+ * a reload.
  *
  * @param uws - The package passes the module of uWebSockets.js.
  * @param options - The package passes the checked options of the server.
  * @returns The promise resolves to the server once it listens.
- * @throws {@link UhttpError} with the codes that {@link serve} documents.
+ * @throws {@link UhttpError} with the codes in the TSDoc of {@link serve}.
  * @internal
  */
 export async function serveOnMainThread(uws: Uws, options: CheckedServeOptions): Promise<Server> {

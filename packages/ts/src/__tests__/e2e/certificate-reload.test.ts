@@ -88,7 +88,7 @@ describe('a server with tls on worker threads', () => {
 })
 
 describe('server.reload() on worker threads', () => {
-  it('answers new connections with the renewed certificates while clients send requests, and fails no request', async () => {
+  it('serves new connections with the renewed certificates while every request that clients send during the reload succeeds', async () => {
     const directory = tlsDirectory()
     const host = await tlsHost(directory, '2')
     const seenBefore = await Promise.all([0, 1, 2, 3].map(() => fetchThread(host.port, 'api.test')))
@@ -178,7 +178,7 @@ describe('server.reload() on worker threads', () => {
     expect((await host.exited).code).toBe(0)
   }, 30_000)
 
-  it('exits with an error when a worker that a reload retired stops answering', async () => {
+  it('exits with an error when a worker that a reload retired blocks its thread', async () => {
     const host = await tlsHost(tlsDirectory(), '1', { UHTTP_WATCHDOG_MS: '600', UHTTP_GRACE_PERIOD_MS: '20000' })
     const old = await openTlsConnection(host.port, 'api.test')
     const sentAt = Date.now()
@@ -190,7 +190,7 @@ describe('server.reload() on worker threads', () => {
     const exit = await host.exited
 
     expect(exit).not.toEqual({ code: 0, signal: null })
-    expect(host.output()).toContain('A worker thread failed to answer for 600 ms.')
+    expect(host.output()).toContain('A worker thread sent no reply to a ping for 600 ms.')
     expect(host.output()).toContain('A worker thread hangs. The server exits with an error.')
   }, 30_000)
 })

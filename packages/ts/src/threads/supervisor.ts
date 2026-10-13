@@ -12,15 +12,15 @@ import { type MainMessage, revivedError, type WorkerMessage } from './messages.j
 import { type SharedSetup, settled, startWorker, type WorkerRecord } from './record.js'
 import { CrashWindow, RestartSlot } from './restarts.js'
 
-const MIXED_TLS_MESSAGE = 'A worker thread and the main thread differ on whether they serve TLS.'
+const MIXED_TLS_MESSAGE = 'A worker thread and the main thread serve different protocols, one TLS and one plain HTTP.'
 const FAILED_BUILD_MESSAGE = 'A worker thread failed to build the app.'
-const STUCK_WORKER_MESSAGE = 'A worker thread failed to exit after the close, so the process ends without it.'
+const STUCK_WORKER_MESSAGE = 'A worker thread is alive after the close, so the main thread stops waiting for it.'
 
 /**
  * The main thread starts the worker threads through this object, which adds the app of each worker
- * to the app of uWebSockets.js that accepts the connections. The object also replaces a worker that
- * crashes, pings each worker that serves, replaces every worker on a reload, and drains every
- * worker on a close.
+ * to the app of uWebSockets.js that receives the connections. The object also replaces a worker that
+ * crashes and pings each worker that serves. On a reload, it replaces every worker, while on a
+ * close, it drains every worker.
  *
  * @internal
  */
@@ -103,10 +103,11 @@ export class Supervisor {
   }
 
   /**
-   * Asks every worker to drain, and waits until each worker that has not hung has exited, for up
-   * to {@link WORKER_EXIT_WAIT_MS} past the grace period.
+   * Sends every worker the message to drain, and waits until each worker that is not hung exits,
+   * for up to {@link WORKER_EXIT_WAIT_MS} past the grace period. The method then marks every worker
+   * that is still alive as hung, so that the process can exit without that worker.
    *
-   * @returns The promise settles once the workers have exited, and a second call returns the same promise.
+   * @returns The promise settles once the workers exit or the wait ends. A second call returns the same promise.
    */
   stop(): Promise<void> {
     this.#stopped ??= this.#stopAll()
@@ -114,14 +115,14 @@ export class Supervisor {
   }
 
   /**
-   * Starts a new set of workers with the renewed certificates, and once every new worker serves,
-   * replaces the old workers with them and lets each old worker finish its connections.
+   * Starts a new set of workers with the renewed certificates. Once every new worker serves, the
+   * method replaces the old workers with the new ones and lets each old worker finish its requests.
    *
    * @returns The promise resolves once the new workers serve every new connection.
    * @throws {@link UhttpError} with the code `INVALID_SERVE_OPTIONS` on a server without `tls`,
-   * `INVALID_CERTIFICATE` when the package can't use a renewed file, `SERVER_CLOSING` once the
-   * server closes, and `APP_START_FAILED` when a new worker fails to start, in which case the old
-   * workers go on serving.
+   * `INVALID_CERTIFICATE` when the package fails to load a renewed file, `SERVER_CLOSING` once the
+   * server starts to close, and `APP_START_FAILED` when a new worker fails to start, in which case
+   * the old workers go on serving.
    */
   async reload(): Promise<void> {
     const { tls } = this.#options
@@ -322,7 +323,7 @@ export class Supervisor {
         this.#removeDescriptor(record)
         record.state = 'leaving'
         record.hung = true
-        this.#log(`A worker thread failed to answer for ${watchdogMs} ms.`, { worker: record.id })
+        this.#log(`A worker thread sent no reply to a ping for ${watchdogMs} ms.`, { worker: record.id })
         this.#fail('A worker thread hangs.')
         return
       }

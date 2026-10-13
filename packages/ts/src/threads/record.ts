@@ -14,34 +14,34 @@ const WORKER_ENTRY = new URL('./worker.js', import.meta.url)
 export type WorkerState = 'starting' | 'serving' | 'leaving' | 'gone'
 
 /**
- * The supervisor keeps these facts about each worker thread.
+ * The supervisor stores these values for each worker thread.
  *
  * @internal
  */
 export interface WorkerRecord {
   /** The supervisor numbers each worker with this ID. */
   readonly id: number
-  /** The worker thread of Node.js. */
+  /** This is the worker thread of Node.js. */
   readonly worker: Worker
-  /** The worker fills this place in the set of workers, which starts a replacement after a crash. */
+  /** The supervisor starts a replacement in this slot after the worker crashes. */
   readonly slot: RestartSlot
-  /** The promise resolves once the worker has built its app, and rejects when it fails first. */
+  /** The promise resolves once the worker builds its app, or rejects when the worker fails before that. */
   readonly ready: PromiseWithResolvers<void>
-  /** The promise resolves once the worker has exited. */
+  /** The promise resolves once the worker exits. */
   readonly exited: Promise<void>
-  /** The worker sets the first element of this shared array to 1 once it has closed its connections. */
+  /** The worker sets the first element of this shared array to 1 once it closes its connections. */
   readonly exitFlag: Int32Array
   /** The worker is in this state. */
   state: WorkerState
-  /** The app of uWebSockets.js on the worker has this descriptor once the worker has built it. */
+  /** The app of uWebSockets.js on the worker has this descriptor once the worker builds the app. */
   descriptor: AppDescriptor | undefined
-  /** The worker last answered a ping at this time from `performance.now()`. */
+  /** The worker sent its last reply to a ping at this time, from `performance.now()`. */
   lastPong: number
-  /** This is `true` while the worker belongs to a reload that has yet to replace the old workers. */
+  /** This is `true` for a worker of a reload until that reload replaces the old workers. */
   held: boolean
-  /** This is `true` from the moment the worker serves, including while it finishes its connections after a reload. */
+  /** The watchdog pings the worker while this is `true`, from the moment that the worker serves, including while it finishes its requests after a reload. */
   watched: boolean
-  /** This is `true` once the watchdog has found that the worker fails to answer. */
+  /** This is `true` once the main thread marks the worker as hung. */
   hung: boolean
 }
 
@@ -58,11 +58,11 @@ export type SharedSetup = Pick<WorkerSetup, 'module' | 'origin'>
  * @internal
  */
 export interface WorkerEvents {
-  /** The worker posted a valid message. */
+  /** The worker posts a valid message. */
   message(record: WorkerRecord, message: WorkerMessage): void
-  /** The worker threw an error that no code caught. */
+  /** The worker throws an error that no code catches. */
   error(record: WorkerRecord, error: Error): void
-  /** The worker exited with this code. */
+  /** The worker exits with this code. */
   exit(record: WorkerRecord, code: number): void
 }
 
@@ -84,7 +84,7 @@ export function settled(promise: Promise<void>): Promise<void> {
  * Starts a worker thread with the setup of the server, and passes each of its events on.
  *
  * @param id - The supervisor passes the ID of the worker.
- * @param slot - The supervisor passes the place that the worker fills.
+ * @param slot - The supervisor passes the slot of the worker.
  * @param held - The supervisor passes `true` for a worker of a reload.
  * @param options - The package passes the checked options of the server.
  * @param setup - The package passes the module URL and the origin bytes for every worker.

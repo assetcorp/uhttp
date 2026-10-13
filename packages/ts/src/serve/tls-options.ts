@@ -8,51 +8,51 @@ const WILDCARD_LABEL = '*'
  * You pass the key and the certificate of one hostname to {@link serve} in this shape.
  */
 export interface TlsCertificate {
-  /** The package reads the private key in PEM form from this file. */
+  /** The package loads the private key in PEM form from this file. */
   keyFile: string
-  /** The package reads the certificate in PEM form from this file, which can hold the intermediate certificates after it. */
+  /** The package loads the certificate in PEM form from this file, which can contain the intermediate certificates after your certificate. */
   certFile: string
   /** The package decrypts the key with this passphrase, which you pass for an encrypted key alone. */
   passphrase?: string
 }
 
 /**
- * You pass these options as `tls` to {@link serve} to serve HTTPS. The server sends the key and the
- * certificate at the top level to every client that names no hostname under `hostnames`.
+ * You pass these options as `tls` to {@link serve} to serve HTTPS. The server sends the
+ * certificate at the top level to every client that sends a hostname outside `hostnames`.
  */
 export interface TlsOptions extends TlsCertificate {
   /**
    * The server sends the certificate under each hostname, such as `api.example.com` or
-   * `*.example.com`, to a client that names that hostname, and it serves the same routes under every
-   * hostname. A `*` stands for the first label of a hostname alone. The package stores each hostname in
-   * lowercase.
+   * `*.example.com`, to a client that sends that hostname. The server serves the same routes under
+   * every hostname. A `*` stands for the first label of a hostname alone. The package stores each
+   * hostname in lowercase.
    */
   hostnames?: Record<string, TlsCertificate>
 }
 
 /**
- * The package stores a key and a certificate in this form once it has checked them.
+ * The package stores a key and a certificate in this form once it checks them.
  *
  * @internal
  */
 export interface CheckedCertificate {
-  /** The package reads the private key from this file. */
+  /** The package loads the private key from this file. */
   readonly keyFile: string
-  /** The package reads the certificate from this file. */
+  /** The package loads the certificate from this file. */
   readonly certFile: string
   /** The package decrypts the key with this passphrase, which is `undefined` for a key without one. */
   readonly passphrase: string | undefined
 }
 
 /**
- * The package stores the `tls` option of {@link serve} in this form once it has checked it.
+ * The package stores the `tls` option of {@link serve} in this form once it checks the option.
  *
  * @internal
  */
 export interface CheckedTls {
-  /** The server sends this certificate to a client that names no hostname in the list. */
+  /** The server sends this certificate to a client that sends a hostname outside the list. */
   readonly fallback: CheckedCertificate
-  /** The server sends the certificate beside each lowercase hostname to a client that names it. */
+  /** The server sends the certificate beside each lowercase hostname to a client that sends that hostname. */
   readonly hostnames: readonly (readonly [string, CheckedCertificate])[]
 }
 
@@ -98,7 +98,7 @@ function checkedHostnames(value: unknown): [string, CheckedCertificate][] {
     if (!isHostname(hostname) || hostname === WILDCARD_LABEL) {
       throw invalid(`The key ${JSON.stringify(name)} of tls.hostnames is not a hostname such as api.example.com.`)
     }
-    if (seen.has(hostname)) throw invalid(`tls.hostnames lists ${hostname} more than once.`)
+    if (seen.has(hostname)) throw invalid(`The hostname ${hostname} appears more than once in tls.hostnames.`)
     seen.add(hostname)
     return [hostname, checkedCertificate(certificate, `tls.hostnames[${JSON.stringify(name)}]`)]
   })
@@ -119,7 +119,7 @@ function isHostnameEntry(value: unknown): value is readonly [string, CheckedCert
 }
 
 /**
- * Returns `true` when a value that a worker received from the main thread has the shape of a
+ * Returns `true` when a value that a worker receives from the main thread has the shape of a
  * {@link CheckedTls}.
  *
  * @param value - The worker passes the value.
@@ -135,7 +135,7 @@ export function isCheckedTls(value: unknown): value is CheckedTls {
 }
 
 /**
- * Returns the `tls` option of {@link serve} once the function has checked its shape.
+ * Returns the `tls` option of {@link serve} after the function checks its shape.
  *
  * @param value - The package passes the `tls` option that you gave to {@link serve}, which can be `undefined`.
  * @returns The function returns the checked option, or `undefined` when you leave the option out.
