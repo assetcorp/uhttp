@@ -54,13 +54,13 @@ Start the server under a process manager that restarts it. Raise `watchdogMs` wh
 
 ## A worker that takes too long to start
 
-A worker can wait forever while it builds its app, for example when the module waits for a database connection that never opens. The main thread therefore stops a worker that takes longer than `workerStartTimeoutMs` to build its app. The limit is 90 seconds by default, which is the default start timeout of systemd. Raise it when your module loads data for longer than that before it returns the app.
+A worker can wait forever while it builds its app, for example when the module waits for a database connection that never opens. The main thread therefore stops a worker that takes longer than `workerStartTimeoutMs` to build its app. The limit is 90 seconds by default, which matches the default start timeout of systemd. Raise it when your module loads data for longer than that before it returns the app.
 
 - When a worker of the first start takes too long, `serve()` rejects with `APP_START_FAILED`. The `cause` of that error has the message 'The worker thread took longer than 90000 ms to build its app.'
 - When a new worker of `server.reload()` takes too long, the reload rejects with `APP_START_FAILED`, while the old workers go on serving.
 - When the replacement for a crashed worker takes too long, the main thread logs 'A worker thread took too long to build its app.' and counts that start as a crash. It then starts another replacement after the delay in [A worker that crashes](#a-worker-that-crashes).
 
-On one thread, the main thread counts those crashes at least `workerStartTimeoutMs` apart. With the default settings, they therefore never reach a `crashLimit` of 5 crashes within 10 seconds on their own, so a module that never builds its app leaves its thread without a worker while the main thread logs each try.
+On one thread, the main thread counts those crashes at least `workerStartTimeoutMs` apart, so with the default settings, they never add up to a `crashLimit` of 5 crashes within 10 seconds on their own. A module that never builds its app therefore leaves its thread without a worker, while the main thread logs each try.
 
 Set `workerStartTimeoutMs` to 0 to let a worker take as long as it needs, in which case `serve()` and `server.reload()` wait until every new worker builds its app.
 
