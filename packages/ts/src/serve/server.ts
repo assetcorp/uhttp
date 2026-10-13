@@ -35,7 +35,7 @@ export interface Server {
    * renewed file, in which case the server goes on serving with the old certificates. The method
    * throws the code `INVALID_SERVE_OPTIONS` on a server without `tls`, and the code
    * `SERVER_CLOSING` once {@link Server.close} starts. It throws the code `APP_START_FAILED` when a
-   * new worker fails to build the app.
+   * new worker fails to build the app or takes longer than `workerStartTimeoutMs` to build it.
    */
   reload(): Promise<void>
 }

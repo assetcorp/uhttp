@@ -1,20 +1,37 @@
 import { writeFileSync } from 'node:fs'
+import { connect } from 'node:net'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { certificateDirectory, writeCertificate } from '../helpers/certificates.js'
-import { type Host, startHost, stateDirectory, waitFor } from '../helpers/child.js'
+import { hostCertificates, writeCertificate } from '../helpers/certificates.js'
+import { type Host, reloadHost as reloaded, startHost, stateDirectory } from '../helpers/child.js'
 import { requestHead } from '../helpers/http-client.js'
 import { pause } from '../helpers/server.js'
-import { openTlsConnection, type TlsConnection } from '../helpers/tls-client.js'
+import { fetchThread, openTlsConnection, type ThreadSeen, type TlsConnection } from '../helpers/tls-client.js'
 
 const HOSTNAMES = ['api.test', 'www.test']
 const STALL_AFTER_RELOAD_MS = 4_000
 
+const PLAIN_CLOSE_WAIT_MS = 2_000
+
 function tlsDirectory(): string {
-  const directory = certificateDirectory()
-  writeCertificate(directory, 'default', 'default.test')
-  for (const hostname of HOSTNAMES) writeCertificate(directory, hostname, hostname)
-  return directory
+  return hostCertificates(HOSTNAMES)
+}
+
+function plainReply(port: number): Promise<{ bytes: Buffer; closedWithinMs: number }> {
+  const { promise, resolve } = Promise.withResolvers<{ bytes: Buffer; closedWithinMs: number }>()
+  const sentAt = Date.now()
+  const chunks: Buffer[] = []
+  const socket = connect(port, '127.0.0.1', () => {
+    socket.write(requestHead('GET', '/thread'))
+  })
+  const timer = setTimeout(() => socket.destroy(), PLAIN_CLOSE_WAIT_MS)
+  socket.on('data', chunk => chunks.push(chunk))
+  socket.on('error', () => undefined)
+  socket.on('close', () => {
+    clearTimeout(timer)
+    resolve({ bytes: Buffer.concat(chunks), closedWithinMs: Date.now() - sentAt })
+  })
+  return promise
 }
 
 function tlsHost(directory: string, threads: string, env: Record<string, string> = {}): Promise<Host> {
@@ -24,23 +41,6 @@ function tlsHost(directory: string, threads: string, env: Record<string, string>
     UHTTP_TLS_HOSTNAMES: HOSTNAMES.join(','),
     ...env,
   })
-}
-
-interface Seen {
-  readonly commonName: string | undefined
-  readonly thread: string
-}
-
-async function fetchThread(port: number, servername: string): Promise<Seen> {
-  const connection = await openTlsConnection(port, servername)
-  const response = await connection.http.exchange(requestHead('GET', '/thread'))
-  connection.socket.destroy()
-  return { commonName: connection.commonName, thread: response.body.toString() }
-}
-
-async function reloaded(host: Host): Promise<string> {
-  host.child.send('reload')
-  return waitFor(() => /reload(ed|\sfailed \S+)\n/.exec(host.output())?.[0].trim(), 15_000, 'The reload')
 }
 
 interface ClientReport {
@@ -76,7 +76,7 @@ async function keepSending(port: number, servername: string, stop: () => boolean
 describe('a server with tls on worker threads', () => {
   it('serves HTTPS with the certificate of each hostname on every worker', async () => {
     const host = await tlsHost(tlsDirectory(), '2')
-    const seen: Seen[] = []
+    const seen: ThreadSeen[] = []
 
     for (let index = 0; index < 8; index++) {
       for (const servername of [...HOSTNAMES, 'other.test']) seen.push(await fetchThread(host.port, servername))
@@ -117,6 +117,22 @@ describe('server.reload() on worker threads', () => {
     await host.close()
     expect((await host.exited).code).toBe(0)
   }, 40_000)
+
+  it('closes each plain HTTP connection without an HTTP response while both workers serve TLS', async () => {
+    const host = await tlsHost(tlsDirectory(), '2')
+    const threads = new Set<string>()
+    for (let attempt = 0; attempt < 6; attempt++) threads.add((await fetchThread(host.port, 'api.test')).thread)
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const reply = await plainReply(host.port)
+      expect(reply.closedWithinMs).toBeLessThan(PLAIN_CLOSE_WAIT_MS)
+      expect(reply.bytes.subarray(0, 5).toString('latin1')).not.toBe('HTTP/')
+    }
+
+    expect(threads.size).toBe(2)
+    await host.close()
+    expect((await host.exited).code).toBe(0)
+  }, 30_000)
 
   it('keeps serving with the old certificates when the renewed files are broken', async () => {
     const directory = tlsDirectory()

@@ -374,6 +374,12 @@ export const FATAL_EXIT_CODE = 1
 /** When the server closes, the main thread waits up to this many milliseconds past the grace period for every worker to exit, so that the close ends even when a worker hangs. */
 export const WORKER_EXIT_WAIT_MS = 5_000
 
+/** By default, the main thread waits this many milliseconds for a worker thread to build its app, which matches the default start timeout of systemd. */
+export const DEFAULT_WORKER_START_TIMEOUT_MS = 90_000
+
+/** {@link serve} throws for a start timeout longer than this many milliseconds, because Node.js sets a longer `setTimeout` delay to 1 millisecond. */
+export const MAX_WORKER_START_TIMEOUT_MS = 2_147_483_647
+
 /** When your code calls `process.exit()`, the main thread waits up to this many milliseconds in total for the workers to close their connections. */
 export const EXIT_HOOK_WAIT_MS = 5_000
 

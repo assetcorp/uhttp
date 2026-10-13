@@ -67,7 +67,7 @@ The server then closes the old connections in the steps of `server.close()`, wit
 
 Once no old request is in progress on a thread, the server closes the idle old connections of that thread. Then, once `gracePeriodMs` passes, it closes every old connection that is left. A client that sends a request on an idle old connection at the moment that the server closes it can see the connection reset. Under section 9.2.2 of RFC 9110, that client can then send an idempotent request such as a GET again on a new connection.
 
-With worker threads, `server.reload()` starts a new worker for each old one and waits until every new worker serves. Only then does the main thread send the new connections to the new workers, while each old worker finishes the requests on its connections and exits. When a new worker fails to start, `server.reload()` rejects with `APP_START_FAILED`, while the old workers go on serving. The main thread also logs the error of that new worker.
+With worker threads, `server.reload()` starts a new worker for each old one and waits until every new worker serves. Only then does the main thread send the new connections to the new workers, while each old worker finishes the requests on its connections and exits. When a new worker fails to start, or takes longer than `workerStartTimeoutMs` to build its app, `server.reload()` rejects with `APP_START_FAILED`, while the old workers go on serving. The main thread also logs the error of that new worker.
 
 A second call to `server.reload()` waits until the first one finishes. Once `server.close()` starts, `server.reload()` rejects with `SERVER_CLOSING`. On a server without `tls`, `server.reload()` rejects with `INVALID_SERVE_OPTIONS`.
 

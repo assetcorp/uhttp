@@ -87,7 +87,8 @@
  *   RFC 6455 forbids.
  * - The package throws `APP_START_FAILED` when the module that you pass to {@link serve} throws
  *   while it builds the app, when its default export is neither an app nor a function that returns
- *   one, or when a worker thread crashes before every worker serves.
+ *   one, when a worker thread crashes before every worker serves, or when a worker takes longer
+ *   than `workerStartTimeoutMs` to build its app.
  *
  * The package sends `INVALID_TRANSFER_ENCODING` and `UNSUPPORTED_TRANSFER_CODING` before it calls
  * any middleware or handler, and it closes the connection after the reply. It sends

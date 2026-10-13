@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -87,6 +87,27 @@ export function startHost(env: Record<string, string>): Promise<Host> {
     reject(new Error(`The host exited with ${code ?? signal} before it printed a port: ${output}`))
   })
   return promise
+}
+
+export interface StartEvent {
+  readonly time: number
+  readonly thread: string
+  readonly event: string
+}
+
+export function startEvents(directory: string): StartEvent[] {
+  return readFileSync(join(directory, 'starts'), 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => {
+      const [time = '0', thread = '', event = ''] = line.split(' ')
+      return { time: Number(time), thread, event }
+    })
+}
+
+export function reloadHost(host: Host): Promise<string> {
+  host.child.send('reload')
+  return waitFor(() => /reload(ed|\sfailed \S+)\n/.exec(host.output())?.[0].trim(), 15_000, 'The reload')
 }
 
 export async function waitFor<T>(

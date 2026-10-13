@@ -6,12 +6,14 @@ import {
   DEFAULT_SOCKET_MODE,
   DEFAULT_THREADS,
   DEFAULT_WATCHDOG_MS,
+  DEFAULT_WORKER_START_TIMEOUT_MS,
   MAX_CRASH_WINDOW_MS,
   MAX_GRACE_PERIOD_MS,
   MAX_PORT,
   MAX_SOCKET_MODE,
   MAX_THREADS,
   MAX_WATCHDOG_MS,
+  MAX_WORKER_START_TIMEOUT_MS,
   MIN_CRASH_LIMIT,
   MIN_CRASH_WINDOW_MS,
   MIN_PORT,
@@ -87,6 +89,15 @@ export interface ServeOptions {
    */
   watchdogMs?: number
   /**
+   * The main thread stops a worker thread that takes longer than this many milliseconds to build
+   * its app. The limit is 90 seconds by default. When a worker of the start takes too long,
+   * `serve()` rejects with `APP_START_FAILED`. When a worker of a reload takes too long,
+   * `server.reload()` rejects with the same code while the old workers go on serving. When the
+   * replacement for a crashed worker takes too long, the main thread counts that start as a crash
+   * towards `crashLimit`. Set it to 0 to let a worker take as long as it needs.
+   */
+  workerStartTimeoutMs?: number
+  /**
    * The main thread writes each crash, each hang, and each exit with an error to this logger. When
    * you leave it out, the main thread writes them to the console.
    */
@@ -113,6 +124,8 @@ export interface CheckedServeOptions {
   readonly crashWindowMs: number
   /** A worker has this many milliseconds to reply to a ping from the main thread. A value of 0 switches the watchdog off. */
   readonly watchdogMs: number
+  /** A worker has this many milliseconds to build its app. A value of 0 switches the limit off. */
+  readonly workerStartTimeoutMs: number
   /** The main thread writes its events to this logger. */
   readonly logger: Logger
   /** During a close or a reload, the server waits this many milliseconds before it closes the connections that are left. */
@@ -209,7 +222,12 @@ export function checkedServeOptions(options: ServeOptions): CheckedServeOptions 
     throw invalid('With threads, pass the URL of the app module, because each worker builds its own app from it.')
   }
   const heap = options.workerHeapMb
-  if (heap !== undefined && threads === 0) throw invalid('Set threads whenever you set workerHeapMb.')
+  for (const [name, value] of [
+    ['workerHeapMb', heap],
+    ['workerStartTimeoutMs', options.workerStartTimeoutMs],
+  ] as const) {
+    if (value !== undefined && threads === 0) throw invalid(`Set threads whenever you set ${name}.`)
+  }
   return {
     app,
     address: checkedAddress(options, threads),
@@ -230,6 +248,13 @@ export function checkedServeOptions(options: ServeOptions): CheckedServeOptions 
       MAX_CRASH_WINDOW_MS,
     ),
     watchdogMs: wholeNumberIn(options.watchdogMs, 'watchdogMs', DEFAULT_WATCHDOG_MS, 0, MAX_WATCHDOG_MS),
+    workerStartTimeoutMs: wholeNumberIn(
+      options.workerStartTimeoutMs,
+      'workerStartTimeoutMs',
+      DEFAULT_WORKER_START_TIMEOUT_MS,
+      0,
+      MAX_WORKER_START_TIMEOUT_MS,
+    ),
     logger: checkedLogger(options.logger),
     gracePeriodMs: wholeNumberIn(
       options.gracePeriodMs,

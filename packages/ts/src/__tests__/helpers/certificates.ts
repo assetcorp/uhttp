@@ -47,3 +47,10 @@ export function writeCertificate(
   if (result.status !== 0) throw new Error(`openssl could not write a certificate: ${result.stderr}`)
   return { keyFile, certFile }
 }
+
+export function hostCertificates(hostnames: readonly string[]): string {
+  const directory = certificateDirectory()
+  writeCertificate(directory, 'default', 'default.test')
+  for (const hostname of hostnames) writeCertificate(directory, hostname, hostname)
+  return directory
+}

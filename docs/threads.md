@@ -18,7 +18,7 @@ export default () => createApp().get('/hello', c => c.text('Hello from a worker.
 
 ## Write the app module
 
-The default export of the module should be the app from `createApp()`, or a function that returns the app or a promise of the app. Each worker imports the module once and builds its app from it, while Node.js executes `server.ts` once, on the main thread. Pass the URL of the module, because the main thread can't post an app object to a worker. `serve()` rejects with `INVALID_SERVE_OPTIONS` when you pass `threads` together with an app object or with a Unix socket path, and when you pass `workerHeapMb` without `threads`.
+The default export of the module should be the app from `createApp()`, or a function that returns the app or a promise of the app. Each worker imports the module once and builds its app from it, while Node.js executes `server.ts` once, on the main thread. Pass the URL of the module, because the main thread can't post an app object to a worker. `serve()` rejects with `INVALID_SERVE_OPTIONS` when you pass `threads` together with an app object or with a Unix socket path, and when you pass `workerHeapMb` or `workerStartTimeoutMs` without `threads`.
 
 `serve()` rejects with `APP_START_FAILED` when the module throws during the first start, or when its default export returns no app. It also rejects with that code when a worker crashes before every worker serves. The `cause` of the error is the error of the worker. Before `serve()` rejects, the package stops the other workers, so the port stays unbound.
 
@@ -51,6 +51,18 @@ While a worker blocks its thread, for example in a loop without an end, the clie
 When a worker sends no reply to a ping within `watchdogMs`, the main thread logs 'A worker thread sent no reply to a ping for 30000 ms.' and closes the port. It then closes the healthy workers as `server.close()` does, and it ends the process without waiting for the hung worker. Because the hung worker still has its connections open when Node.js stops it, the process can end with `SIGABRT`.
 
 Start the server under a process manager that restarts it. Raise `watchdogMs` when a route blocks its thread for longer on purpose. Set `watchdogMs` to 0 to switch the watchdog off, in which case the connections of a hung worker stay open until the process ends.
+
+## A worker that takes too long to start
+
+A worker can wait forever while it builds its app, for example when the module waits for a database connection that never opens. The main thread therefore stops a worker that takes longer than `workerStartTimeoutMs` to build its app. The limit is 90 seconds by default, which is the default start timeout of systemd. Raise it when your module loads data for longer than that before it returns the app.
+
+- When a worker of the first start takes too long, `serve()` rejects with `APP_START_FAILED`. The `cause` of that error has the message 'The worker thread took longer than 90000 ms to build its app.'
+- When a new worker of `server.reload()` takes too long, the reload rejects with `APP_START_FAILED`, while the old workers go on serving.
+- When the replacement for a crashed worker takes too long, the main thread logs 'A worker thread took too long to build its app.' and counts that start as a crash. It then starts another replacement after the delay in [A worker that crashes](#a-worker-that-crashes).
+
+On one thread, the main thread counts those crashes at least `workerStartTimeoutMs` apart. With the default settings, they therefore never reach a `crashLimit` of 5 crashes within 10 seconds on their own, so a module that never builds its app leaves its thread without a worker while the main thread logs each try.
+
+Set `workerStartTimeoutMs` to 0 to let a worker take as long as it needs, in which case `serve()` and `server.reload()` wait until every new worker builds its app.
 
 ## Logs
 
