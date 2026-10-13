@@ -22,7 +22,7 @@ export type {
 } from './multipart/index.js'
 export type { Reply, ReplyStream, ResponseStream, StreamProducer } from './reply.js'
 export type { RequestInfo } from './request.js'
-export { type ServeOptions, type Server, serve } from './serve.js'
+export { type ServeOptions, type Server, serve } from './serve/index.js'
 export type { EventStream, EventStreamOptions, EventStreamProducer, ServerSentEvent } from './sse.js'
 export type { TestBody, TestHeaders, TestRequestInit } from './testing/index.js'
 export type {
@@ -37,3 +37,12 @@ export type {
   RouteArguments,
   RouteOptions,
 } from './types.js'
+export type {
+  PublishOptions,
+  PubSubAdapter,
+  SendOptions,
+  SendStatus,
+  ServerWebSocket,
+  WebSocketArguments,
+  WebSocketRoute,
+} from './websocket/types.js'

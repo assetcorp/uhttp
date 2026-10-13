@@ -6,9 +6,31 @@ import { attachGroup, Group, Registry, registryOf } from './group.js'
 import { checkedLimit, checkedTimeLimit } from './limits.js'
 import type { TestRequestInit } from './testing/index.js'
 import type { AppOptions } from './types.js'
+import type { PublishOptions, PubSubAdapter } from './websocket/types.js'
 
 let construct: (runtime: AppRuntime) => App
 let compile: (app: App) => CompiledApp
+let connectPublisher: (app: App, publish: Publish | undefined) => void
+
+type Publish = (topic: string, message: string | Uint8Array | ArrayBuffer, options?: PublishOptions) => void
+
+const ADAPTER_METHODS = ['start', 'subscribe', 'unsubscribe', 'publish', 'close'] as const
+
+function checkedAdapter(pubsub: PubSubAdapter | undefined): PubSubAdapter | undefined {
+  if (pubsub === undefined) return undefined
+  const value: unknown = pubsub
+  const complete =
+    typeof value === 'object' &&
+    value !== null &&
+    ADAPTER_METHODS.every(method => typeof Reflect.get(value, method) === 'function')
+  if (!complete) {
+    throw new UhttpError(
+      'INVALID_APP_OPTIONS',
+      `Pass a pub/sub adapter with the methods ${ADAPTER_METHODS.join(', ')} as the pubsub option.`,
+    )
+  }
+  return pubsub
+}
 
 function checkedRuntime(options: AppOptions): AppRuntime {
   const { logger, notFound, onError, maxBodyBytes = DEFAULT_MAX_BODY_BYTES, timeoutMs = DEFAULT_TIMEOUT_MS } = options
@@ -31,6 +53,7 @@ function checkedRuntime(options: AppOptions): AppRuntime {
     onError,
     maxBodyBytes: checkedLimit(maxBodyBytes, 'INVALID_APP_OPTIONS', 'maxBodyBytes'),
     timeoutMs: checkedTimeLimit(timeoutMs, 'INVALID_APP_OPTIONS'),
+    pubsub: checkedAdapter(options.pubsub),
   }
 }
 
@@ -43,10 +66,14 @@ export class App extends Group {
   readonly #runtime: AppRuntime
   #compiled: CompiledApp | undefined
   #compiledVersion = -1
+  #publish: Publish | undefined
 
   static {
     construct = runtime => new App(runtime)
     compile = app => app.#compile()
+    connectPublisher = (app, publish) => {
+      app.#publish = publish
+    }
   }
 
   private constructor(runtime: AppRuntime) {
@@ -61,7 +88,8 @@ export class App extends Group {
    * context. The method lowercases header names, and it sends `host: localhost` when your headers
    * include no `Host`, as `fetch` does. It returns the same 400 as uWebSockets.js for more than 98
    * header lines, for a request line and headers above 4,096 bytes, and for an empty, repeated, or
-   * invalid `Host`.
+   * invalid `Host`. When the package accepts a WebSocket upgrade, the method returns the 101 with
+   * `sec-websocket-accept` and the first subprotocol that the request offers, but it opens no socket.
    *
    * @param target - You pass the path with an optional query string, such as `/search?q=uhttp`.
    * @param init - You can set the method, the headers, the client address, and an abort signal here.
@@ -70,6 +98,23 @@ export class App extends Group {
   async request(target: string, init: TestRequestInit = {}): Promise<Response> {
     const { requestApp } = await import('./testing/index.js')
     return requestApp(this.#compile(), target, init)
+  }
+
+  /**
+   * Sends a message to every WebSocket that has subscribed to a topic on any worker thread. When the
+   * app has a pub/sub adapter, the package also passes the message to the adapter for the
+   * subscribers on other servers. Because no socket can subscribe before {@link serve} has started
+   * the app, the method drops any message that your code publishes before then.
+   *
+   * @param topic - You pass the name of the topic.
+   * @param message - The package sends a string as text and bytes as a binary message, unless you
+   * set `binary` in the options.
+   * @param options - You can choose a binary or a text message and ask for compression here.
+   * @throws {@link UhttpError} with the code `INVALID_WEBSOCKET` when the server has started and the
+   * topic is not a string or the message is neither a string nor bytes.
+   */
+  publish(topic: string, message: string | Uint8Array | ArrayBuffer, options?: PublishOptions): void {
+    this.#publish?.(topic, message, options)
   }
 
   #compile(): CompiledApp {
@@ -95,14 +140,27 @@ export function compiledOf(app: App): CompiledApp {
 }
 
 /**
+ * Connects {@link App.publish} to the hub of the thread that serves the app, or disconnects it once
+ * the server closes.
+ *
+ * @param app - The package passes the app that it serves.
+ * @param publish - The package passes the function that publishes through the hub, or `undefined`.
+ * @internal
+ */
+export function setPublisher(app: App, publish: Publish | undefined): void {
+  connectPublisher(app, publish)
+}
+
+/**
  * Returns a new app with no routes, so that you can add routes before you pass the app to
  * {@link serve}.
  *
- * @param options - You can pass a logger, a not-found handler, an error handler, a body limit, and
- * a time limit here.
+ * @param options - You can pass a logger, a not-found handler, an error handler, a body limit, a
+ * time limit, and a pub/sub adapter here.
  * @returns The function returns the new app.
  * @throws {@link UhttpError} with the code `INVALID_APP_OPTIONS` when an option has the wrong type,
- * or when a limit is not a whole number of zero or more.
+ * when a limit is not a whole number of zero or more, or when the adapter is missing one of its
+ * five methods.
  */
 export function createApp(options: AppOptions = {}): App {
   return construct(checkedRuntime(options))

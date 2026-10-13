@@ -1,4 +1,4 @@
-import { BODYLESS_STATUSES, MAX_REPLY_STATUS, MIN_REPLY_STATUS } from './constants.js'
+import { BODYLESS_STATUSES, MAX_REPLY_STATUS, MIN_REPLY_STATUS, SWITCHING_PROTOCOLS_STATUS } from './constants.js'
 import { UhttpError } from './errors.js'
 import type { HeaderLines } from './headers.js'
 
@@ -108,12 +108,17 @@ let construct: (
   stream: ReplyStream | undefined,
 ) => Reply
 
+let constructSwitch: () => Reply
+
 /**
  * You get a `Reply` from a helper on the {@link Context}, such as {@link Context.json}, and your
  * handler returns it so that the package can write it to the client.
  */
 export class Reply {
-  /** The HTTP status is a whole number from 200 to 599. */
+  /**
+   * The HTTP status is a whole number from 200 to 599, apart from the 101 that the package sets
+   * when it accepts the upgrade of a WebSocket route.
+   */
   readonly status: number
   /** The package sends this value as the `content-type` header, and it sends none when this is `undefined`. */
   readonly contentType: string | undefined
@@ -126,6 +131,7 @@ export class Reply {
 
   static {
     construct = (status, contentType, body, headers, stream) => new Reply(status, contentType, body, headers, stream)
+    constructSwitch = () => new Reply(SWITCHING_PROTOCOLS_STATUS, undefined, null, undefined, undefined, true)
   }
 
   private constructor(
@@ -134,8 +140,10 @@ export class Reply {
     body: string | Uint8Array | null,
     headers: HeaderLines | undefined,
     stream: ReplyStream | undefined,
+    switching = false,
   ) {
-    if (!Number.isInteger(status) || status < MIN_REPLY_STATUS || status > MAX_REPLY_STATUS) {
+    const valid = Number.isInteger(status) && status >= MIN_REPLY_STATUS && status <= MAX_REPLY_STATUS
+    if (!valid && !switching) {
       throw new UhttpError(
         'INVALID_STATUS',
         `The status of a reply must be a whole number from ${MIN_REPLY_STATUS} to ${MAX_REPLY_STATUS}, and the code passed ${status}.`,
@@ -173,6 +181,20 @@ export function createReply(
   if (headers === undefined || typeLines === undefined) return construct(status, contentType, body, headers, stream)
   headers.delete('content-type')
   return construct(status, typeLines.at(-1), body, headers.size === 0 ? undefined : headers, stream)
+}
+
+/**
+ * Returns the reply with the status 101 that the last handler of a WebSocket route returns once
+ * every check of the upgrade request has passed. When the request ends with this reply, the
+ * package switches the connection to a WebSocket. When a middleware returns another reply in its
+ * place, the package sends that reply.
+ *
+ * @returns The function returns a reply without a body. No helper on the context returns a reply
+ * with this status.
+ * @internal
+ */
+export function switchingReply(): Reply {
+  return constructSwitch()
 }
 
 /**
