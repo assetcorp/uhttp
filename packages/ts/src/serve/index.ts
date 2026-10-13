@@ -58,9 +58,10 @@ async function serveOnWorkers(uws: Uws, options: CheckedServeOptions, module: UR
  * or a value outside its range, or when you pass options that the package can't use together. It
  * throws the code `INVALID_CERTIFICATE` when the package fails to load a key file or a certificate
  * file, or when a key fails to decrypt or to match its certificate. It throws the code
- * `APP_START_FAILED` when the app module fails to build the app or a worker crashes during the
- * start. It throws the code `LISTEN_FAILED` when the operating system fails to bind the address, or
- * when a file other than a socket, or a socket on which a server listens, is at the Unix socket path.
+ * `APP_START_FAILED` when the app module fails to build the app, when a worker crashes during the
+ * start, or when a worker takes longer than `workerStartTimeoutMs` to build its app. It throws the
+ * code `LISTEN_FAILED` when the operating system fails to bind the address, or when a file other
+ * than a socket, or a socket on which a server listens, is at the Unix socket path.
  */
 export async function serve(options: ServeOptions): Promise<Server> {
   const checked = checkedServeOptions(options)

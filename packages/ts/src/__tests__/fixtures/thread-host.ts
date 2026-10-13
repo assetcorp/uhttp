@@ -39,6 +39,7 @@ const server = await serve({
     crashWindowMs: 'UHTTP_CRASH_WINDOW_MS',
     workerHeapMb: 'UHTTP_WORKER_HEAP_MB',
     gracePeriodMs: 'UHTTP_GRACE_PERIOD_MS',
+    workerStartTimeoutMs: 'UHTTP_WORKER_START_TIMEOUT_MS',
   }),
 })
 

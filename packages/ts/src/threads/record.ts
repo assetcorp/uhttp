@@ -43,6 +43,8 @@ export interface WorkerRecord {
   watched: boolean
   /** This is `true` once the main thread marks the worker as hung. */
   hung: boolean
+  /** This timer fires once the worker takes longer than `workerStartTimeoutMs` to build its app. The field is `undefined` when no timer is pending. */
+  startDeadline: NodeJS.Timeout | undefined
 }
 
 /**
@@ -123,6 +125,7 @@ export function startWorker(
     held,
     watched: false,
     hung: false,
+    startDeadline: undefined,
   }
   worker.on('message', (message: unknown) => {
     if (isWorkerMessage(message)) events.message(record, message)

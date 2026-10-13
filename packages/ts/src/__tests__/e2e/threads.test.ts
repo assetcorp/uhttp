@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { serve } from '../../index.js'
-import { startHost, stateDirectory, waitFor } from '../helpers/child.js'
+import { startHost, startEvents as starts, stateDirectory, waitFor } from '../helpers/child.js'
 import { type HttpConnection, openConnection, requestHead } from '../helpers/http-client.js'
 import { pause, track } from '../helpers/server.js'
 import { openSocket } from '../helpers/websocket.js'
@@ -31,16 +31,6 @@ async function threadsSeen(port: number, connections: number): Promise<Set<strin
     connection.destroy()
   }
   return seen
-}
-
-function starts(directory: string): { time: number; thread: string; event: string }[] {
-  return readFileSync(join(directory, 'starts'), 'utf8')
-    .trim()
-    .split('\n')
-    .map(line => {
-      const [time = '0', thread = '', event = ''] = line.split(' ')
-      return { time: Number(time), thread, event }
-    })
 }
 
 describe('a server on worker threads', () => {

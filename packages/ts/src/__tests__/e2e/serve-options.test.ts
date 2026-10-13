@@ -49,6 +49,11 @@ describe('the options of serve()', () => {
       { app: module, port: 0, threads: 1, crashWindowMs: 0 },
       { app: module, port: 0, threads: 1, watchdogMs: -1 },
       { app: module, port: 0, threads: 1, watchdogMs: 2 ** 31 },
+      { app, port: 0, workerStartTimeoutMs: 1_000 },
+      { app: module, port: 0, threads: 1, workerStartTimeoutMs: -1 },
+      { app: module, port: 0, threads: 1, workerStartTimeoutMs: 1.5 },
+      { app: module, port: 0, threads: 1, workerStartTimeoutMs: 2 ** 31 },
+      { app: module, port: 0, threads: 1, workerStartTimeoutMs: '1000' },
       { app, port: 0, logger: { info: () => undefined } },
     ]
 

@@ -1,6 +1,6 @@
 import { connect, type TLSSocket } from 'node:tls'
 import { afterEach } from 'vitest'
-import { HttpConnection } from './http-client.js'
+import { HttpConnection, requestHead } from './http-client.js'
 
 const LOOPBACK = '127.0.0.1'
 
@@ -28,4 +28,16 @@ export function openTlsConnection(port: number, servername: string): Promise<Tls
   })
   socket.once('error', reject)
   return promise
+}
+
+export interface ThreadSeen {
+  readonly commonName: string | undefined
+  readonly thread: string
+}
+
+export async function fetchThread(port: number, servername: string): Promise<ThreadSeen> {
+  const connection = await openTlsConnection(port, servername)
+  const response = await connection.http.exchange(requestHead('GET', '/thread'))
+  connection.socket.destroy()
+  return { commonName: connection.commonName, thread: response.body.toString() }
 }

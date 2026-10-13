@@ -15,6 +15,7 @@ import { CrashWindow, RestartSlot } from './restarts.js'
 const MIXED_TLS_MESSAGE = 'A worker thread and the main thread serve different protocols, one TLS and one plain HTTP.'
 const FAILED_BUILD_MESSAGE = 'A worker thread failed to build the app.'
 const STUCK_WORKER_MESSAGE = 'A worker thread is alive after the close, so the main thread stops waiting for it.'
+const START_TIMEOUT_MESSAGE = 'A worker thread took too long to build its app.'
 
 /**
  * The main thread starts the worker threads through this object, which adds the app of each worker
@@ -189,11 +190,33 @@ export class Supervisor {
       exit: (worker, code) => {
         this.#lost(worker, new Error(`The worker thread exited with code ${code}.`), 'A worker thread exited.')
         worker.state = 'gone'
+        this.#clearStartDeadline(worker)
         this.#records.delete(worker.id)
       },
     })
     this.#records.set(record.id, record)
+    this.#armStartDeadline(record)
     return record
+  }
+
+  #armStartDeadline(record: WorkerRecord): void {
+    const timeoutMs = this.#options.workerStartTimeoutMs
+    if (timeoutMs === 0) return
+    record.startDeadline = setTimeout(() => this.#startTimedOut(record, timeoutMs), timeoutMs)
+    record.startDeadline.unref()
+  }
+
+  #clearStartDeadline(record: WorkerRecord): void {
+    clearTimeout(record.startDeadline)
+    record.startDeadline = undefined
+  }
+
+  #startTimedOut(record: WorkerRecord, timeoutMs: number): void {
+    record.startDeadline = undefined
+    if (record.state === 'gone') return
+    const error = new Error(`The worker thread took longer than ${timeoutMs} ms to build its app.`)
+    this.#lost(record, error, START_TIMEOUT_MESSAGE)
+    void record.worker.terminate()
   }
 
   #post(record: WorkerRecord, message: MainMessage): void {
@@ -217,6 +240,7 @@ export class Supervisor {
   }
 
   #ready(record: WorkerRecord, descriptor: AppDescriptor, secure: boolean): void {
+    this.#clearStartDeadline(record)
     if (record.state !== 'starting') return
     record.descriptor = descriptor
     if (secure !== (this.#options.tls !== undefined)) {

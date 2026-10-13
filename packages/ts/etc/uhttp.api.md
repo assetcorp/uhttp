@@ -233,6 +233,7 @@ export interface ServeOptions {
     tls?: TlsOptions;
     watchdogMs?: number;
     workerHeapMb?: number;
+    workerStartTimeoutMs?: number;
 }
 
 // @public
