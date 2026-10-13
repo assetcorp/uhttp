@@ -43,7 +43,7 @@ Between the bind and that change of mode, the file has the mode that the umask o
 
 Once `gracePeriodMs` passes, which is 10 seconds by default, the server closes every connection that is left, including a connection whose request is still in progress. The promise from `server.close()` resolves once every connection closes. A second call returns that same promise, so you can call `server.close()` from more than one place. With worker threads, the promise resolves once each worker exits, after every worker takes the same steps.
 
-uWebSockets.js v20.71.0 has no function that closes a single idle connection, so the package closes the idle connections of a thread together, once the last request on that thread finishes. Until then, an idle connection stays open, so a client that sends a request on it receives the 503.
+uWebSockets.js v20.71.0 gives the package no way to reach a connection between two requests, so the package closes the idle connections of a thread together, once the last request on that thread finishes or once `gracePeriodMs` passes. Until then, an idle connection stays open, so a client that sends a request on it receives the 503.
 
 ## Close the server on a signal
 
