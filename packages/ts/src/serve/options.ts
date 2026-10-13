@@ -90,7 +90,7 @@ export interface ServeOptions {
   watchdogMs?: number
   /**
    * The main thread stops a worker thread that takes longer than this many milliseconds to build
-   * its app. The limit is 90 seconds by default. When a worker of the start takes too long,
+   * its app. The limit is 90 seconds by default. When a worker of the first start takes too long,
    * `serve()` rejects with `APP_START_FAILED`. When a worker of a reload takes too long,
    * `server.reload()` rejects with the same code while the old workers go on serving. When the
    * replacement for a crashed worker takes too long, the main thread counts that start as a crash
