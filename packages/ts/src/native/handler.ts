@@ -90,8 +90,8 @@ export function copyRequest(
     exchange,
     method,
     path,
+    chain,
     req,
-    chain.parameterNames,
     parameters,
     framing.contentLength,
     plan.headerNames,
@@ -245,6 +245,7 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
     parameterNames: route.parameterNames,
     rawParameters: NO_PARAMETERS,
     matchedRoute: true,
+    route: route.path,
     limits: route.limits,
   }
   const withoutParameters: DecodedChain = { chain: base, parameters: NO_PARAMETERS }

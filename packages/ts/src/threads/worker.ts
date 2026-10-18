@@ -9,6 +9,7 @@ import { importApp } from '../serve/module.js'
 import { hubOf, loadUws, nativeAppOf, registerApp } from '../serve/native.js'
 import { isCheckedTls } from '../serve/tls-options.js'
 import type { Hub } from '../websocket/hub.js'
+import { installSharedMemory } from './memory.js'
 import { isMainMessage, type MainMessage, serializedError, type WorkerMessage, type WorkerSetup } from './messages.js'
 import { ThreadRelay } from './relay.js'
 
@@ -80,9 +81,11 @@ function setupOf(value: unknown): WorkerSetup | undefined {
   const origin: unknown = Reflect.get(value, 'origin')
   const tls: unknown = Reflect.get(value, 'tls')
   const flag: unknown = Reflect.get(value, 'exitFlag')
+  const memory: unknown = Reflect.get(value, 'memory')
   if (typeof module !== 'string' || !(origin instanceof Uint8Array) || !(flag instanceof Int32Array)) return undefined
-  if (tls === undefined) return { module, origin, tls: undefined, exitFlag: flag }
-  return isCheckedTls(tls) ? { module, origin, tls, exitFlag: flag } : undefined
+  if (!(memory instanceof SharedArrayBuffer)) return undefined
+  if (tls === undefined) return { module, origin, tls: undefined, exitFlag: flag, memory }
+  return isCheckedTls(tls) ? { module, origin, tls, exitFlag: flag, memory } : undefined
 }
 
 async function drainAndExit(request: DrainRequest): Promise<void> {
@@ -134,6 +137,7 @@ function receive(message: MainMessage): void {
 
 async function start(setup: WorkerSetup): Promise<void> {
   let app: Awaited<ReturnType<typeof importApp>>
+  installSharedMemory(setup.memory)
   try {
     app = await importApp(new URL(setup.module))
   } catch (error) {
@@ -144,7 +148,7 @@ async function start(setup: WorkerSetup): Promise<void> {
   const uws = loadUws()
   const native = await nativeAppOf(uws, setup.tls, true)
   pendingNative = native
-  const drain = new Drain()
+  const drain = new Drain(setup.tls !== undefined)
   const hub = await hubOf(native, compiled, setup.origin)
   await registerApp(uws, native, compiled, hub, drain, setup.tls)
   const relay = hub === undefined ? undefined : new ThreadRelay(hub)
