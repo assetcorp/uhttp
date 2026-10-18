@@ -1,6 +1,7 @@
 import type { WebSocket, WebSocketBehavior } from 'uWebSockets.js'
 import type { CompiledApp, CompiledWebSocket } from '../compile.js'
 import { WEBSOCKET_HANDLER_ERROR_CODE } from '../constants.js'
+import type { Drain } from '../native/drain.js'
 import type { Logger } from '../types.js'
 import type { Hub } from './hub.js'
 import { type NativeSocket, socketOf } from './socket.js'
@@ -61,6 +62,7 @@ function runHandler(
  * @param app - The package passes the compiled app.
  * @param compiled - The package passes the compiled WebSocket route.
  * @param hub - The package passes the hub of the thread.
+ * @param appDrain - The package passes the drain of the app of uWebSockets.js, which counts every open socket.
  * @returns The function returns the behaviour to pass to `ws()` of uWebSockets.js.
  * @internal
  */
@@ -69,6 +71,7 @@ export function socketBehavior(
   app: CompiledApp,
   compiled: CompiledWebSocket,
   hub: Hub,
+  appDrain: Drain,
 ): WebSocketBehavior<unknown> {
   const { route } = compiled
   const { logger } = app.runtime
@@ -83,11 +86,12 @@ export function socketBehavior(
     closeOnBackpressureLimit: route.closeOnBackpressureLimit,
     compression: route.compression ? flags.SHARED_COMPRESSOR | flags.SHARED_DECOMPRESSOR : flags.DISABLED,
     sendPingsAutomatically: true,
-    upgrade: upgradeHandler(app, compiled, hub),
+    upgrade: upgradeHandler(app, compiled, hub, appDrain),
     open: (ws: WebSocket<unknown>) => {
       const socket = socketOf(ws)
       if (socket === undefined) return
       socket.attach(ws)
+      appDrain.opened(socket)
       if (open !== undefined) runHandler(logger, path, 'open', socket, () => open(socket))
     },
     message: (ws: WebSocket<unknown>, data: ArrayBuffer, isBinary: boolean) => {
@@ -105,6 +109,7 @@ export function socketBehavior(
       const socket = socketOf(ws)
       if (socket === undefined) return
       socket.detach()
+      appDrain.closed(socket)
       if (close === undefined) return
       const copied = text.decode(reason)
       runHandler(logger, path, 'close', socket, () => close(socket, code, copied))

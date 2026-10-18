@@ -5,18 +5,22 @@ import type { CompiledApp, CompiledRoute, CopyPlan } from '../compile.js'
 import { LIST_HEADER_NAMES } from '../constants.js'
 import { type Context, createContext } from '../context.js'
 import { startDeadline } from '../deadline.js'
+import { UhttpError } from '../errors.js'
 import { Exchange } from '../exchange.js'
 import { lineSeparatorOf } from '../headers.js'
+import { errorReply, type Reply } from '../reply.js'
 import { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type RequestChain, resolveChain } from '../resolve.js'
-import { attachBody } from './body.js'
+import { attachBody, followBody } from './body.js'
 import { closeConnection, remoteAddressOf, watchAbort } from './close.js'
+import { CLOSING, type Drain } from './drain.js'
 import { type RequestFraming, readFraming } from './framing.js'
 import { refusedRequest } from './refuse.js'
-import { writeCrash, writeFramingRejection, writeReply } from './write.js'
+import { writeCrash, writeFramingRejection, writeReply, writeWholeReply } from './write.js'
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
 
+const SERVER_CLOSING_MESSAGE = 'The server is closing, so send the request again on a new connection.'
 const NO_VALUES: readonly (string | undefined)[] = []
 const NO_PARAMETERS: readonly string[] = []
 const MISSED_ROUTE_MESSAGE =
@@ -223,13 +227,16 @@ function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
  * and releases the request of uWebSockets.js. Last, it attaches the abort handler unless the
  * response ended inside the handler.
  *
+ * While the server closes, the handler passes every request to {@link answerWhileClosing}.
+ *
  * @param app - The package passes the compiled app.
  * @param route - The package passes the compiled route.
  * @param method - The route matches this method, which is `HEAD` for the route beside a GET route.
+ * @param drain - The package passes the drain of the app of uWebSockets.js.
  * @returns The function returns the handler to register with uWebSockets.js.
  * @internal
  */
-export function routeHandler(app: CompiledApp, route: CompiledRoute, method: string): NativeHandler {
+export function routeHandler(app: CompiledApp, route: CompiledRoute, method: string, drain: Drain): NativeHandler {
   const count = route.parameterNames.length
   const base: RequestChain = {
     layers: route.layers,
@@ -264,8 +271,9 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
     return respondAndRelease(res, exchange, request, chain)
   }
   return (res, req) => {
-    const exchange = new Exchange(app.runtime)
-    if (!answer(res, req, exchange)) watchAbort(res, exchange)
+    const exchange = new Exchange(app.runtime, drain)
+    const ended = drain.mode === CLOSING ? answerWhileClosing(res, req, exchange) : answer(res, req, exchange)
+    if (!ended) watchAbort(res, exchange)
   }
 }
 
@@ -297,15 +305,55 @@ function answerFallback(app: CompiledApp, res: HttpResponse, req: HttpRequest, e
  * and sends the request through the JavaScript matcher. The client then receives a 404, a 405, or
  * the methods of the path for OPTIONS. When the JavaScript matcher matches a route there, the
  * handler serves it and logs a warning. Last, the handler attaches the abort handler unless the
- * response ended inside it.
+ * response ended inside it. While the server closes, the handler passes every request to
+ * {@link answerWhileClosing}.
  *
  * @param app - The package passes the compiled app.
+ * @param drain - The package passes the drain of the app of uWebSockets.js.
  * @returns The function returns the handler to register under `any('/*')`.
  * @internal
  */
-export function fallbackHandler(app: CompiledApp): NativeHandler {
+export function fallbackHandler(app: CompiledApp, drain: Drain): NativeHandler {
   return (res, req) => {
-    const exchange = new Exchange(app.runtime)
-    if (!answerFallback(app, res, req, exchange)) watchAbort(res, exchange)
+    const exchange = new Exchange(app.runtime, drain)
+    const ended =
+      drain.mode === CLOSING ? answerWhileClosing(res, req, exchange) : answerFallback(app, res, req, exchange)
+    if (!ended) watchAbort(res, exchange)
   }
+}
+
+/**
+ * Sends a 503 with the code `SERVER_CLOSING` in response to a request that the client sends while
+ * the server closes. The package closes the connection after that reply. The function makes the
+ * same framing checks as a route handler, but it calls no middleware for such a request. It records the end of a body that the client declares, so that the package
+ * can write the reply in the way that {@link writeReply} writes it while the client is still
+ * sending the body.
+ *
+ * @param res - The package passes the response of uWebSockets.js, inside the synchronous handler.
+ * @param req - The package passes the request of uWebSockets.js.
+ * @param exchange - The package passes the state of the request.
+ * @returns The function returns `true` when the response ends or the connection closes.
+ * @internal
+ */
+export function answerWhileClosing(res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean {
+  let method = ''
+  try {
+    method = req.getCaseSensitiveMethod()
+    const framing = admittedFraming(res, req, exchange)
+    if (framing === undefined) return false
+    if (framing.declaresBody) followBody(res, exchange, framing)
+  } catch (error) {
+    return crash(res, exchange, error, method, '')
+  }
+  return writeWholeReply(res, exchange, serverClosingReply(), method === 'HEAD')
+}
+
+/**
+ * Returns the 503 with the code `SERVER_CLOSING` that a client receives while the server closes.
+ *
+ * @returns The function returns a new reply on every call.
+ * @internal
+ */
+export function serverClosingReply(): Reply {
+  return errorReply(new UhttpError('SERVER_CLOSING', SERVER_CLOSING_MESSAGE))
 }

@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { getHeapStatistics } from 'node:v8'
 import { MessagePort, threadId } from 'node:worker_threads'
-import { createApp } from '../../index.js'
+import { createApp, type PubSubAdapter } from '../../index.js'
 
 const stateDirectory = process.env.UHTTP_FIXTURE_DIR
 const SLOW_START_MS = 3_000
@@ -18,6 +18,14 @@ MessagePort.prototype.postMessage = function countedPost(...args: Parameters<Mes
 function record(event: string): void {
   if (stateDirectory !== undefined)
     appendFileSync(join(stateDirectory, 'starts'), `${Date.now()} ${threadId} ${event}\n`)
+}
+
+const adapterThatNeverStarts: PubSubAdapter = {
+  start: () => new Promise(() => undefined),
+  publish: () => undefined,
+  subscribe: () => undefined,
+  unsubscribe: () => undefined,
+  close: () => undefined,
 }
 
 function blockForever(): void {
@@ -43,12 +51,15 @@ export default async function buildApp() {
     setTimeout(() => {
       throw new Error('The fixture crashed on purpose after it started.')
     }, CRASH_AFTER_START_MS)
+  } else if (stateDirectory !== undefined && existsSync(join(stateDirectory, 'hang-start'))) {
+    record('hang')
+    await new Promise(() => undefined)
   } else if (stateDirectory !== undefined && existsSync(join(stateDirectory, 'slow-start'))) {
     record('slow')
     await new Promise(resolve => setTimeout(resolve, SLOW_START_MS))
   }
   record('start')
-  const app = createApp()
+  const app = claimed('hang-adapter') ? createApp({ pubsub: adapterThatNeverStarts }) : createApp()
   app
     .get('/thread', c => c.text(String(threadId)))
     .get('/heap', c => c.text(String(getHeapStatistics().heap_size_limit)))
@@ -74,6 +85,15 @@ export default async function buildApp() {
     .get('/hang', c => {
       setTimeout(blockForever, 0)
       return c.text('hanging')
+    })
+    .get('/stall/:ms', async c => {
+      await new Promise(resolve => setTimeout(resolve, Number(c.req.param('ms'))))
+      blockForever()
+      return c.text('stalled')
+    })
+    .get('/slow/:ms', async c => {
+      await new Promise(resolve => setTimeout(resolve, Number(c.req.param('ms'))))
+      return c.text(`slow from thread ${threadId}`)
     })
     .post('/publish/:topic', c => {
       const before = portMessages
