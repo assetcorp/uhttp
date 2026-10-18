@@ -2,9 +2,9 @@ import { BodyArrival } from './arrival.js'
 import { UhttpError } from './errors.js'
 import { settableHeaderName } from './headers.js'
 import { addListener, type OnceListeners } from './listeners.js'
+import { type Drain, SERVING } from './native/drain.js'
 import type { Reply } from './reply.js'
-import type { ErrorHandler, Handler, Logger } from './types.js'
-import type { PubSubAdapter } from './websocket/types.js'
+import type { AppRuntime, BodyState } from './runtime.js'
 
 const CONTENT_TYPE = 'content-type'
 
@@ -12,47 +12,6 @@ interface ContextHeader {
   readonly lines: string[]
   readonly appends: boolean
   setAt: number
-}
-
-/**
- * The package shares these settings of one app with every request to that app.
- *
- * @internal
- */
-export interface AppRuntime {
-  /** The package writes every 500 to this logger. */
-  readonly logger: Logger | undefined
-  /** The package calls this handler for a path that has no route. */
-  readonly notFound: Handler | undefined
-  /** The package calls this handler for every error that the chain throws. */
-  readonly onError: ErrorHandler | undefined
-  /** The package accepts a request body of up to this many bytes, unless the route sets its own limit. */
-  readonly maxBodyBytes: number
-  /** A handler has this many milliseconds before the package sends a 503, and 0 means no limit. */
-  readonly timeoutMs: number
-  /** The package passes each message that your code publishes to this adapter, which is `undefined` when you pass none. */
-  readonly pubsub: PubSubAdapter | undefined
-}
-
-/**
- * Through this interface, the package controls the body reader of a request once the response
- * starts.
- *
- * @internal
- */
-export interface BodyState {
-  /**
-   * Makes the reader discard the rest of the body as it arrives, and resumes a paused source, so
-   * that the rest of the body keeps arriving after the response starts.
-   */
-  settle(): void
-  /**
-   * Stops pausing the source for the rest of the request. uWebSockets.js stops writing to a paused
-   * socket as well as reading from it, so the package calls this method when a streamed reply
-   * starts. The reader can then hold up to the body limit of the route in chunks that your code
-   * hasn't read.
-   */
-  keepFlowing(): void
 }
 
 /**
@@ -90,6 +49,10 @@ export class Exchange {
   disconnected = false
   /** This is `true` once the package has attached its abort handler to the response of uWebSockets.js. */
   watchingAbort = false
+  /** This is `true` once the package sends a whole reply on a connection that the package closes itself later. */
+  lingering = false
+  readonly #drain: Drain | undefined
+  #counted = false
   #arrival: BodyArrival | undefined
   #reply: Reply | undefined
   #final = false
@@ -108,9 +71,30 @@ export class Exchange {
    * Creates the state of one request.
    *
    * @param runtime - The package passes the settings of the app that serves the request.
+   * @param drain - The package passes the drain of the app of uWebSockets.js that serves the
+   * request, or `undefined` for a request through `app.request()`.
    */
-  constructor(runtime: AppRuntime) {
+  constructor(runtime: AppRuntime, drain?: Drain) {
     this.runtime = runtime
+    this.#drain = drain
+  }
+
+  /**
+   * Counts the request in the drain of its app when its response stays open after the handler of
+   * uWebSockets.js returns. The method skips the request when the connection is closed. It also
+   * skips a request whose response is over, unless the package closes that connection itself later.
+   */
+  countOpenResponse(): void {
+    const drain = this.#drain
+    if (drain === undefined || this.#counted || this.disconnected || (this.closed && !this.lingering)) return
+    this.#counted = true
+    drain.started()
+  }
+
+  #uncount(): void {
+    if (!this.#counted) return
+    this.#counted = false
+    this.#drain?.finished()
   }
 
   /**
@@ -144,6 +128,7 @@ export class Exchange {
    */
   abort(): void {
     this.disconnected = true
+    this.#uncount()
     this.#disconnection?.fire(undefined)
     if (this.closed) return
     this.aborted = true
@@ -181,14 +166,19 @@ export class Exchange {
 
   /**
    * Returns `true` when the package closes the connection after the response for a reason of its
-   * own, which the reply then announces with `Connection: close`. The reason is an early rejection,
-   * a `PAYLOAD_TOO_LARGE` error, a time limit, a rejected `transfer-encoding`, or more of the body on
-   * its way than the package discards to keep the connection open.
+   * own, in which case the reply contains `Connection: close`. The reason is an early rejection, a
+   * `PAYLOAD_TOO_LARGE` error, a time limit, a rejected `transfer-encoding`, an unread rest of the
+   * body that is longer than the package discards to keep the connection open, or a server that is
+   * closing or reloading.
    *
    * @returns The method returns `false` when only the client can ask for the close.
    */
   serverCloses(): boolean {
-    return this.closeAfterReply || this.#arrival?.unbounded === true
+    return (
+      this.closeAfterReply ||
+      this.#arrival?.unbounded === true ||
+      (this.#drain !== undefined && this.#drain.mode !== SERVING)
+    )
   }
 
   /**
@@ -265,6 +255,7 @@ export class Exchange {
   end(): void {
     if (this.closed) return
     this.closed = true
+    if (!this.lingering) this.#uncount()
     this.#closing?.fire(undefined)
   }
 

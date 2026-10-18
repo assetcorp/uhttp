@@ -1,6 +1,6 @@
 import { ALLOW_METHOD_ORDER, BODY_METHODS, LIST_HEADER_NAMES } from './constants.js'
-import type { AppRuntime } from './exchange.js'
 import { Matcher, prefixCoverage, prefixMatches, type Segment, splitPath } from './router/index.js'
+import type { AppRuntime } from './runtime.js'
 import type { Handler, Middleware, MiddlewareHandler, RouteOptions } from './types.js'
 import { upgradeRequired } from './websocket/handshake.js'
 import type { CheckedWebSocketRoute } from './websocket/route.js'

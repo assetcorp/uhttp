@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { serve } from '../../index.js'
-import { startHost, stateDirectory, waitFor } from '../helpers/child.js'
+import { startHost, startEvents as starts, stateDirectory, waitFor } from '../helpers/child.js'
 import { type HttpConnection, openConnection, requestHead } from '../helpers/http-client.js'
 import { pause, track } from '../helpers/server.js'
 import { openSocket } from '../helpers/websocket.js'
@@ -31,16 +31,6 @@ async function threadsSeen(port: number, connections: number): Promise<Set<strin
     connection.destroy()
   }
   return seen
-}
-
-function starts(directory: string): { time: number; thread: string; event: string }[] {
-  return readFileSync(join(directory, 'starts'), 'utf8')
-    .trim()
-    .split('\n')
-    .map(line => {
-      const [time = '0', thread = '', event = ''] = line.split(' ')
-      return { time: Number(time), thread, event }
-    })
 }
 
 describe('a server on worker threads', () => {
@@ -163,7 +153,7 @@ describe('a server on worker threads', () => {
     await host.close()
 
     expect(await host.exited).toEqual({ code: 0, signal: null })
-    expect((await socket.closed).code).toBe(1006)
+    expect((await socket.closed).code).toBe(1001)
     expect(await Promise.all(connections.map(connection => connection.waitForClose()))).toEqual([
       'closed',
       'closed',
@@ -239,7 +229,7 @@ describe('a server on worker threads', () => {
 
     expect(exit).toEqual({ code: null, signal: 'SIGABRT' })
     expect(Date.now() - startedAt).toBeLessThan(10_000)
-    expect(host.output()).toContain('A worker thread failed to answer for 600 ms.')
+    expect(host.output()).toContain('A worker thread sent no reply to a ping for 600 ms.')
     expect(host.output()).toContain('A worker thread hangs. The server exits with an error.')
   }, 20_000)
 
@@ -251,7 +241,7 @@ describe('a server on worker threads', () => {
     const outcome = await Promise.race([host.exited, pause(3_000).then(() => 'alive')])
 
     expect(outcome).toBe('alive')
-    expect(host.output()).not.toContain('failed to answer')
+    expect(host.output()).not.toContain('sent no reply to a ping')
   }, 20_000)
 
   it('ends the process when a worker that has an open connection passes its heap limit', async () => {

@@ -7,8 +7,8 @@
  * `REQUEST_ABORTED`, `INVALID_TRANSFER_ENCODING`, and `INVALID_UPGRADE` correspond to 400,
  * `FORBIDDEN_ORIGIN` to 403, `NOT_FOUND` to 404, `METHOD_NOT_ALLOWED` to 405, `PAYLOAD_TOO_LARGE`
  * to 413, `UNSUPPORTED_MEDIA_TYPE` to 415, `UPGRADE_REQUIRED` to 426, `UNSUPPORTED_TRANSFER_CODING`
- * to 501, and `HANDLER_TIMEOUT` to 503. Every other code corresponds to 500. The package throws
- * each code in one situation:
+ * to 501, and `HANDLER_TIMEOUT` and `SERVER_CLOSING` to 503. Every other code corresponds to 500.
+ * The package throws each code in one situation:
  *
  * - The package throws `INVALID_PATH_PARAMETER` when a path parameter contains a percent sequence
  *   that fails to decode.
@@ -28,27 +28,28 @@
  *   the body ends.
  * - The package throws `HANDLER_TIMEOUT` when a handler passes the time limit of its route, and it
  *   closes the connection after the reply.
- * - The package sends `INVALID_TRANSFER_ENCODING` when a client lists `chunked` more than once in
+ * - The package sends `INVALID_TRANSFER_ENCODING` when a client sends `chunked` more than once in
  *   the `transfer-encoding` lines of a request, or ends those lines with a coding other than
  *   `chunked`.
  * - The package sends `UNSUPPORTED_TRANSFER_CODING` when a client applies a transfer coding before
  *   `chunked`, such as `gzip, chunked`, because the package decodes `chunked` alone.
- * - The package throws `UNDECLARED_HEADER` when your code asks for a header that neither the route
- *   nor its middleware declared.
- * - The package throws `UNDECLARED_CLIENT_ADDRESS` when your code asks for the client address and
- *   nobody declared it.
+ * - The package throws `UNDECLARED_HEADER` when your code reads a header that neither the route nor
+ *   its middleware declared.
+ * - The package throws `UNDECLARED_CLIENT_ADDRESS` when your code reads the client address, but
+ *   neither the route nor its middleware declared it.
  * - The package throws `UNDECLARED_BODY` when your code reads the body on a route without a body
  *   reader.
  * - The package throws `BODY_ALREADY_READ` when your code reads a body after it streamed that body.
  * - The package throws `REQUEST_RELEASED` when your code reads the query string or the content type
- *   for the first time after the package has sent a reply that your handler returned without an
- *   `await`, because uWebSockets.js frees the request once its handler returns. Reading
- *   `header('content-type')`, `headers()`, or `body` also reads the content type.
- * - The package throws `INVALID_SCHEMA` when a schema lacks the Standard Schema interface, or when
- *   its validator throws, rejects, or returns something other than a Standard Schema result.
+ *   for the first time after the package sends a reply that your handler returned without an
+ *   `await`, because uWebSockets.js frees the request once its handler returns. Your code also
+ *   reads the content type when it calls `header('content-type')` or `headers()`, or reads `body`.
+ * - The package throws `INVALID_SCHEMA` when you pass a schema without the Standard Schema
+ *   interface, or when its validator throws, rejects, or returns something other than a Standard
+ *   Schema result.
  * - The package throws `INVALID_UPLOAD` when you pass `multipart()` a limit that is not a whole
  *   number of zero or more, when its `file` callback returns something other than a writable
- *   stream, or when a destination closes before the package has written the whole file.
+ *   stream, or when a destination closes before the package writes the whole file.
  * - The package throws `INVALID_HEADER` when your code sets a header name or a header value that
  *   HTTP forbids.
  * - The package throws `INVALID_EVENT` when a server-sent event has a line break in its name or its
@@ -63,12 +64,19 @@
  * - The package throws `INVALID_APP_OPTIONS` when you pass {@link createApp} an option of the wrong
  *   type, or a limit that is not a whole number of zero or more.
  * - The package throws `INVALID_SERVE_OPTIONS` when you pass {@link serve} an option of the wrong
- *   type or a value outside its range, or when you pass `threads` together with an app object or
- *   a Unix socket path.
+ *   type or a value outside its range, when you pass `threads` together with an app object or a
+ *   Unix socket path, or when you call `server.reload()` on a server without `tls`.
  * - The package throws `LISTEN_FAILED` when the operating system can't bind the address that you
- *   chose, or when the Unix socket path names a file other than a socket or a socket in use.
+ *   chose, when the file at the Unix socket path is not a socket, when another server listens on
+ *   that path, or when the package can't set the mode of the socket file.
+ * - The package throws `INVALID_CERTIFICATE` when {@link serve} or `server.reload()` can't load a
+ *   key file or a certificate file, or when a key fails to decrypt with its passphrase or to match
+ *   its certificate.
+ * - The package sends `SERVER_CLOSING` in response to a request that a client sends on an open
+ *   connection after `server.close()` starts, and then it closes that connection. `server.reload()`
+ *   throws it once `server.close()` starts.
  * - The package throws `UPGRADE_REQUIRED` when a client sends a request without a WebSocket upgrade
- *   to a WebSocket route, or asks for a version of the protocol other than 13.
+ *   to a WebSocket route, or sends a version of the protocol other than 13.
  * - The package throws `INVALID_UPGRADE` when a client sends an upgrade request without
  *   `upgrade: websocket` or `connection: upgrade`, with a malformed `sec-websocket-key`, or with a
  *   body.
@@ -79,12 +87,14 @@
  *   RFC 6455 forbids.
  * - The package throws `APP_START_FAILED` when the module that you pass to {@link serve} throws
  *   while it builds the app, when its default export is neither an app nor a function that returns
- *   one, or when a worker thread crashes before every worker serves.
+ *   one, when a worker thread crashes before every worker serves, or when a worker takes longer
+ *   than `workerStartTimeoutMs` to build its app.
  *
  * The package sends `INVALID_TRANSFER_ENCODING` and `UNSUPPORTED_TRANSFER_CODING` before it calls
- * any middleware or handler, and it closes the connection after the reply. When your code throws
- * any error apart from a `UhttpError` below 500 or a `HANDLER_TIMEOUT`, the client receives
- * `INTERNAL_ERROR`.
+ * any middleware or handler, and it closes the connection after the reply. It sends
+ * `SERVER_CLOSING` before it calls any middleware or handler too. When your code throws any error
+ * apart from a `UhttpError` below 500, a `HANDLER_TIMEOUT`, or a `SERVER_CLOSING`, the client
+ * receives `INTERNAL_ERROR`.
  */
 export type ErrorCode =
   | 'INVALID_PATH_PARAMETER'
@@ -122,6 +132,8 @@ export type ErrorCode =
   | 'FORBIDDEN_ORIGIN'
   | 'INVALID_WEBSOCKET'
   | 'APP_START_FAILED'
+  | 'INVALID_CERTIFICATE'
+  | 'SERVER_CLOSING'
 
 const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   INVALID_PATH_PARAMETER: 400,
@@ -159,10 +171,12 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   FORBIDDEN_ORIGIN: 403,
   INVALID_WEBSOCKET: 500,
   APP_START_FAILED: 500,
+  INVALID_CERTIFICATE: 500,
+  SERVER_CLOSING: 503,
 }
 
 /**
- * The package lists each problem that a validator found with a body in this shape.
+ * The package stores each problem that a validator finds with a body in this shape.
  */
 export interface ValidationIssue {
   /** The validator wrote this message, which the package cuts to 256 characters. */
@@ -187,9 +201,9 @@ export interface UhttpErrorOptions extends ErrorOptions {
  * that corresponds to the code.
  *
  * @remarks
- * When code throws a `UhttpError` whose status is below 500, or one with the code
- * `HANDLER_TIMEOUT`, the client receives that status together with the code, the message, and any
- * validation problems. For every other error, the client receives a 500 with the message 'The
+ * When code throws a `UhttpError` whose status is below 500, or one with the code `HANDLER_TIMEOUT`
+ * or `SERVER_CLOSING`, the client receives that status together with the code, the message, and
+ * any validation problems. For every other error, the client receives a 500 with the message 'The
  * request failed.'
  */
 export class UhttpError extends Error {
@@ -208,7 +222,7 @@ export class UhttpError extends Error {
    *
    * @param code - You choose the code, and the constructor sets the HTTP status that corresponds to it.
    * @param message - You write this message for a developer, and the package sends it to the
-   * client only when the status is below 500 or the code is `HANDLER_TIMEOUT`.
+   * client only when the status is below 500 or the code is `HANDLER_TIMEOUT` or `SERVER_CLOSING`.
    * @param options - You can pass the standard error options here, such as `cause`, together with
    * a list of validation problems.
    */
@@ -223,12 +237,15 @@ export class UhttpError extends Error {
 
 /**
  * Returns `true` when the package sends the code and the message of an error to the client, which
- * it does for a `UhttpError` below 500 and for `HANDLER_TIMEOUT`.
+ * it does for a `UhttpError` below 500, for `HANDLER_TIMEOUT`, and for `SERVER_CLOSING`.
  *
  * @param error - The function checks this error.
  * @returns The function returns `false` for every other error, which the client receives as a 500.
  * @internal
  */
 export function isClientError(error: unknown): error is UhttpError {
-  return error instanceof UhttpError && (error.status < 500 || error.code === 'HANDLER_TIMEOUT')
+  return (
+    error instanceof UhttpError &&
+    (error.status < 500 || error.code === 'HANDLER_TIMEOUT' || error.code === 'SERVER_CLOSING')
+  )
 }
