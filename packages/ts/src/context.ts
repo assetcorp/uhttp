@@ -111,7 +111,7 @@ export class Context {
    * check.
    */
   header(name: string, value: string, options?: HeaderOptions): void {
-    this.#exchange.response.setHeader(name, value, options?.append === true)
+    this.#exchange.setHeader(name, value, options?.append === true)
   }
 
   /**

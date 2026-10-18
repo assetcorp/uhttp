@@ -10,6 +10,7 @@ import {
 } from '../constants.js'
 import type { Exchange } from '../exchange.js'
 import { type DecodedChain, decodeChain } from '../resolve.js'
+import { forEachResponseHeader } from '../response.js'
 import { splitPath } from '../router/index.js'
 import {
   acceptUpgrade,
@@ -93,7 +94,7 @@ export function testUpgradeOf(app: CompiledApp, parsed: ParsedTestRequest): Test
  */
 export function switchingResponse(exchange: Exchange, handshake: HandshakeHeaders): Response {
   const headers = new Headers()
-  exchange.response.forEachHeader((name, value) => {
+  forEachResponseHeader(exchange, (name, value) => {
     if (!UPGRADE_REPLY_HEADER_NAMES.includes(name)) headers.append(name, value)
   })
   headers.set('upgrade', 'websocket')

@@ -69,7 +69,7 @@ function keysOf(context: Context): readonly KeyObject[] {
 
 function appendLine(context: Context, line: string): void {
   setCookieName ??= fixedName(SET_COOKIE_HEADER)
-  exchangeOf(context).response.setPrepared(setCookieName, line, true)
+  exchangeOf(context).setPrepared(setCookieName, line, true)
 }
 
 /**

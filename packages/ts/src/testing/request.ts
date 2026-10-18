@@ -15,6 +15,7 @@ import { lineSeparatorOf } from '../headers.js'
 import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.js'
 import { CopiedRequest, type LiveRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type PreparedRequest, resolveChain } from '../resolve.js'
+import { forEachResponseHeader, responseContentType } from '../response.js'
 import { attachTestBody } from './body.js'
 import { firstValue, type ParsedTestRequest, parseTestRequest, type TestRequestInit, valuesOf } from './parse.js'
 import { testStreamBody } from './stream.js'
@@ -61,9 +62,9 @@ function framingRejectionResponse(error: UhttpError, head: boolean): Response {
 
 function responseHeaders(exchange: Exchange): Headers {
   const headers = new Headers()
-  const contentType = exchange.response.contentType()
+  const contentType = responseContentType(exchange)
   if (contentType !== undefined) headers.set('content-type', contentType)
-  exchange.response.forEachHeader((name, value) => {
+  forEachResponseHeader(exchange, (name, value) => {
     headers.append(name, value)
   })
   return headers
@@ -117,9 +118,8 @@ function copyTestRequest(
     exchange,
     parsed.method,
     parsed.path,
-    chain.route,
+    chain,
     liveTestRequest(parsed),
-    chain.parameterNames,
     parameters,
     firstValue(lines, 'content-length'),
     plan.headerNames,

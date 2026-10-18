@@ -3,7 +3,7 @@ import { STATUS_TEXT } from '../constants.js'
 import type { Exchange } from '../exchange.js'
 import { headerBytes } from '../headers.js'
 import { JSON_CONTENT_TYPE, type Reply, TEXT_CONTENT_TYPE } from '../reply.js'
-import type { HeaderVisitor } from '../response.js'
+import { forEachResponseHeader, type HeaderVisitor, hasResponseHeaders, responseContentType } from '../response.js'
 
 /**
  * Returns the status code and the reason phrase of a status line, such as `404 Not Found`.
@@ -44,9 +44,9 @@ function okHeadOf(contentType: string | undefined): ArrayBuffer | undefined {
  * @internal
  */
 export function forEachHeaderLine(exchange: Exchange, emit: HeaderVisitor): void {
-  const contentType = exchange.response.contentType()
+  const contentType = responseContentType(exchange)
   if (contentType !== undefined) emit('content-type', contentType, undefined)
-  exchange.response.forEachHeader(emit)
+  forEachResponseHeader(exchange, emit)
 }
 
 /**
@@ -63,7 +63,7 @@ export function forEachHeaderLine(exchange: Exchange, emit: HeaderVisitor): void
  * @internal
  */
 export function writeHead(res: HttpResponse, exchange: Exchange, reply: Reply): void {
-  const contentType = exchange.response.contentType()
+  const contentType = responseContentType(exchange)
   const okHead = reply.status === OK_STATUS ? okHeadOf(contentType) : undefined
   if (okHead !== undefined) {
     res.writeStatus(okHead)
@@ -71,11 +71,11 @@ export function writeHead(res: HttpResponse, exchange: Exchange, reply: Reply): 
     if (reply.status !== OK_STATUS) res.writeStatus(statusLine(reply.status))
     if (contentType !== undefined) res.writeHeader(CONTENT_TYPE_NAME, contentTypeValue(contentType))
   }
-  if (exchange.response.hasHeaders()) writeResponseHeaders(res, exchange)
+  if (hasResponseHeaders(exchange)) writeResponseHeaders(res, exchange)
 }
 
 function writeResponseHeaders(res: HttpResponse, exchange: Exchange): void {
-  exchange.response.forEachHeader((name, value, encoded) => {
+  forEachResponseHeader(exchange, (name, value, encoded) => {
     if (encoded === undefined) res.writeHeader(name, value)
     else res.writeHeader(encoded.name, encoded.value ?? value)
   })

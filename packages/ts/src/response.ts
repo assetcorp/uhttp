@@ -1,19 +1,19 @@
-import { settableHeaderName } from './headers.js'
 import type { Reply } from './reply.js'
 
 const CONTENT_TYPE = 'content-type'
 
 /**
  * The package passes a fixed header to uWebSockets.js as these bytes, which a middleware builds
- * once with `headerBytes`, because uWebSockets.js reads an `ArrayBuffer` in place.
+ * once with `headerBytes`, because uWebSockets.js uses the bytes of an `ArrayBuffer` without a
+ * conversion.
  *
  * @internal
  */
 export interface EncodedHeader {
-  /** These bytes hold the lowercase name of the header. */
+  /** These bytes are the lowercase name of the header. */
   readonly name: ArrayBuffer
   /**
-   * These bytes hold the value of the header, or this is `undefined` for a value that a middleware
+   * These bytes are the value of the header, or this is `undefined` for a value that a middleware
    * builds for each request, which the package passes to uWebSockets.js as text.
    */
   readonly value: ArrayBuffer | undefined
@@ -26,7 +26,7 @@ export interface EncodedHeader {
  * @internal
  */
 export interface PreparedName {
-  /** The middleware checked this lowercase name, which frames no response. */
+  /** The middleware checked this lowercase name, which is the name of no framing header. */
   readonly name: string
   /** The package passes these bytes to uWebSockets.js. */
   readonly encoded: EncodedHeader
@@ -38,7 +38,7 @@ export interface PreparedName {
  * @internal
  */
 export interface PreparedHeader extends PreparedName {
-  /** The middleware checked this value, which the encoded bytes hold as well. */
+  /** The middleware checked this value, and the encoded bytes contain the same value. */
   readonly value: string
 }
 
@@ -52,197 +52,171 @@ export interface PreparedHeader extends PreparedName {
  */
 export type HeaderVisitor = (name: string, value: string, encoded: EncodedHeader | undefined) => void
 
-interface ContextHeader {
+/**
+ * The package keeps one response header that code set through the context in this form.
+ *
+ * @internal
+ */
+export interface SetHeader {
+  /** The package sends these lines of the header in order. */
   readonly lines: string[]
+  /** This list contains the bytes of each fixed line at the index of that line, and it contains `undefined` at the index of any other line. */
   readonly encodings: (EncodedHeader | undefined)[]
+  /** This is `true` when your code appended the header, so the package sends it after the lines of the reply under the same name. */
   readonly appends: boolean
+  /** This number is the place of the last line in the count of replies and headers of the request. */
   setAt: number
 }
 
 /**
- * The package keeps the reply of one request and the response headers that code set through the
- * context in this object, and it merges the two when it writes the response.
+ * The package keeps the response headers that code set through the context in this map, under
+ * their lowercase names.
  *
  * @internal
  */
-export class ResponseState {
-  #reply: Reply | undefined
-  #final = false
-  #replySetAt = 0
-  #headers: Map<string, ContextHeader> | undefined
-  #clock = 0
+export type SetHeaders = Map<string, SetHeader>
 
+/**
+ * The package reads the current reply of a request and the response headers that code set through
+ * the context from the state of the request in this form.
+ *
+ * @internal
+ */
+export interface ResponseParts {
   /** The chain has produced this reply so far, and it is `undefined` before any reply exists. */
-  get reply(): Reply | undefined {
-    return this.#reply
-  }
+  readonly reply: Reply | undefined
+  /** This number is the place of the current reply in the count of replies and headers of the request. */
+  readonly replySetAt: number
+  /** The package keeps the headers that code set through the context here, and this is `undefined` until code sets one. */
+  readonly setHeaders: SetHeaders | undefined
+}
 
-  /**
-   * Makes a reply the current reply of the request. The headers of a reply that this one replaces
-   * no longer go out, while the headers that your code set through the context stay.
-   *
-   * @param reply - The package makes this reply the current one.
-   */
-  assign(reply: Reply): void {
-    if (this.#final || reply === this.#reply) return
-    this.#reply = reply
-    this.#replySetAt = ++this.#clock
+/**
+ * Stores one line of a response header that code set through the context.
+ *
+ * @param headers - The package passes the headers that code set so far, or `undefined` when code set none.
+ * @param lowerName - The package passes the checked lowercase name of the header.
+ * @param value - The package passes the checked value of the line.
+ * @param encoded - The package passes the bytes of a fixed line, or `undefined` for any other line.
+ * @param append - When this is `true`, the package keeps the earlier lines of the header.
+ * @param setAt - The package passes the place of the line in the count of replies and headers.
+ * @returns The function returns the map that contains the line, which it creates when code set no header before.
+ * @internal
+ */
+export function storeHeader(
+  headers: SetHeaders | undefined,
+  lowerName: string,
+  value: string,
+  encoded: EncodedHeader | undefined,
+  append: boolean,
+  setAt: number,
+): SetHeaders {
+  const stored = headers ?? new Map<string, SetHeader>()
+  const existing = stored.get(lowerName)
+  if (append && existing !== undefined) {
+    existing.lines.push(value)
+    existing.encodings.push(encoded)
+    existing.setAt = setAt
+    return stored
   }
+  stored.set(lowerName, { lines: [value], encodings: [encoded], appends: append, setAt })
+  return stored
+}
 
-  /**
-   * Makes a reply the current reply of the request for good, so that a later reply of the chain
-   * never replaces it.
-   *
-   * @param reply - The package makes this reply the last one.
-   */
-  finalize(reply: Reply): void {
-    this.assign(reply)
-    this.#final = true
+/**
+ * Returns the content type that the package sends with the current reply. When your code set a
+ * `content-type` header after the chain produced the reply, the package sends that header in place
+ * of the content type of the reply.
+ *
+ * @param parts - The package passes the state of the request.
+ * @returns The function returns the content type, or `undefined` when neither the reply nor your
+ * code set one.
+ * @internal
+ */
+export function responseContentType(parts: ResponseParts): string | undefined {
+  const set = parts.setHeaders?.get(CONTENT_TYPE)
+  const replyType = parts.reply?.contentType
+  if (set !== undefined && (replyType === undefined || set.setAt > parts.replySetAt)) return set.lines.at(-1)
+  return replyType
+}
+
+/**
+ * Returns `true` when the package sends at least one line of a header with the current reply,
+ * whether the reply or your code set it.
+ *
+ * @param parts - The package passes the state of the request.
+ * @param lowerName - The caller passes the lowercase name of the header.
+ * @returns The function returns `false` when neither the reply nor your code set the header.
+ * @internal
+ */
+export function hasResponseHeader(parts: ResponseParts, lowerName: string): boolean {
+  if (lowerName === CONTENT_TYPE) return responseContentType(parts) !== undefined
+  return parts.reply?.headers?.has(lowerName) === true || parts.setHeaders?.has(lowerName) === true
+}
+
+/**
+ * Returns `true` when the current reply has headers or your code set a header, which means that
+ * {@link forEachResponseHeader} can have lines to pass on.
+ *
+ * @param parts - The package passes the state of the request.
+ * @returns The function returns `false` when that function has no line to pass on.
+ * @internal
+ */
+export function hasResponseHeaders(parts: ResponseParts): boolean {
+  return parts.reply?.headers !== undefined || parts.setHeaders !== undefined
+}
+
+function replaces(set: SetHeader | undefined, replySetAt: number): boolean {
+  return set !== undefined && set.setAt > replySetAt && !set.appends
+}
+
+/**
+ * Returns the lines of one response header that the package sends with the current reply, by the
+ * rules of {@link forEachResponseHeader}.
+ *
+ * @param parts - The package passes the state of the request.
+ * @param lowerName - The caller passes the lowercase name of the header.
+ * @returns The function returns the lines, or `undefined` when the package sends no line of the header.
+ * @internal
+ */
+export function responseHeaderLines(parts: ResponseParts, lowerName: string): readonly string[] | undefined {
+  if (lowerName === CONTENT_TYPE) {
+    const contentType = responseContentType(parts)
+    return contentType === undefined ? undefined : [contentType]
   }
+  const { replySetAt } = parts
+  const replyLines = parts.reply?.headers?.get(lowerName)
+  const set = parts.setHeaders?.get(lowerName)
+  const lines: string[] = []
+  if (replyLines !== undefined && !replaces(set, replySetAt)) lines.push(...replyLines)
+  if (set !== undefined && !(replyLines !== undefined && set.setAt < replySetAt)) lines.push(...set.lines)
+  return lines.length === 0 ? undefined : lines
+}
 
-  /**
-   * Puts a changed form of the current reply in its place, such as a compressed form, while the
-   * headers that your code set through the context keep their order against the reply.
-   *
-   * @param reply - The package passes the changed form of the current reply.
-   */
-  substitute(reply: Reply): void {
-    if (this.#final || this.#reply === undefined) return
-    this.#reply = reply
-  }
-
-  /**
-   * Sets a response header after checking its name and its value. The header goes out with
-   * whatever reply the request ends with, unless that reply arrived later with a header of the
-   * same name.
-   *
-   * @param name - The package stores this header name in lowercase.
-   * @param value - The package sends this value.
-   * @param append - When this is `true`, the package keeps the earlier lines of the header.
-   */
-  setHeader(name: string, value: string, append: boolean): void {
-    const lowerName = settableHeaderName(name, value)
-    if (lowerName !== undefined) this.#store(lowerName, value, undefined, append)
-  }
-
-  /**
-   * Sets a response header that a middleware checked and encoded once at startup. The method
-   * checks it no further.
-   *
-   * @param header - The middleware passes the prepared header.
-   * @param append - When this is `true`, the package keeps the earlier lines of the header.
-   */
-  setFixed(header: PreparedHeader, append: boolean): void {
-    this.#store(header.name, header.value, header.encoded, append)
-  }
-
-  /**
-   * Sets a response header under a name that a middleware prepared at startup, with a value that
-   * the middleware built and checked for this request. The method checks neither of them again.
-   *
-   * @param name - The middleware passes the prepared name.
-   * @param value - The middleware passes the checked value.
-   * @param append - When this is `true`, the package keeps the earlier lines of the header.
-   */
-  setPrepared(name: PreparedName, value: string, append: boolean): void {
-    this.#store(name.name, value, name.encoded, append)
-  }
-
-  /**
-   * Returns `true` when at least one line of a header goes out with the current reply, whether the
-   * reply or your code set it.
-   *
-   * @param lowerName - The caller passes the lowercase name of the header.
-   * @returns The method returns `false` when neither the reply nor your code set the header.
-   */
-  has(lowerName: string): boolean {
-    if (lowerName === CONTENT_TYPE) return this.contentType() !== undefined
-    return this.#reply?.headers?.has(lowerName) === true || this.#headers?.has(lowerName) === true
-  }
-
-  #store(lowerName: string, value: string, encoded: EncodedHeader | undefined, append: boolean): void {
-    this.#headers ??= new Map()
-    const setAt = ++this.#clock
-    const existing = this.#headers.get(lowerName)
-    if (append && existing !== undefined) {
-      existing.lines.push(value)
-      existing.encodings.push(encoded)
-      existing.setAt = setAt
-      return
+/**
+ * Calls a function for each line of every response header that the package sends with the current
+ * reply, apart from `content-type`. For a header that both the reply and your code set, the package
+ * sends the one that your code or the reply set later, and it sends an appended line after the lines
+ * of the reply.
+ *
+ * @param parts - The package passes the state of the request.
+ * @param emit - The package calls this function for each line.
+ * @internal
+ */
+export function forEachResponseHeader(parts: ResponseParts, emit: HeaderVisitor): void {
+  const { replySetAt, setHeaders } = parts
+  const replyHeaders = parts.reply?.headers
+  if (replyHeaders !== undefined) {
+    for (const [name, lines] of replyHeaders) {
+      if (replaces(setHeaders?.get(name), replySetAt)) continue
+      for (const line of lines) emit(name, line, undefined)
     }
-    this.#headers.set(lowerName, { lines: [value], encodings: [encoded], appends: append, setAt })
   }
-
-  /**
-   * Returns the content type that the package sends with the current reply. A `content-type`
-   * header that your code set after the reply arrived replaces the content type of the reply.
-   *
-   * @returns The method returns the content type, or `undefined` when neither the reply nor your
-   * code set one.
-   */
-  contentType(): string | undefined {
-    const set = this.#headers?.get(CONTENT_TYPE)
-    const replyType = this.#reply?.contentType
-    if (set !== undefined && (replyType === undefined || set.setAt > this.#replySetAt)) return set.lines.at(-1)
-    return replyType
-  }
-
-  /**
-   * Returns `true` when the current reply carries headers or your code set a header, so that
-   * {@link ResponseState.forEachHeader} can have lines to pass on.
-   *
-   * @returns The method returns `false` when that method has no line to pass on.
-   */
-  hasHeaders(): boolean {
-    return this.#reply?.headers !== undefined || this.#headers !== undefined
-  }
-
-  /**
-   * Returns the lines of one response header that go out with the current reply, by the rules of
-   * {@link ResponseState.forEachHeader}.
-   *
-   * @param lowerName - The caller passes the lowercase name of the header.
-   * @returns The method returns the lines, or `undefined` when no line of the header goes out.
-   */
-  header(lowerName: string): readonly string[] | undefined {
-    if (lowerName === CONTENT_TYPE) {
-      const contentType = this.contentType()
-      return contentType === undefined ? undefined : [contentType]
-    }
-    const replyLines = this.#reply?.headers?.get(lowerName)
-    const set = this.#headers?.get(lowerName)
-    const lines: string[] = []
-    if (replyLines !== undefined && !this.#replaces(set)) lines.push(...replyLines)
-    if (set !== undefined && !(replyLines !== undefined && set.setAt < this.#replySetAt)) lines.push(...set.lines)
-    return lines.length === 0 ? undefined : lines
-  }
-
-  #replaces(set: ContextHeader | undefined): boolean {
-    return set !== undefined && set.setAt > this.#replySetAt && !set.appends
-  }
-
-  /**
-   * Calls a function for each line of every response header that goes out with the current reply,
-   * apart from `content-type`. For a header that both the reply and your code set, the one that
-   * your code or the reply set later goes out, and an appended line follows the lines of the reply.
-   *
-   * @param emit - The package calls this function for each line.
-   */
-  forEachHeader(emit: HeaderVisitor): void {
-    const replyHeaders = this.#reply?.headers
-    const setHeaders = this.#headers
-    if (replyHeaders !== undefined) {
-      for (const [name, lines] of replyHeaders) {
-        if (this.#replaces(setHeaders?.get(name))) continue
-        for (const line of lines) emit(name, line, undefined)
-      }
-    }
-    if (setHeaders === undefined) return
-    for (const [name, set] of setHeaders) {
-      if (name === CONTENT_TYPE) continue
-      if (replyHeaders?.has(name) === true && set.setAt < this.#replySetAt) continue
-      const { lines, encodings } = set
-      for (let index = 0; index < lines.length; index++) emit(name, lines[index] ?? '', encodings[index])
-    }
+  if (setHeaders === undefined) return
+  for (const [name, set] of setHeaders) {
+    if (name === CONTENT_TYPE) continue
+    if (replyHeaders?.has(name) === true && set.setAt < replySetAt) continue
+    const { lines, encodings } = set
+    for (let index = 0; index < lines.length; index++) emit(name, lines[index] ?? '', encodings[index])
   }
 }

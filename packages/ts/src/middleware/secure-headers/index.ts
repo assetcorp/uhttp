@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { type Context, exchangeOf } from '../../context.js'
 import { settableHeaderName } from '../../headers.js'
+import { hasResponseHeader } from '../../response.js'
 import type { MiddlewareDefinition } from '../../types.js'
 import { protocolOf } from '../client.js'
 import { type FixedHeader, fixedHeader, fixedName, invalidOption, optionsObject } from '../options.js'
@@ -137,19 +138,19 @@ export function secureHeaders(options?: SecureHeadersOptions): MiddlewareDefinit
     async handle(context, next) {
       const policyValue = policy === undefined ? undefined : policyFor(context, policy)
       await next()
-      const response = exchangeOf(context).response
+      const exchange = exchangeOf(context)
       for (const header of fixed) {
-        if (!response.has(header.name)) response.setFixed(header, false)
+        if (!hasResponseHeader(exchange, header.name)) exchange.setFixed(header, false)
       }
-      if (policyValue !== undefined && !response.has(CONTENT_SECURITY_POLICY)) {
-        response.setPrepared(policyName, policyValue, false)
+      if (policyValue !== undefined && !hasResponseHeader(exchange, CONTENT_SECURITY_POLICY)) {
+        exchange.setPrepared(policyName, policyValue, false)
       }
       if (
         strictTransport !== undefined &&
-        !response.has(STRICT_TRANSPORT_SECURITY) &&
+        !hasResponseHeader(exchange, STRICT_TRANSPORT_SECURITY) &&
         protocolOf(context) === 'https'
       ) {
-        response.setFixed(strictTransport, false)
+        exchange.setFixed(strictTransport, false)
       }
     },
   }

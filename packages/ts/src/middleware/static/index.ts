@@ -136,7 +136,7 @@ function fileReply(context: Context, path: string, stats: Stats, plan: StaticPla
       ? byteRange(context.req.header(RANGE_HEADER), stats.size)
       : ({ kind: 'whole' } as const)
   if (range.kind === 'unsatisfiable') {
-    exchangeOf(context).response.setPrepared(plan.contentRangeName, `bytes */${stats.size}`, false)
+    exchangeOf(context).setPrepared(plan.contentRangeName, `bytes */${stats.size}`, false)
     throw new UhttpError(
       'RANGE_NOT_SATISFIABLE',
       `The file has ${stats.size} bytes, so the range starts at or past its end.`,

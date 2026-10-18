@@ -74,7 +74,7 @@ export function accessLog(options?: AccessLogOptions): MiddlewareDefinition {
       const address = clientAddressOf(context)
       const exchange = exchangeOf(context)
       exchange.onClose(() => {
-        const status = exchange.response.reply?.status
+        const status = exchange.reply?.status
         const duration = (performance.now() - started).toFixed(DURATION_FRACTION_DIGITS)
         const line = `${field(context.req.method)} ${field(context.req.route)} ${status ?? MISSING_FIELD} ${duration}ms ${field(address)} ${field(requestIdOf(context))}`
         try {
