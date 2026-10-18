@@ -96,6 +96,14 @@ function checkDeclarations(value: object, owner: string, allowAll: boolean): voi
   }
 }
 
+function checkOptionsHeaders(value: object): void {
+  const headers: unknown = Reflect.get(value, 'optionsHeaders')
+  if (headers === undefined) return
+  if (!Array.isArray(headers) || !headers.every(name => typeof name === 'string')) {
+    throw new UhttpError('INVALID_ROUTE', 'Set the optionsHeaders of a middleware to a list of header names.')
+  }
+}
+
 function checkedMiddleware(list: readonly unknown[]): Middleware[] {
   return list.map(entry => {
     if (!isMiddleware(entry)) {
@@ -104,7 +112,10 @@ function checkedMiddleware(list: readonly unknown[]): Middleware[] {
         'Pass each middleware as a function or as an object with a handle function.',
       )
     }
-    if (typeof entry !== 'function') checkDeclarations(entry, 'a middleware', false)
+    if (typeof entry !== 'function') {
+      checkDeclarations(entry, 'a middleware', false)
+      checkOptionsHeaders(entry)
+    }
     return entry
   })
 }

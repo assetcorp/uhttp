@@ -34,6 +34,34 @@ export function splitPath(path: string): string[] {
   return path.slice(1).split('/')
 }
 
+const ENCODED_SUB_DELIMITERS: Readonly<Record<string, string>> = {
+  '%24': '$',
+  '%26': '&',
+  '%2B': '+',
+  '%2C': ',',
+  '%3B': ';',
+  '%3D': '=',
+  '%40': '@',
+}
+
+/**
+ * Returns the canonical raw spelling of a decoded path segment, which is the one spelling that the
+ * router matches. The function keeps each character of the static alphabet of a route path as it
+ * is and writes every other character as a percent sequence with uppercase hex digits, so `café`
+ * becomes `caf%C3%A9`.
+ *
+ * @param decoded - The caller passes the segment after decoding it once.
+ * @returns The function returns the canonical raw segment, or `undefined` for a segment that
+ * contains a lone surrogate, which no UTF-8 sequence decodes to.
+ * @internal
+ */
+export function canonicalSegment(decoded: string): string | undefined {
+  if (!decoded.isWellFormed()) return undefined
+  return encodeURIComponent(decoded).replace(/%(?:24|26|2B|2C|3B|3D|40)|\*/g, encoded =>
+    encoded === '*' ? '%2A' : (ENCODED_SUB_DELIMITERS[encoded] ?? encoded),
+  )
+}
+
 function invalid(message: string): UhttpError {
   return new UhttpError('INVALID_ROUTE', message)
 }

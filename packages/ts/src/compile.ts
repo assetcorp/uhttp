@@ -178,8 +178,10 @@ export interface CompiledApp {
   readonly appMiddleware: readonly Middleware[]
   /** The package calls the middleware of the app through these functions. */
   readonly appLayers: readonly MiddlewareHandler[]
-  /** The package copies a request by this plan when only the middleware of the app wraps it. */
+  /** The package copies a request by this plan when the request matches no route, so the package calls only the middleware of the app. */
   readonly appCopyPlan: CopyPlan
+  /** The package copies an OPTIONS request by this plan when the request matches no route, so the package calls only the middleware of the app. */
+  readonly appOptionsCopyPlan: CopyPlan
   /** A request that no route handles has these limits, which are those of the app with no body reader. */
   readonly appLimits: RouteLimits
   /** The package checks these prefix guards from the shortest prefix to the longest. */
@@ -207,11 +209,17 @@ function guarded(segments: readonly Segment[], middleware: Middleware): Middlewa
  * Returns the plan by which the package copies a request for a chain of middleware and a route.
  *
  * @param middleware - You pass every middleware in the chain.
- * @param options - You pass the options objects of the route, or none for a fallback answer.
+ * @param options - You pass the options objects of the route, or none for a fallback reply.
+ * @param method - The package passes the method of the requests that it copies by the plan, so that
+ * the plan includes the `optionsHeaders` of each middleware only for OPTIONS.
  * @returns The function returns a plan that merges every declaration.
  * @internal
  */
-export function copyPlanOf(middleware: readonly Middleware[], options: readonly RouteOptions[] = []): CopyPlan {
+export function copyPlanOf(
+  middleware: readonly Middleware[],
+  options: readonly RouteOptions[],
+  method: string,
+): CopyPlan {
   const names = new Set<string>()
   let allHeaders = false
   let clientAddress = false
@@ -229,6 +237,7 @@ export function copyPlanOf(middleware: readonly Middleware[], options: readonly 
   for (const entry of middleware) {
     if (typeof entry === 'function') continue
     declare(entry.headers)
+    if (method === 'OPTIONS') declare(entry.optionsHeaders)
     if (entry.clientAddress === true) clientAddress = true
   }
   const headerNames = [...names]
@@ -272,7 +281,7 @@ function compileRoute(
     parameterNames,
     layers,
     handler: record.handler,
-    copyPlan: copyPlanOf(declared, record.options),
+    copyPlan: copyPlanOf(declared, record.options, record.method),
     limits: routeLimitsOf(record, runtime),
   }
 }
@@ -337,7 +346,8 @@ export function compileApp(runtime: AppRuntime, contents: RegistryContents): Com
     methods,
     appMiddleware: [...contents.middleware],
     appLayers: contents.middleware.map(handlerOf),
-    appCopyPlan: copyPlanOf(contents.middleware),
+    appCopyPlan: copyPlanOf(contents.middleware, [], 'GET'),
+    appOptionsCopyPlan: copyPlanOf(contents.middleware, [], 'OPTIONS'),
     appLimits: { readsBody: false, maxBodyBytes: runtime.maxBodyBytes, timeoutMs: runtime.timeoutMs },
     guards,
   }

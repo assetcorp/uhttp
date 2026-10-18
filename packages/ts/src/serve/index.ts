@@ -20,8 +20,15 @@ async function serveOnWorkers(uws: Uws, options: CheckedServeOptions, module: UR
   acceptor.any('/*', res => {
     res.writeStatus(NO_WORKER_STATUS).end(NO_WORKER_BODY, true)
   })
-  const { Supervisor } = await import('../threads/supervisor.js')
-  const supervisor = new Supervisor(acceptor, options, { module: module.href, origin: processOrigin() })
+  const [{ Supervisor }, { createSharedMemory }] = await Promise.all([
+    import('../threads/supervisor.js'),
+    import('../threads/memory.js'),
+  ])
+  const supervisor = new Supervisor(acceptor, options, {
+    module: module.href,
+    origin: processOrigin(),
+    memory: createSharedMemory(),
+  })
   let listener: Listener
   try {
     await supervisor.start()

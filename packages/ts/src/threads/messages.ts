@@ -21,6 +21,8 @@ export interface WorkerSetup {
    * and before it exits, so that the main thread can wait for the worker in its exit hook.
    */
   readonly exitFlag: Int32Array
+  /** The package keeps the tables of every rate limiter in this shared memory, so that every worker of the server counts requests in the same tables. */
+  readonly memory: SharedArrayBuffer
 }
 
 /**

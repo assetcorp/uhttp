@@ -62,9 +62,20 @@ export interface ClosableSocket {
 export class Drain {
   /** The app is in this mode, which the package changes only from {@link SERVING} towards {@link CLOSING}. */
   mode: DrainMode = SERVING
+  /** This is `true` when the app serves HTTPS, which means that every client of the app connects over TLS. */
+  readonly secure: boolean
   readonly #sockets = new Set<ClosableSocket>()
   #pending = 0
   #emptied: PromiseWithResolvers<void> | undefined
+
+  /**
+   * Creates the drain of one app of uWebSockets.js.
+   *
+   * @param secure - The package passes `true` for an app that serves HTTPS.
+   */
+  constructor(secure: boolean) {
+    this.secure = secure
+  }
 
   /** Records a response that stays open after the handler of uWebSockets.js returns. */
   started(): void {

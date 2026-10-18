@@ -18,6 +18,19 @@ function sourceModules(directory: string): string[] {
   })
 }
 
+const MIDDLEWARE_SUBPATHS = [
+  'access-log',
+  'compression',
+  'cookies',
+  'cors',
+  'csrf',
+  'rate-limit',
+  'request-id',
+  'secure-headers',
+  'static',
+  'trusted-proxies',
+]
+
 function readManifest(): Record<string, unknown> {
   return JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'))
 }
@@ -97,12 +110,18 @@ describe('the built package', () => {
 })
 
 describe('the package manifest', () => {
-  it('sets the type to module, sets sideEffects to false, and lists one typed entry point', () => {
+  it('sets the type to module, sets sideEffects to false, and lists a typed entry point for the core and each middleware', () => {
     const manifest = readManifest()
+    const middleware = Object.fromEntries(
+      MIDDLEWARE_SUBPATHS.map(name => [
+        `./${name}`,
+        { types: `./dist/middleware/${name}/index.d.ts`, import: `./dist/middleware/${name}/index.js` },
+      ]),
+    )
 
     expect(manifest.type).toBe('module')
     expect(manifest.sideEffects).toBe(false)
-    expect(manifest.exports).toEqual({ '.': { types: './dist/index.d.ts', import: './dist/index.js' } })
+    expect(manifest.exports).toEqual({ '.': { types: './dist/index.d.ts', import: './dist/index.js' }, ...middleware })
   })
 
   it('lists no runtime dependencies and a peer range for uWebSockets.js from v20.70.0', () => {

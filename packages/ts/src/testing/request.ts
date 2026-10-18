@@ -61,9 +61,9 @@ function framingRejectionResponse(error: UhttpError, head: boolean): Response {
 
 function responseHeaders(exchange: Exchange): Headers {
   const headers = new Headers()
-  const contentType = exchange.responseContentType()
+  const contentType = exchange.response.contentType()
   if (contentType !== undefined) headers.set('content-type', contentType)
-  exchange.forEachResponseHeader((name, value) => {
+  exchange.response.forEachHeader((name, value) => {
     headers.append(name, value)
   })
   return headers
@@ -117,6 +117,7 @@ function copyTestRequest(
     exchange,
     parsed.method,
     parsed.path,
+    chain.route,
     liveTestRequest(parsed),
     chain.parameterNames,
     parameters,

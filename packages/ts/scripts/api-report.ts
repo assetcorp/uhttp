@@ -15,6 +15,9 @@ const TEMP_DIR = join(WORK_DIR, 'temp')
 const REPORT_SUFFIX = '.api.md'
 const WRITE_HINT = `Run 'pnpm nx run uhttp:api:write' to regenerate every API report, and commit the change.`
 const QUOTED_NAME = /"([^"]+)"/g
+const REPORTED_DECLARATION =
+  /^export (?:declare )?(?:abstract )?(?:class|function|const|let|var|interface|type|enum|namespace) ([A-Za-z_$][\w$]*)/gm
+const ROOT_REFERENCE_MESSAGES: readonly string[] = ['ae-forgotten-export', 'ae-unresolved-link']
 
 interface EntryPoint {
   subpath: string
@@ -106,7 +109,19 @@ function itemName(message: ExtractorMessage): string {
   return quoted.at(-1)?.[1] ?? message.text
 }
 
-function analyse(entry: EntryPoint): string[] {
+function rootExportNames(root: EntryPoint | undefined): ReadonlySet<string> {
+  if (root === undefined) return new Set()
+  const report = readFileSync(join(GENERATED_DIR, `${root.reportName}${REPORT_SUFFIX}`), 'utf8')
+  return new Set([...report.matchAll(REPORTED_DECLARATION)].map(match => match[1] ?? ''))
+}
+
+function reachableFromRoot(entry: EntryPoint, message: ExtractorMessage, rootNames: ReadonlySet<string>): boolean {
+  return (
+    entry.subpath !== '.' && ROOT_REFERENCE_MESSAGES.includes(message.messageId) && rootNames.has(itemName(message))
+  )
+}
+
+function analyse(entry: EntryPoint, rootNames: ReadonlySet<string>): string[] {
   const problems: string[] = []
   const config = ExtractorConfig.loadFileAndPrepare(writeConfig(entry))
   Extractor.invoke(config, {
@@ -115,6 +130,7 @@ function analyse(entry: EntryPoint): string[] {
     messageCallback(message: ExtractorMessage): void {
       message.handled = true
       if (message.category === 'console' || message.logLevel === 'none') return
+      if (reachableFromRoot(entry, message, rootNames)) return
       if (message.messageId === 'ae-undocumented') {
         problems.push(`${entry.subpath}: ${itemName(message)} has no TSDoc comment.`)
         return
@@ -204,7 +220,10 @@ function run(write: boolean): number {
     return 1
   }
   const problems = undocumentedDeclarations()
-  problems.push(...entries.flatMap(analyse))
+  const root = entries.find(entry => entry.subpath === '.')
+  if (root !== undefined) problems.push(...analyse(root, new Set()))
+  const rootNames = rootExportNames(root)
+  problems.push(...entries.filter(entry => entry !== root).flatMap(entry => analyse(entry, rootNames)))
   problems.push(...reconcile(entries, write))
   if (problems.length === 0) {
     console.log(`Every published declaration has TSDoc, and the API reports in etc/ match the exports.`)
