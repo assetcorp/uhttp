@@ -57,7 +57,7 @@ export type HeaderVisitor = (name: string, value: string, encoded: EncodedHeader
  *
  * @internal
  */
-export interface SetHeader {
+export interface ContextHeader {
   /** The package sends these lines of the header in order. */
   readonly lines: string[]
   /** This list contains the bytes of each fixed line at the index of that line, and it contains `undefined` at the index of any other line. */
@@ -74,7 +74,7 @@ export interface SetHeader {
  *
  * @internal
  */
-export type SetHeaders = Map<string, SetHeader>
+export type ContextHeaders = Map<string, ContextHeader>
 
 /**
  * The package reads the current reply of a request and the response headers that code set through
@@ -88,7 +88,7 @@ export interface ResponseParts {
   /** This number is the place of the current reply in the count of replies and headers of the request. */
   readonly replySetAt: number
   /** The package keeps the headers that code set through the context here, and this is `undefined` until code sets one. */
-  readonly setHeaders: SetHeaders | undefined
+  readonly contextHeaders: ContextHeaders | undefined
 }
 
 /**
@@ -104,14 +104,14 @@ export interface ResponseParts {
  * @internal
  */
 export function storeHeader(
-  headers: SetHeaders | undefined,
+  headers: ContextHeaders | undefined,
   lowerName: string,
   value: string,
   encoded: EncodedHeader | undefined,
   append: boolean,
   setAt: number,
-): SetHeaders {
-  const stored = headers ?? new Map<string, SetHeader>()
+): ContextHeaders {
+  const stored = headers ?? new Map<string, ContextHeader>()
   const existing = stored.get(lowerName)
   if (append && existing !== undefined) {
     existing.lines.push(value)
@@ -134,7 +134,7 @@ export function storeHeader(
  * @internal
  */
 export function responseContentType(parts: ResponseParts): string | undefined {
-  const set = parts.setHeaders?.get(CONTENT_TYPE)
+  const set = parts.contextHeaders?.get(CONTENT_TYPE)
   const replyType = parts.reply?.contentType
   if (set !== undefined && (replyType === undefined || set.setAt > parts.replySetAt)) return set.lines.at(-1)
   return replyType
@@ -151,7 +151,7 @@ export function responseContentType(parts: ResponseParts): string | undefined {
  */
 export function hasResponseHeader(parts: ResponseParts, lowerName: string): boolean {
   if (lowerName === CONTENT_TYPE) return responseContentType(parts) !== undefined
-  return parts.reply?.headers?.has(lowerName) === true || parts.setHeaders?.has(lowerName) === true
+  return parts.reply?.headers?.has(lowerName) === true || parts.contextHeaders?.has(lowerName) === true
 }
 
 /**
@@ -163,10 +163,10 @@ export function hasResponseHeader(parts: ResponseParts, lowerName: string): bool
  * @internal
  */
 export function hasResponseHeaders(parts: ResponseParts): boolean {
-  return parts.reply?.headers !== undefined || parts.setHeaders !== undefined
+  return parts.reply?.headers !== undefined || parts.contextHeaders !== undefined
 }
 
-function replaces(set: SetHeader | undefined, replySetAt: number): boolean {
+function replaces(set: ContextHeader | undefined, replySetAt: number): boolean {
   return set !== undefined && set.setAt > replySetAt && !set.appends
 }
 
@@ -186,7 +186,7 @@ export function responseHeaderLines(parts: ResponseParts, lowerName: string): re
   }
   const { replySetAt } = parts
   const replyLines = parts.reply?.headers?.get(lowerName)
-  const set = parts.setHeaders?.get(lowerName)
+  const set = parts.contextHeaders?.get(lowerName)
   const lines: string[] = []
   if (replyLines !== undefined && !replaces(set, replySetAt)) lines.push(...replyLines)
   if (set !== undefined && !(replyLines !== undefined && set.setAt < replySetAt)) lines.push(...set.lines)
@@ -204,16 +204,16 @@ export function responseHeaderLines(parts: ResponseParts, lowerName: string): re
  * @internal
  */
 export function forEachResponseHeader(parts: ResponseParts, emit: HeaderVisitor): void {
-  const { replySetAt, setHeaders } = parts
+  const { replySetAt, contextHeaders } = parts
   const replyHeaders = parts.reply?.headers
   if (replyHeaders !== undefined) {
     for (const [name, lines] of replyHeaders) {
-      if (replaces(setHeaders?.get(name), replySetAt)) continue
+      if (replaces(contextHeaders?.get(name), replySetAt)) continue
       for (const line of lines) emit(name, line, undefined)
     }
   }
-  if (setHeaders === undefined) return
-  for (const [name, set] of setHeaders) {
+  if (contextHeaders === undefined) return
+  for (const [name, set] of contextHeaders) {
     if (name === CONTENT_TYPE) continue
     if (replyHeaders?.has(name) === true && set.setAt < replySetAt) continue
     const { lines, encodings } = set

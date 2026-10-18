@@ -5,11 +5,11 @@ import { addListener, type OnceListeners } from './listeners.js'
 import { type Drain, SERVING } from './native/drain.js'
 import type { Reply } from './reply.js'
 import {
+  type ContextHeaders,
   type EncodedHeader,
   type PreparedHeader,
   type PreparedName,
   type ResponseParts,
-  type SetHeaders,
   storeHeader,
 } from './response.js'
 import type { AppRuntime, BodyState } from './runtime.js'
@@ -55,7 +55,7 @@ export class Exchange implements ResponseParts {
   #reply: Reply | undefined
   #final = false
   #replySetAt = 0
-  #headers: SetHeaders | undefined
+  #headers: ContextHeaders | undefined
   #clock = 0
   #counted = false
   #arrival: BodyArrival | undefined
@@ -285,7 +285,7 @@ export class Exchange implements ResponseParts {
   }
 
   /** The package keeps the headers that code set through the context here, and this is `undefined` until code sets one. */
-  get setHeaders(): SetHeaders | undefined {
+  get contextHeaders(): ContextHeaders | undefined {
     return this.#headers
   }
 
