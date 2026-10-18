@@ -25,7 +25,7 @@ Match on the code, because the message can change between releases.
 | Code | Status | When the package uses the code |
 | --- | --- | --- |
 | `INVALID_PATH_PARAMETER` | 400 | A path parameter contains a percent sequence that fails to decode. |
-| `NOT_FOUND` | 404 | A path has no route. You can throw it yourself for a missing record. |
+| `NOT_FOUND` | 404 | A path has no route, or the middleware of `serveStatic()` receives a path that differs from its canonical spelling. You can throw it yourself for a missing record. |
 | `METHOD_NOT_ALLOWED` | 405 | A path has routes, but none for the method of the request. |
 | `PAYLOAD_TOO_LARGE` | 413 | A request body, a form, or an upload passes one of its limits. The package closes the connection after the reply. |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A body parser receives a content type or a charset that it can't parse, or the client compresses a request body. |
@@ -60,6 +60,11 @@ Match on the code, because the message can change between releases.
 | `UPGRADE_REQUIRED` | 426 | A client sends a request without a WebSocket upgrade to a WebSocket route, or sends a `sec-websocket-version` other than 13. |
 | `INVALID_UPGRADE` | 400 | A client sends an upgrade request without `upgrade: websocket` or `connection: upgrade`, with a malformed `sec-websocket-key`, or with a body. When the request has a body, the package closes the connection after the reply. |
 | `FORBIDDEN_ORIGIN` | 403 | A client sends an upgrade request from the `null` origin, or from an origin that fails the check of the route. |
+| `RATE_LIMITED` | 429 | A client sends more requests than the limit of `rateLimit()` in one window. The package sends `Retry-After` with the reply. |
+| `CSRF_REJECTED` | 403 | The middleware of `csrf()` rejects a request that a page on another site can send as a form, because the app allows neither its `Sec-Fetch-Site` header nor its `Origin` header. |
+| `RANGE_NOT_SATISFIABLE` | 416 | A client asks `serveStatic()` for a byte range that starts at or past the end of the file. The package sends `Content-Range` with the size of the file in the reply. |
+| `INVALID_COOKIE` | 500 | Your code sets a cookie with a name that is not an HTTP token, with a value or an attribute that contains `;` or a control character, or with attributes that browsers reject. The package also throws it when your code signs or verifies a cookie on a route without `cookies()` and its keys. |
+| `INVALID_MIDDLEWARE_OPTIONS` | 500 | You pass a middleware an option of the wrong type or outside its range. The function that builds the middleware throws when you call it, so you see the mistake when your app starts. |
 | `INVALID_WEBSOCKET` | 500 | Your code passes a topic or a message of the wrong type to a socket or to `app.publish()`, or closes a socket with a code or a reason outside the limits of RFC 6455. |
 
 For a `UhttpError` below 500, and for `HANDLER_TIMEOUT` and `SERVER_CLOSING`, the package sends the status, the code, and the message of the error, together with `issues` for `VALIDATION_FAILED`. For every other error, including any error that is not a `UhttpError`, it sends a 500 whose message is 'The request failed.' alone, so that the package writes a stack trace or an internal message only to your logger:

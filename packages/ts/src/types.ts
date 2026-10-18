@@ -41,6 +41,12 @@ export type MiddlewareHandler = (
 export interface MiddlewareDefinition {
   /** The package copies these request headers for every route that this middleware wraps. */
   readonly headers?: readonly string[]
+  /**
+   * The package copies these request headers for an OPTIONS request alone, such as the headers of a
+   * CORS preflight request, so that the package adds no work for them to a request with any other
+   * method.
+   */
+  readonly optionsHeaders?: readonly string[]
   /** When this is `true`, the package copies the client address for every route that this middleware wraps. */
   readonly clientAddress?: boolean
   /** The package calls this function for each request that passes through the middleware. */

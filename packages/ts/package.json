@@ -29,6 +29,46 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./access-log": {
+      "types": "./dist/middleware/access-log/index.d.ts",
+      "import": "./dist/middleware/access-log/index.js"
+    },
+    "./compression": {
+      "types": "./dist/middleware/compression/index.d.ts",
+      "import": "./dist/middleware/compression/index.js"
+    },
+    "./cookies": {
+      "types": "./dist/middleware/cookies/index.d.ts",
+      "import": "./dist/middleware/cookies/index.js"
+    },
+    "./cors": {
+      "types": "./dist/middleware/cors/index.d.ts",
+      "import": "./dist/middleware/cors/index.js"
+    },
+    "./csrf": {
+      "types": "./dist/middleware/csrf/index.d.ts",
+      "import": "./dist/middleware/csrf/index.js"
+    },
+    "./rate-limit": {
+      "types": "./dist/middleware/rate-limit/index.d.ts",
+      "import": "./dist/middleware/rate-limit/index.js"
+    },
+    "./request-id": {
+      "types": "./dist/middleware/request-id/index.d.ts",
+      "import": "./dist/middleware/request-id/index.js"
+    },
+    "./secure-headers": {
+      "types": "./dist/middleware/secure-headers/index.d.ts",
+      "import": "./dist/middleware/secure-headers/index.js"
+    },
+    "./static": {
+      "types": "./dist/middleware/static/index.d.ts",
+      "import": "./dist/middleware/static/index.js"
+    },
+    "./trusted-proxies": {
+      "types": "./dist/middleware/trusted-proxies/index.d.ts",
+      "import": "./dist/middleware/trusted-proxies/index.js"
     }
   },
   "files": [
@@ -57,6 +97,7 @@
     "@types/node": "22.20.5",
     "@vitest/coverage-v8": "5.0.3",
     "arktype": "2.2.7",
+    "rollup": "4.64.6",
     "typescript": "7.0.2",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#9ec36de7709996c58dce03d63796216c90a17136",
     "valibot": "1.5.0",

@@ -17,6 +17,7 @@ This roadmap lists the work that the project plans, so it will change as that wo
   - One `threads` option will spread connections across worker threads.
   - Any Standard Schema validator will check request data.
   - A logger will be optional.
+  - Ten optional middleware will each have an entry point of their own: trusted proxies, request IDs, access logs, rate limits, security headers, CORS, CSRF protection, cookies, compression, and static files.
 - **The benchmark page.** A suite will send requests with h2load to bare uWebSockets.js, uhttp, Hono on its Node.js adapter, Fastify, and Express, over a plain route, a JSON route, and an upload route, across a sweep of connection counts. A generator will then write the figures and the charts into `BENCHMARKS.md` from the recorded results.
 
 ## Planned

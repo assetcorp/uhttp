@@ -18,6 +18,18 @@ export interface RequestInfo {
   /** The path is the raw target of the request without its query string. */
   readonly path: string
   /**
+   * You wrote this path when you added the route that matched the request, such as `/users/:id`.
+   * It is `undefined` when no route matched, as for a 404, for a 405, or for the reply that the
+   * package itself sends to an OPTIONS request.
+   */
+  readonly route: string | undefined
+  /**
+   * This is `true` when the client connected to the server over TLS. Behind a proxy that
+   * terminates TLS, this is `false`, so call `protocolOf()` from `@delali/uhttp/trusted-proxies`
+   * to get the protocol that the proxy reports.
+   */
+  readonly secure: boolean
+  /**
    * The query string is the raw part of the target after the `?`, and it is empty when the target
    * has none.
    *
@@ -131,6 +143,7 @@ export interface LiveRequest {
 export class CopiedRequest implements RequestInfo {
   readonly method: string
   readonly path: string
+  readonly route: string | undefined
   #live: LiveRequest | undefined
   #query = ''
   #queryRead = false
@@ -153,6 +166,7 @@ export class CopiedRequest implements RequestInfo {
    * @param exchange - The package passes the state of the request, which creates the abort signal.
    * @param method - The client sent this method.
    * @param path - The package passes the raw path without its query string.
+   * @param route - The package passes the path of the route that matched, or `undefined` when no route matched.
    * @param live - The package passes the live request, from which the object reads the query string and the content type.
    * @param parameterNames - You wrote these parameter names in the route path.
    * @param parameterValues - The package passes the decoded parameter values in the same order as the names.
@@ -167,6 +181,7 @@ export class CopiedRequest implements RequestInfo {
     exchange: Exchange,
     method: string,
     path: string,
+    route: string | undefined,
     live: LiveRequest,
     parameterNames: readonly string[],
     parameterValues: readonly string[],
@@ -180,6 +195,7 @@ export class CopiedRequest implements RequestInfo {
     this.#exchange = exchange
     this.method = method
     this.path = path
+    this.route = route
     this.#live = live
     this.#parameterNames = parameterNames
     this.#parameterValues = parameterValues
@@ -258,6 +274,10 @@ export class CopiedRequest implements RequestInfo {
 
   get signal(): AbortSignal {
     return this.#exchange.signal
+  }
+
+  get secure(): boolean {
+    return this.#exchange.secure
   }
 
   param(name: string): string | undefined {

@@ -1,6 +1,7 @@
 import type { AppDescriptor } from 'uWebSockets.js'
 import { Worker } from 'node:worker_threads'
 import type { CheckedServeOptions } from '../serve/options.js'
+import { releaseLocksOf } from './memory.js'
 import { isWorkerMessage, type WorkerMessage, type WorkerSetup } from './messages.js'
 import type { RestartSlot } from './restarts.js'
 
@@ -52,7 +53,7 @@ export interface WorkerRecord {
  *
  * @internal
  */
-export type SharedSetup = Pick<WorkerSetup, 'module' | 'origin'>
+export type SharedSetup = Pick<WorkerSetup, 'module' | 'origin' | 'memory'>
 
 /**
  * The supervisor receives the events of each worker through these functions.
@@ -131,7 +132,9 @@ export function startWorker(
     if (isWorkerMessage(message)) events.message(record, message)
   })
   worker.on('error', error => events.error(record, error))
+  const { threadId } = worker
   worker.on('exit', code => {
+    releaseLocksOf(setup.memory, threadId)
     events.exit(record, code)
     exit.resolve()
   })

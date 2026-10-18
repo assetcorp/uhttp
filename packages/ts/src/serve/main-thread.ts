@@ -22,8 +22,8 @@ interface Https {
   readonly acceptor: TemplatedApp
 }
 
-function generationOf(native: TemplatedApp): Generation {
-  return { native, drain: new Drain(), closed: false }
+function generationOf(native: TemplatedApp, secure: boolean): Generation {
+  return { native, drain: new Drain(secure), closed: false }
 }
 
 function closeGeneration(generation: Generation): void {
@@ -75,7 +75,7 @@ class MainThreadServer {
     const https = this.#https
     if (https === undefined) throw reloadWithoutTlsError()
     if (this.#closing) throw closingError()
-    const next = generationOf(await nativeAppOf(this.#uws, https.tls, true))
+    const next = generationOf(await nativeAppOf(this.#uws, https.tls, true), true)
     try {
       await registerApp(this.#uws, next.native, this.#compiled, this.#hub, next.drain, https.tls)
     } catch (error) {
@@ -107,7 +107,7 @@ interface Started {
 
 async function startApp(uws: Uws, compiled: CompiledApp, tls: CheckedTls | undefined): Promise<Started> {
   const native = await nativeAppOf(uws, tls, true)
-  const generation = generationOf(native)
+  const generation = generationOf(native, tls !== undefined)
   let hub: Hub | undefined
   let https: Https | undefined
   try {

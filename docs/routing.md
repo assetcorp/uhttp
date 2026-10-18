@@ -148,6 +148,10 @@ const requireLogin: Middleware = {
 }
 ```
 
+Declare a header in `optionsHeaders` when a middleware uses that header on OPTIONS requests alone, as a CORS middleware does with `access-control-request-method` on a preflight request. The package then copies that header only for an OPTIONS request, so it adds no work for that header to a request with any other method.
+
+Beside the headers that you declare, you can read two properties of every request, which the package fills in without a call into uWebSockets.js. `c.req.route` is the path that you wrote when you added the matching route, such as `/users/:id`, so you can use it in a log line or a metric. It is `undefined` for a 404, for a 405, and for the reply that the package itself sends to an OPTIONS request. `c.req.secure` is `true` when the client connected over TLS. Behind a proxy that terminates TLS, `c.req.secure` is `false`, so use `protocolOf()` from [Trusted proxies](middleware/trusted-proxies.md) to get the protocol that the proxy reports.
+
 `c.req.header()` throws a `UhttpError` with the code `UNDECLARED_HEADER` for a header that nobody declared, so the first test that calls that code fails with the name of the missing header in its message. `c.req.clientAddress` throws `UNDECLARED_CLIENT_ADDRESS` in the same way when nobody declared the client address.
 
 Set the body reader, the body limit, and the time limit of a route in the same options object, with `body`, `maxBodyBytes`, and `timeoutMs`, as [Request bodies and validation](bodies.md) describes.

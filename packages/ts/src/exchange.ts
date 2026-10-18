@@ -1,18 +1,10 @@
 import { BodyArrival } from './arrival.js'
 import { UhttpError } from './errors.js'
-import { settableHeaderName } from './headers.js'
 import { addListener, type OnceListeners } from './listeners.js'
 import { type Drain, SERVING } from './native/drain.js'
 import type { Reply } from './reply.js'
+import { ResponseState } from './response.js'
 import type { AppRuntime, BodyState } from './runtime.js'
-
-const CONTENT_TYPE = 'content-type'
-
-interface ContextHeader {
-  readonly lines: string[]
-  readonly appends: boolean
-  setAt: number
-}
 
 /**
  * The package keeps the state of one request and its response in this object, from the abort
@@ -51,14 +43,11 @@ export class Exchange {
   watchingAbort = false
   /** This is `true` once the package sends a whole reply on a connection that the package closes itself later. */
   lingering = false
+  /** The package keeps the reply and the response headers that code set through the context here. */
+  readonly response = new ResponseState()
   readonly #drain: Drain | undefined
   #counted = false
   #arrival: BodyArrival | undefined
-  #reply: Reply | undefined
-  #final = false
-  #replySetAt = 0
-  #headers: Map<string, ContextHeader> | undefined
-  #clock = 0
   #controller: AbortController | undefined
   #signalFired = false
   #signalReason: unknown
@@ -77,6 +66,11 @@ export class Exchange {
   constructor(runtime: AppRuntime, drain?: Drain) {
     this.runtime = runtime
     this.#drain = drain
+  }
+
+  /** This is `true` when the client connected over TLS to the app of uWebSockets.js that serves the request. */
+  get secure(): boolean {
+    return this.#drain?.secure === true
   }
 
   /**
@@ -271,7 +265,7 @@ export class Exchange {
 
   /** The chain has produced this reply so far, and it is `undefined` before any reply exists. */
   get reply(): Reply | undefined {
-    return this.#reply
+    return this.response.reply
   }
 
   /**
@@ -281,9 +275,7 @@ export class Exchange {
    * @param reply - The package makes this reply the current one.
    */
   assign(reply: Reply): void {
-    if (this.#final || reply === this.#reply) return
-    this.#reply = reply
-    this.#replySetAt = ++this.#clock
+    this.response.assign(reply)
   }
 
   /**
@@ -294,79 +286,6 @@ export class Exchange {
    * @param reply - The package makes this reply the last one.
    */
   finalize(reply: Reply): void {
-    this.assign(reply)
-    this.#final = true
-  }
-
-  /**
-   * Sets a response header after checking its name and its value. The header goes out with
-   * whatever reply the request ends with, unless that reply arrived later with a header of the
-   * same name.
-   *
-   * @param name - The package stores this header name in lowercase.
-   * @param value - The package sends this value.
-   * @param append - When this is `true`, the package keeps the earlier lines of the header.
-   */
-  setHeader(name: string, value: string, append: boolean): void {
-    const lowerName = settableHeaderName(name, value)
-    if (lowerName === undefined) return
-    this.#headers ??= new Map()
-    const setAt = ++this.#clock
-    const existing = this.#headers.get(lowerName)
-    if (append && existing !== undefined) {
-      existing.lines.push(value)
-      existing.setAt = setAt
-      return
-    }
-    this.#headers.set(lowerName, { lines: [value], appends: append, setAt })
-  }
-
-  /**
-   * Returns the content type that the package sends with the current reply. A `content-type`
-   * header that your code set after the reply arrived replaces the content type of the reply.
-   *
-   * @returns The method returns the content type, or `undefined` when neither the reply nor your
-   * code set one.
-   */
-  responseContentType(): string | undefined {
-    const set = this.#headers?.get(CONTENT_TYPE)
-    const replyType = this.#reply?.contentType
-    if (set !== undefined && (replyType === undefined || set.setAt > this.#replySetAt)) return set.lines.at(-1)
-    return replyType
-  }
-
-  /**
-   * Returns `true` when the current reply carries headers or your code set a header, so that
-   * {@link Exchange.forEachResponseHeader} can have lines to pass on.
-   *
-   * @returns The method returns `false` when that method has no line to pass on.
-   */
-  hasResponseHeaders(): boolean {
-    return this.#reply?.headers !== undefined || this.#headers !== undefined
-  }
-
-  /**
-   * Calls a function for each line of every response header that goes out with the current reply,
-   * apart from `content-type`. For a header that both the reply and your code set, the one that
-   * your code or the reply set later goes out, and an appended line follows the lines of the reply.
-   *
-   * @param emit - The package calls this function with the lowercase name and the value of each line.
-   */
-  forEachResponseHeader(emit: (name: string, value: string) => void): void {
-    const replyHeaders = this.#reply?.headers
-    const setHeaders = this.#headers
-    if (replyHeaders !== undefined) {
-      for (const [name, lines] of replyHeaders) {
-        const set = setHeaders?.get(name)
-        if (set !== undefined && set.setAt > this.#replySetAt && !set.appends) continue
-        for (const line of lines) emit(name, line)
-      }
-    }
-    if (setHeaders === undefined) return
-    for (const [name, set] of setHeaders) {
-      if (name === CONTENT_TYPE) continue
-      if (replyHeaders?.has(name) === true && set.setAt < this.#replySetAt) continue
-      for (const line of set.lines) emit(name, line)
-    }
+    this.response.finalize(reply)
   }
 }
