@@ -1,6 +1,7 @@
 import { type Context, exchangeOf } from '../../context.js'
+import type { Exchange } from '../../exchange.js'
 import { createReply, type Reply } from '../../reply.js'
-import type { PreparedName, ResponseState } from '../../response.js'
+import { hasResponseHeader, type PreparedName, responseContentType, responseHeaderLines } from '../../response.js'
 import type { MiddlewareDefinition } from '../../types.js'
 import { fixedHeader, fixedName, invalidOption, optionsObject, wholeNumberOption } from '../options.js'
 import {
@@ -73,9 +74,9 @@ async function compressedReply(
   return createReply(reply.status, reply.contentType, compressed, copiedHeaders(reply.headers))
 }
 
-function weakenTag(response: ResponseState, tagName: PreparedName): void {
-  const tag = response.header(ETAG_HEADER)?.at(-1)
-  if (tag !== undefined && !tag.startsWith('W/')) response.setPrepared(tagName, `W/${tag}`, false)
+function weakenTag(exchange: Exchange, tagName: PreparedName): void {
+  const tag = responseHeaderLines(exchange, ETAG_HEADER)?.at(-1)
+  if (tag !== undefined && !tag.startsWith('W/')) exchange.setPrepared(tagName, `W/${tag}`, false)
 }
 
 /**
@@ -131,27 +132,27 @@ export function compression(options?: CompressionOptions): MiddlewareDefinition 
     async handle(context, next) {
       await next()
       if (skipped.has(context)) return
-      const response = exchangeOf(context).response
-      const reply = response.reply
+      const exchange = exchangeOf(context)
+      const reply = exchange.reply
       if (
         reply === undefined ||
         UNCOMPRESSED_STATUSES.includes(reply.status) ||
-        response.has(CONTENT_ENCODING_HEADER) ||
-        forbidsTransform(response.header(CACHE_CONTROL_HEADER)) ||
-        !compressibleType(response.contentType())
+        hasResponseHeader(exchange, CONTENT_ENCODING_HEADER) ||
+        forbidsTransform(responseHeaderLines(exchange, CACHE_CONTROL_HEADER)) ||
+        !compressibleType(responseContentType(exchange))
       ) {
         return
       }
-      response.setFixed(vary, true)
+      exchange.setFixed(vary, true)
       if (context.req.method === 'HEAD') return
       const encoding = negotiatedEncoding(context.req.header(ACCEPT_ENCODING_HEADER), encodings)
       const contentEncoding = encoding === undefined ? undefined : contentEncodings.get(encoding)
       if (encoding === undefined || contentEncoding === undefined) return
       const replacement = await compressedReply(reply, encoding, threshold)
       if (replacement === undefined) return
-      response.substitute(replacement)
-      response.setFixed(contentEncoding, false)
-      weakenTag(response, tagName)
+      exchange.substitute(replacement)
+      exchange.setFixed(contentEncoding, false)
+      weakenTag(exchange, tagName)
     },
   }
 }

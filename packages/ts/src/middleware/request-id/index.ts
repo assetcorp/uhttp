@@ -27,7 +27,7 @@ export function requestId(): MiddlewareDefinition {
       const inbound = viaTrustedProxy(context) ? context.req.header(REQUEST_ID_HEADER) : undefined
       const id = inbound !== undefined && VALID_REQUEST_ID.test(inbound) ? inbound : randomUUID()
       setRequestId(context, id)
-      exchangeOf(context).response.setPrepared(idName, id, false)
+      exchangeOf(context).setPrepared(idName, id, false)
       return next()
     },
   }

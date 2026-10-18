@@ -134,6 +134,19 @@ export interface LiveRequest {
 }
 
 /**
+ * The package passes the route that matched a request to its copy in this form, which the chain of
+ * the request implements.
+ *
+ * @internal
+ */
+export interface MatchedRoute {
+  /** You wrote this path when you added the route, and it is `undefined` when no route matched. */
+  readonly route: string | undefined
+  /** You wrote these parameter names in the route path. */
+  readonly parameterNames: readonly string[]
+}
+
+/**
  * The package copies a request into this object, and it passes the object to every middleware and
  * handler as {@link RequestInfo}. The object reads the query string and the content type from the
  * live request when your code first asks for them, until the package releases the live request.
@@ -143,7 +156,6 @@ export interface LiveRequest {
 export class CopiedRequest implements RequestInfo {
   readonly method: string
   readonly path: string
-  readonly route: string | undefined
   #live: LiveRequest | undefined
   #query = ''
   #queryRead = false
@@ -151,7 +163,7 @@ export class CopiedRequest implements RequestInfo {
   #contentTypeRead = false
   readonly #contentLength: string | undefined
   readonly #exchange: Exchange
-  readonly #parameterNames: readonly string[]
+  readonly #matched: MatchedRoute
   readonly #parameterValues: readonly string[]
   readonly #headerNames: readonly string[]
   readonly #headerValues: readonly (string | undefined)[]
@@ -166,9 +178,8 @@ export class CopiedRequest implements RequestInfo {
    * @param exchange - The package passes the state of the request, which creates the abort signal.
    * @param method - The client sent this method.
    * @param path - The package passes the raw path without its query string.
-   * @param route - The package passes the path of the route that matched, or `undefined` when no route matched.
+   * @param matched - The package passes the path and the parameter names of the route that matched.
    * @param live - The package passes the live request, from which the object reads the query string and the content type.
-   * @param parameterNames - You wrote these parameter names in the route path.
    * @param parameterValues - The package passes the decoded parameter values in the same order as the names.
    * @param contentLength - The client sent this raw `content-length` header, and it is `undefined` when the request has none.
    * @param headerNames - The route and its middleware declared these header names, which the package lowercased.
@@ -181,9 +192,8 @@ export class CopiedRequest implements RequestInfo {
     exchange: Exchange,
     method: string,
     path: string,
-    route: string | undefined,
+    matched: MatchedRoute,
     live: LiveRequest,
-    parameterNames: readonly string[],
     parameterValues: readonly string[],
     contentLength: string | undefined,
     headerNames: readonly string[],
@@ -195,9 +205,8 @@ export class CopiedRequest implements RequestInfo {
     this.#exchange = exchange
     this.method = method
     this.path = path
-    this.route = route
+    this.#matched = matched
     this.#live = live
-    this.#parameterNames = parameterNames
     this.#parameterValues = parameterValues
     this.#contentLength = contentLength
     this.#headerNames = headerNames
@@ -205,6 +214,10 @@ export class CopiedRequest implements RequestInfo {
     this.#allHeaders = allHeaders
     this.#clientAddress = clientAddress
     this.#reader = reader
+  }
+
+  get route(): string | undefined {
+    return this.#matched.route
   }
 
   get query(): string {
@@ -281,13 +294,13 @@ export class CopiedRequest implements RequestInfo {
   }
 
   param(name: string): string | undefined {
-    const index = this.#parameterNames.indexOf(name)
+    const index = this.#matched.parameterNames.indexOf(name)
     return index === -1 ? undefined : this.#parameterValues[index]
   }
 
   params(): Record<string, string> {
     const params: Record<string, string> = {}
-    this.#parameterNames.forEach((name, index) => {
+    this.#matched.parameterNames.forEach((name, index) => {
       const value = this.#parameterValues[index]
       if (value !== undefined) params[name] = value
     })
