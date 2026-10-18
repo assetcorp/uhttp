@@ -126,7 +126,7 @@ describe('static files over the network', () => {
     ['a doubled slash', '/assets//app.js'],
     ['a hidden file', '/assets/.env'],
     ['a missing file', '/assets/missing.js'],
-  ])('answers %s with a 404 and keeps the connection open', async (_name, target) => {
+  ])('replies 404 to %s and keeps the connection open', async (_name, target) => {
     const server = await start(staticApp())
 
     const { connection, response } = await send(server.port, requestHead('GET', target))

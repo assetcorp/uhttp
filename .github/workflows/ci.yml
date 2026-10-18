@@ -50,5 +50,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Mount a FAT folder, which ignores the case of file names, for the static-file tests
+        run: |
+          sudo apt-get install -y -qq dosfstools
+          truncate -s 64M "$RUNNER_TEMP/case-insensitive.img"
+          mkfs.vfat "$RUNNER_TEMP/case-insensitive.img"
+          sudo mkdir -p /mnt/case-insensitive
+          sudo mount -o "loop,uid=$(id -u),gid=$(id -g)" "$RUNNER_TEMP/case-insensitive.img" /mnt/case-insensitive
+          echo "UHTTP_CASE_INSENSITIVE_FOLDER=/mnt/case-insensitive" >> "$GITHUB_ENV"
+
       - name: Test with the coverage thresholds
         run: pnpm test:coverage

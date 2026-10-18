@@ -45,6 +45,15 @@ describe('trustedProxies() options', () => {
     expect(build).toThrow(expect.objectContaining({ code: 'INVALID_MIDDLEWARE_OPTIONS' }))
   })
 
+  it.each([
+    ['a hop count', 1],
+    ['a hop count inside the list', ['10.0.0.1', 2]],
+    ['true', true],
+  ])('throws, for %s, the error that a client can add its own entries to X-Forwarded-For', (_name, trust) => {
+    const build = () => trustedProxies({ trust } as unknown as TrustedProxiesOptions)
+    expect(build).toThrow(/a client can add its own entries to X-Forwarded-For/)
+  })
+
   it('uses the address of the peer when you pass no list of proxies', async () => {
     const client = await clientOf(undefined, '10.0.0.5', { 'x-forwarded-for': '203.0.113.9' })
     expect(client.address).toBe('10.0.0.5')

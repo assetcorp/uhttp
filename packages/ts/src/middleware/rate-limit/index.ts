@@ -206,9 +206,9 @@ function setHeaders(response: ResponseState, plan: LimitPlan, hit: RateLimitHit,
  * The built-in store keeps its counts in memory that the worker threads of a server share, and it
  * removes expired keys on a timer. Build each rate limiter once, when Node loads the module of your
  * app, so that every worker counts its n-th rate limiter in the same table. When the store is full,
- * the package lets each request with a new key through without counting it, and it writes one
- * warning to the logger. With fixed windows, the middleware can let up to twice the limit through
- * around the end of a window.
+ * the package removes the least recently used key of a sample to count a new key, and it writes one
+ * warning to the logger the first time that it removes a live key. With fixed windows, the
+ * middleware can serve up to twice the limit around the end of a window.
  *
  * @param options - You set the limit and the window, and you can set the key, the headers that the
  * key function uses, the store, the legacy headers, and the size of the built-in store.
@@ -217,7 +217,7 @@ function setHeaders(response: ResponseState, plan: LimitPlan, hit: RateLimitHit,
  * whole number from 1 to 2,147,483,646, when `windowMs` is not a whole number from 1,000 to
  * 2,147,483,647, when `key` is not a function, when `headers` contains an entry that is not a
  * header name, when `store` has no `increment` method, or when `maxKeys` is not a whole number
- * from 1 to 1,048,576 or comes with a `store`. It throws the same error when your app builds more
+ * from 1 to 1,048,576 or you pass it together with a `store`. It throws the same error when your app builds more
  * than 64 rate limiters with the built-in store, or when their tables need more than 1 GiB
  * together.
  */
@@ -233,7 +233,7 @@ export function rateLimit(options: RateLimitOptions): MiddlewareDefinition {
         throw new UhttpError('INTERNAL_ERROR', 'The key function of rateLimit() returned no string.')
       }
       const hit = checkedHit(await plan.store.increment(key, plan.windowMs))
-      if (!warned && plan.memory?.takeFullWarning() === true) {
+      if (!warned && plan.memory?.takeEvictionWarning() === true) {
         warned = true
         logToApp(context, 'warn', {}, STORE_FULL_MESSAGE)
       }

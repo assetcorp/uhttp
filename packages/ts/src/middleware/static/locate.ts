@@ -4,6 +4,33 @@ import { join, sep } from 'node:path'
 import { UhttpError } from '../../errors.js'
 
 const READ_WITHOUT_BLOCKING = constants.O_RDONLY | constants.O_NONBLOCK
+const REALPATH_KEEPS_REQUESTED_CASE = process.platform === 'linux'
+
+function swappedCase(name: string): string {
+  let swapped = ''
+  for (const character of name) {
+    const upper = character.toUpperCase()
+    swapped += upper === character ? character.toLowerCase() : upper
+  }
+  return swapped
+}
+
+async function sameEntry(first: string, second: string): Promise<boolean> {
+  const other = await lstat(second).catch(() => undefined)
+  if (other === undefined) return false
+  const original = await lstat(first)
+  return other.dev === original.dev && other.ino === original.ino
+}
+
+async function ignoresCase(root: string, segments: readonly string[]): Promise<boolean> {
+  let parent = root
+  for (const segment of segments) {
+    const swapped = swappedCase(segment)
+    if (swapped !== segment && (await sameEntry(join(parent, segment), join(parent, swapped)))) return true
+    parent = join(parent, segment)
+  }
+  return false
+}
 
 function insideFolder(folder: string, path: string): boolean {
   return path === folder || path.startsWith(folder.endsWith(sep) ? folder : `${folder}${sep}`)
@@ -27,7 +54,10 @@ async function walk(root: string, segments: readonly string[]): Promise<string |
  * path, because of a symlink or because a case-insensitive filesystem matched another spelling,
  * the function checks the path one segment at a time. It keeps a segment only when the folder
  * contains an entry with that exact spelling, and it follows a symlink only when the target is
- * inside the folder.
+ * inside the folder. On Linux, `realpath` returns the spelling of the request even from a folder
+ * that ignores case, such as a casefolded ext4 folder or a macOS folder that Docker mounts, so the
+ * function also checks the path one segment at a time whenever the opposite case of a segment
+ * leads to the same entry.
  *
  * @param root - The middleware passes the real path of its folder.
  * @param segments - The middleware passes the decoded segments below the folder.
@@ -38,7 +68,8 @@ export async function locate(root: string, segments: readonly string[]): Promise
   const expected = join(root, ...segments)
   try {
     const real = await realpath(expected)
-    return real === expected ? real : await walk(root, segments)
+    if (real !== expected) return await walk(root, segments)
+    return REALPATH_KEEPS_REQUESTED_CASE && (await ignoresCase(root, segments)) ? await walk(root, segments) : real
   } catch {
     return undefined
   }
