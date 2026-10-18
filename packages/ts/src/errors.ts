@@ -5,10 +5,11 @@
  * @remarks
  * `INVALID_PATH_PARAMETER`, `INVALID_JSON`, `VALIDATION_FAILED`, `INVALID_MULTIPART`,
  * `REQUEST_ABORTED`, `INVALID_TRANSFER_ENCODING`, and `INVALID_UPGRADE` correspond to 400,
- * `FORBIDDEN_ORIGIN` to 403, `NOT_FOUND` to 404, `METHOD_NOT_ALLOWED` to 405, `PAYLOAD_TOO_LARGE`
- * to 413, `UNSUPPORTED_MEDIA_TYPE` to 415, `UPGRADE_REQUIRED` to 426, `UNSUPPORTED_TRANSFER_CODING`
- * to 501, and `HANDLER_TIMEOUT` and `SERVER_CLOSING` to 503. Every other code corresponds to 500.
- * The package throws each code in one situation:
+ * `FORBIDDEN_ORIGIN` and `CSRF_REJECTED` to 403, `NOT_FOUND` to 404, `METHOD_NOT_ALLOWED` to 405,
+ * `PAYLOAD_TOO_LARGE` to 413, `UNSUPPORTED_MEDIA_TYPE` to 415, `RANGE_NOT_SATISFIABLE` to 416,
+ * `UPGRADE_REQUIRED` to 426, `RATE_LIMITED` to 429, `UNSUPPORTED_TRANSFER_CODING` to 501, and
+ * `HANDLER_TIMEOUT` and `SERVER_CLOSING` to 503. Every other code corresponds to 500. The package
+ * throws each code in one situation:
  *
  * - The package throws `INVALID_PATH_PARAMETER` when a path parameter contains a percent sequence
  *   that fails to decode.
@@ -85,6 +86,19 @@
  * - The package throws `INVALID_WEBSOCKET` when your code passes a topic or a message of the wrong
  *   type to a socket or to `app.publish()`, or closes a socket with a code or a reason that
  *   RFC 6455 forbids.
+ * - The rate-limit middleware throws `RATE_LIMITED` when a client sends more requests within one
+ *   window than the limit of the middleware.
+ * - The CSRF middleware throws `CSRF_REJECTED` when a browser sends a form submission that can
+ *   change data from another site, or sends it with neither `Sec-Fetch-Site` nor `Origin`.
+ * - The static-file middleware throws `RANGE_NOT_SATISFIABLE` when a client asks for a byte range
+ *   that starts at or past the end of the file.
+ * - The cookie middleware throws `INVALID_COOKIE` when your code sets a cookie whose name is not
+ *   an HTTP token, whose value or attribute contains `;` or a control character, whose name and
+ *   value come to more than 4,096 bytes, whose `maxAge` is not a whole number of seconds up to
+ *   34,560,000, or whose attributes differ from what browsers require. It also throws the code
+ *   when your code signs or verifies a cookie on a route without `cookies()` and its keys.
+ * - A middleware throws `INVALID_MIDDLEWARE_OPTIONS` when you pass it an option of the wrong type
+ *   or a value outside its range.
  * - The package throws `APP_START_FAILED` when the module that you pass to {@link serve} throws
  *   while it builds the app, when its default export is neither an app nor a function that returns
  *   one, when a worker thread crashes before every worker serves, or when a worker takes longer
@@ -134,6 +148,11 @@ export type ErrorCode =
   | 'APP_START_FAILED'
   | 'INVALID_CERTIFICATE'
   | 'SERVER_CLOSING'
+  | 'RATE_LIMITED'
+  | 'CSRF_REJECTED'
+  | 'RANGE_NOT_SATISFIABLE'
+  | 'INVALID_COOKIE'
+  | 'INVALID_MIDDLEWARE_OPTIONS'
 
 const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   INVALID_PATH_PARAMETER: 400,
@@ -173,6 +192,11 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   APP_START_FAILED: 500,
   INVALID_CERTIFICATE: 500,
   SERVER_CLOSING: 503,
+  RATE_LIMITED: 429,
+  CSRF_REJECTED: 403,
+  RANGE_NOT_SATISFIABLE: 416,
+  INVALID_COOKIE: 500,
+  INVALID_MIDDLEWARE_OPTIONS: 500,
 }
 
 /**

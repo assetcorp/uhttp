@@ -29,6 +29,8 @@ export interface RequestChain {
   readonly rawParameters: readonly string[]
   /** This is `true` when the chain ends in the handler of a route. */
   readonly matchedRoute: boolean
+  /** You wrote this path for the route that the chain ends in, and it is `undefined` for a chain without a route. */
+  readonly route: string | undefined
   /** The package reads the body reader, the body limit, and the time limit of the request from these limits. */
   readonly limits: RouteLimits
 }
@@ -82,11 +84,11 @@ function fallbackChain(app: CompiledApp, method: string, segments: readonly stri
   if (allowed.length === 0) handler = app.runtime.notFound ?? defaultNotFound
   else if (method === 'OPTIONS') handler = answerOptions(allow)
   else handler = refuseMethod(allow)
-  const wrapping = { layers: app.appLayers, copyPlan: app.appCopyPlan }
+  const wrapping = { layers: app.appLayers, copyPlan: appCopyPlanFor(app, method) }
   if (guards.length > 0) {
     const middleware = [...app.appMiddleware, ...guards.flatMap(guard => guard.middleware)]
     wrapping.layers = middleware.map(handlerOf)
-    wrapping.copyPlan = copyPlanOf(middleware)
+    wrapping.copyPlan = copyPlanOf(middleware, [], method)
   }
   return {
     ...wrapping,
@@ -94,8 +96,13 @@ function fallbackChain(app: CompiledApp, method: string, segments: readonly stri
     parameterNames: NO_PARAMETERS,
     rawParameters: NO_PARAMETERS,
     matchedRoute: false,
+    route: undefined,
     limits: app.appLimits,
   }
+}
+
+function appCopyPlanFor(app: CompiledApp, method: string): CopyPlan {
+  return method === 'OPTIONS' ? app.appOptionsCopyPlan : app.appCopyPlan
 }
 
 /**
@@ -122,6 +129,7 @@ export function resolveChain(app: CompiledApp, method: string, path: string): Re
     parameterNames: route.parameterNames,
     rawParameters: match.parameters,
     matchedRoute: true,
+    route: route.path,
     limits: route.limits,
   }
 }
@@ -146,16 +154,17 @@ export function rejectedChain(chain: RequestChain, rejection: UhttpError): Reque
   }
 }
 
-function invalidParameterChain(app: CompiledApp): RequestChain {
+function invalidParameterChain(app: CompiledApp, route: RequestChain): RequestChain {
   return {
     layers: app.appLayers,
     handler: () => {
       throw new UhttpError('INVALID_PATH_PARAMETER', INVALID_PARAMETER_MESSAGE)
     },
-    copyPlan: app.appCopyPlan,
+    copyPlan: route.copyPlan,
     parameterNames: NO_PARAMETERS,
     rawParameters: NO_PARAMETERS,
     matchedRoute: false,
+    route: undefined,
     limits: app.appLimits,
   }
 }
@@ -172,7 +181,9 @@ function decodeParameter(value: string): string | undefined {
 /**
  * Decodes each raw parameter value of a chain once. When a value contains a percent sequence that
  * fails to decode, the function returns a chain in its place, in which the middleware of the app
- * wraps a 400 with the code `INVALID_PATH_PARAMETER`.
+ * wraps a 400 with the code `INVALID_PATH_PARAMETER`. The package copies the request for that
+ * chain by the plan of the route, because that plan includes every header that the middleware of
+ * the app declared.
  *
  * @param app - The package passes the compiled app.
  * @param chain - The package passes the chain of the request with its raw parameter values.
@@ -184,7 +195,7 @@ export function decodeChain(app: CompiledApp, chain: RequestChain): DecodedChain
   const parameters: string[] = []
   for (const value of chain.rawParameters) {
     const decoded = decodeParameter(value)
-    if (decoded === undefined) return { chain: invalidParameterChain(app), parameters: NO_PARAMETERS }
+    if (decoded === undefined) return { chain: invalidParameterChain(app, chain), parameters: NO_PARAMETERS }
     parameters.push(decoded)
   }
   return { chain, parameters }

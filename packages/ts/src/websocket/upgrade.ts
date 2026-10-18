@@ -14,6 +14,7 @@ import { statusLine } from '../native/head.js'
 import { writeReply } from '../native/write.js'
 import type { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type RequestChain } from '../resolve.js'
+import { forEachResponseHeader } from '../response.js'
 import { acceptUpgrade, type HandshakeHeaders, handshakeError, handshakeOf, refuseUpgrade } from './handshake.js'
 import type { Hub } from './hub.js'
 import { NativeSocket, SOCKET_STATE } from './socket.js'
@@ -37,7 +38,7 @@ interface Upgrade {
 function switchProtocols(upgrade: Upgrade): void {
   const { res, exchange, context, handshake } = upgrade
   res.writeStatus(SWITCHING_STATUS_LINE)
-  exchange.forEachResponseHeader((name, value) => {
+  forEachResponseHeader(exchange, (name, value) => {
     if (!UPGRADE_REPLY_HEADER_NAMES.includes(name)) res.writeHeader(name, value)
   })
   const socket = new NativeSocket(contextValues(context), upgrade.hub)
@@ -130,6 +131,7 @@ export function upgradeHandler(app: CompiledApp, socket: CompiledWebSocket, hub:
     parameterNames: route.parameterNames,
     rawParameters: NO_PARAMETERS,
     matchedRoute: true,
+    route: route.path,
     limits: route.limits,
   }
   const withoutParameters: DecodedChain = { chain: base, parameters: NO_PARAMETERS }

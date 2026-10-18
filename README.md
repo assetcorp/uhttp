@@ -16,6 +16,21 @@ The package is under construction and has no release yet. The first release will
 - Read [Serve HTTPS](docs/https.md) for certificates, several hostnames, and the renewal of certificates while the server goes on serving.
 - Read [Errors](docs/errors.md) for the error codes, the error and not-found handlers, the logger, and the errors that uWebSockets.js sends itself.
 
+## Middleware
+
+Each middleware has its own entry point, such as `@delali/uhttp/cors`, so that a bundler can leave out every middleware that your app doesn't import. On each request, the package does no work for a middleware that you leave off the route.
+
+- Read [Trusted proxies](docs/middleware/trusted-proxies.md) for the address, the protocol, and the host of a client behind a proxy.
+- Read [Request IDs](docs/middleware/request-id.md) for an ID on each request, with which you can find the request that a client reports in your logs.
+- Read [Access logs](docs/middleware/access-log.md) for one line on each request, without the secrets that a request can contain.
+- Read [Rate limits](docs/middleware/rate-limit.md) for limits that every worker thread shares, the IETF rate-limit headers, and a store on Redis.
+- Read [Security headers](docs/middleware/secure-headers.md) for the presets for pages and APIs, HSTS, and a content security policy with a nonce.
+- Read [CORS](docs/middleware/cors.md) for the origins whose scripts may read your responses, and for the replies to preflight requests.
+- Read [CSRF protection](docs/middleware/csrf.md) for rejecting a form that another site sends to your app.
+- Read [Cookies](docs/middleware/cookies.md) for reading, setting, deleting, and signing cookies.
+- Read [Compression](docs/middleware/compression.md) for Brotli, zstd, and gzip responses, and for the routes that should stay uncompressed.
+- Read [Static files](docs/middleware/static.md) for serving a folder with caching, byte ranges, and canonical paths.
+
 ## License
 
 MIT

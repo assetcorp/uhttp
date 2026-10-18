@@ -4,15 +4,15 @@ import { settableHeaderName } from './headers.js'
 import { addListener, type OnceListeners } from './listeners.js'
 import { type Drain, SERVING } from './native/drain.js'
 import type { Reply } from './reply.js'
+import {
+  type ContextHeaders,
+  type EncodedHeader,
+  type PreparedHeader,
+  type PreparedName,
+  type ResponseParts,
+  storeHeader,
+} from './response.js'
 import type { AppRuntime, BodyState } from './runtime.js'
-
-const CONTENT_TYPE = 'content-type'
-
-interface ContextHeader {
-  readonly lines: string[]
-  readonly appends: boolean
-  setAt: number
-}
 
 /**
  * The package keeps the state of one request and its response in this object, from the abort
@@ -20,7 +20,7 @@ interface ContextHeader {
  *
  * @internal
  */
-export class Exchange {
+export class Exchange implements ResponseParts {
   /** The package reads the logger and the handlers of the app from these settings. */
   readonly runtime: AppRuntime
   /**
@@ -52,13 +52,13 @@ export class Exchange {
   /** This is `true` once the package sends a whole reply on a connection that the package closes itself later. */
   lingering = false
   readonly #drain: Drain | undefined
-  #counted = false
-  #arrival: BodyArrival | undefined
   #reply: Reply | undefined
   #final = false
   #replySetAt = 0
-  #headers: Map<string, ContextHeader> | undefined
+  #headers: ContextHeaders | undefined
   #clock = 0
+  #counted = false
+  #arrival: BodyArrival | undefined
   #controller: AbortController | undefined
   #signalFired = false
   #signalReason: unknown
@@ -77,6 +77,11 @@ export class Exchange {
   constructor(runtime: AppRuntime, drain?: Drain) {
     this.runtime = runtime
     this.#drain = drain
+  }
+
+  /** This is `true` when the client connected over TLS to the app of uWebSockets.js that serves the request. */
+  get secure(): boolean {
+    return this.#drain?.secure === true
   }
 
   /**
@@ -274,9 +279,20 @@ export class Exchange {
     return this.#reply
   }
 
+  /** This number is the place of the current reply in the count of replies and headers of the request. */
+  get replySetAt(): number {
+    return this.#replySetAt
+  }
+
+  /** The package keeps the headers that code set through the context here, and this is `undefined` until code sets one. */
+  get contextHeaders(): ContextHeaders | undefined {
+    return this.#headers
+  }
+
   /**
-   * Makes a reply the current reply of the request. The headers of a reply that this one replaces
-   * no longer go out, while the headers that your code set through the context stay.
+   * Makes a reply the current reply of the request. The package no longer sends the headers of the
+   * reply that this one replaces, while it still sends the headers that your code set through the
+   * context.
    *
    * @param reply - The package makes this reply the current one.
    */
@@ -299,9 +315,21 @@ export class Exchange {
   }
 
   /**
-   * Sets a response header after checking its name and its value. The header goes out with
-   * whatever reply the request ends with, unless that reply arrived later with a header of the
-   * same name.
+   * Puts a changed form of the current reply in its place, such as a compressed form, while the
+   * package keeps the order of the headers that your code set through the context against the
+   * reply.
+   *
+   * @param reply - The package passes the changed form of the current reply.
+   */
+  substitute(reply: Reply): void {
+    if (this.#final || this.#reply === undefined) return
+    this.#reply = reply
+  }
+
+  /**
+   * Sets a response header after checking its name and its value. The package sends the header
+   * with whatever reply the request ends with, unless the chain produced that reply later with a
+   * header of the same name.
    *
    * @param name - The package stores this header name in lowercase.
    * @param value - The package sends this value.
@@ -309,64 +337,33 @@ export class Exchange {
    */
   setHeader(name: string, value: string, append: boolean): void {
     const lowerName = settableHeaderName(name, value)
-    if (lowerName === undefined) return
-    this.#headers ??= new Map()
-    const setAt = ++this.#clock
-    const existing = this.#headers.get(lowerName)
-    if (append && existing !== undefined) {
-      existing.lines.push(value)
-      existing.setAt = setAt
-      return
-    }
-    this.#headers.set(lowerName, { lines: [value], appends: append, setAt })
+    if (lowerName !== undefined) this.#store(lowerName, value, undefined, append)
   }
 
   /**
-   * Returns the content type that the package sends with the current reply. A `content-type`
-   * header that your code set after the reply arrived replaces the content type of the reply.
+   * Sets a response header that a middleware checked and encoded once at startup. The method
+   * checks it no further.
    *
-   * @returns The method returns the content type, or `undefined` when neither the reply nor your
-   * code set one.
+   * @param header - The middleware passes the prepared header.
+   * @param append - When this is `true`, the package keeps the earlier lines of the header.
    */
-  responseContentType(): string | undefined {
-    const set = this.#headers?.get(CONTENT_TYPE)
-    const replyType = this.#reply?.contentType
-    if (set !== undefined && (replyType === undefined || set.setAt > this.#replySetAt)) return set.lines.at(-1)
-    return replyType
+  setFixed(header: PreparedHeader, append: boolean): void {
+    this.#store(header.name, header.value, header.encoded, append)
   }
 
   /**
-   * Returns `true` when the current reply carries headers or your code set a header, so that
-   * {@link Exchange.forEachResponseHeader} can have lines to pass on.
+   * Sets a response header under a name that a middleware prepared at startup, with a value that
+   * the middleware built and checked for this request. The method checks neither of them again.
    *
-   * @returns The method returns `false` when that method has no line to pass on.
+   * @param name - The middleware passes the prepared name.
+   * @param value - The middleware passes the checked value.
+   * @param append - When this is `true`, the package keeps the earlier lines of the header.
    */
-  hasResponseHeaders(): boolean {
-    return this.#reply?.headers !== undefined || this.#headers !== undefined
+  setPrepared(name: PreparedName, value: string, append: boolean): void {
+    this.#store(name.name, value, name.encoded, append)
   }
 
-  /**
-   * Calls a function for each line of every response header that goes out with the current reply,
-   * apart from `content-type`. For a header that both the reply and your code set, the one that
-   * your code or the reply set later goes out, and an appended line follows the lines of the reply.
-   *
-   * @param emit - The package calls this function with the lowercase name and the value of each line.
-   */
-  forEachResponseHeader(emit: (name: string, value: string) => void): void {
-    const replyHeaders = this.#reply?.headers
-    const setHeaders = this.#headers
-    if (replyHeaders !== undefined) {
-      for (const [name, lines] of replyHeaders) {
-        const set = setHeaders?.get(name)
-        if (set !== undefined && set.setAt > this.#replySetAt && !set.appends) continue
-        for (const line of lines) emit(name, line)
-      }
-    }
-    if (setHeaders === undefined) return
-    for (const [name, set] of setHeaders) {
-      if (name === CONTENT_TYPE) continue
-      if (replyHeaders?.has(name) === true && set.setAt < this.#replySetAt) continue
-      for (const line of set.lines) emit(name, line)
-    }
+  #store(lowerName: string, value: string, encoded: EncodedHeader | undefined, append: boolean): void {
+    this.#headers = storeHeader(this.#headers, lowerName, value, encoded, append, ++this.#clock)
   }
 }

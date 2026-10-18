@@ -37,6 +37,7 @@ export interface HeaderOptions {
 
 let construct: (request: RequestInfo, exchange: Exchange) => Context
 let readValues: (context: Context) => Record<string, unknown>
+let readExchange: (context: Context) => Exchange
 
 /**
  * Every middleware and handler receives a `Context`, which has the copied request in `req` and
@@ -55,6 +56,7 @@ export class Context {
       for (const [key, value] of context.#values ?? []) values[key] = value
       return values
     }
+    readExchange = context => context.#exchange
   }
 
   private constructor(request: RequestInfo, exchange: Exchange) {
@@ -247,4 +249,17 @@ export function createContext(request: RequestInfo, exchange: Exchange): Context
  */
 export function contextValues(context: Context): Record<string, unknown> {
   return readValues(context)
+}
+
+/**
+ * Returns the state of the request behind a context, so that a middleware of the package can read
+ * the response headers, replace the reply with a changed copy of it, and wait for the end of the
+ * response.
+ *
+ * @param context - The middleware passes the context of the request.
+ * @returns The function returns the state of the request.
+ * @internal
+ */
+export function exchangeOf(context: Context): Exchange {
+  return readExchange(context)
 }
