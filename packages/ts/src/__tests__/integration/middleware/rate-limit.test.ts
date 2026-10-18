@@ -202,27 +202,48 @@ describe('rateLimit() store', () => {
     expect((await hit(limitedApp({ limit: 1, windowMs: 5000, store }))).status).toBe(500)
   })
 
-  it('serves requests with new keys and warns once when the built-in store is full', async () => {
+  it('counts a new key in a full built-in store by removing the least recently used key, and warns once', async () => {
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
     const { entries, logger } = memoryLogger()
     const app = createApp({ logger })
       .use(rateLimit({ limit: 1, windowMs: 60000, maxKeys: 2 }))
       .get('/', c => c.text('ok'))
-    for (const address of ['192.0.2.1', '192.0.2.2', '192.0.2.3', '192.0.2.4', '192.0.2.3']) {
-      expect((await app.request('/', { clientAddress: address })).status).toBe(200)
+    const statusFor = async (address: string): Promise<number> => {
+      vi.advanceTimersByTime(10)
+      return (await app.request('/', { clientAddress: address })).status
     }
-    expect((await app.request('/', { clientAddress: '192.0.2.1' })).status).toBe(429)
+    expect(await statusFor('192.0.2.1')).toBe(200)
+    expect(await statusFor('192.0.2.2')).toBe(200)
+    expect(await statusFor('192.0.2.1')).toBe(429)
+    expect(await statusFor('192.0.2.3')).toBe(200)
+    expect(await statusFor('192.0.2.3')).toBe(429)
+    expect(await statusFor('192.0.2.1')).toBe(429)
+    expect(await statusFor('192.0.2.2')).toBe(200)
     expect(entries.filter(entry => entry.level === 'warn')).toHaveLength(1)
   })
 
-  it('frees expired keys on its timer', async () => {
+  it('frees expired keys on its timer, so that a new key removes no live key', async () => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date', 'setInterval'] })
-    const app = createApp()
+    const { entries, logger } = memoryLogger()
+    const app = createApp({ logger })
       .use(rateLimit({ limit: 1, windowMs: 1000, maxKeys: 1 }))
       .get('/', c => c.text('ok'))
     await app.request('/', { clientAddress: '192.0.2.1' })
     vi.advanceTimersByTime(1000)
     await app.request('/', { clientAddress: '192.0.2.2' })
     expect((await app.request('/', { clientAddress: '192.0.2.2' })).status).toBe(429)
+    expect(entries.filter(entry => entry.level === 'warn')).toHaveLength(0)
+  })
+
+  it('keeps counting the newest key after clients send from 6,000 /64 prefixes of one /48 to a store of 4,096 keys', async () => {
+    const app = createApp()
+      .use(rateLimit({ limit: 1, windowMs: 60000, maxKeys: 4096 }))
+      .get('/', c => c.text('ok'))
+    for (let index = 0; index < 6000; index++) {
+      const address = `2001:db8:1:${index.toString(16)}::1`
+      expect((await app.request('/', { clientAddress: address })).status).toBe(200)
+    }
+    expect((await app.request('/', { clientAddress: '2001:db8:1:176f::9' })).status).toBe(429)
   })
 
   it('keeps counting correctly after thousands of keys expire and return', async () => {

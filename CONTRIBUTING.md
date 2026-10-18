@@ -44,6 +44,8 @@ The tests of `packages/ts` are in `packages/ts/src/__tests__/`, in three groups.
 
 Write an end-to-end test for every behaviour that a client sees on the network, such as a status, a header, a closed connection, or a body that the client has to parse whole. `app.request()` never calls the code that writes to the socket, so only an end-to-end test can catch a fault in that code. In each end-to-end test, send the whole request that a real client would send, including the body of a request that the server rejects. Then check what happened to the connection after the response, as well as the response itself.
 
+The static-file tests in `integration/middleware/static-case.test.ts` and `e2e/case-insensitive-static-files.test.ts` need a folder that ignores the case of file names. On macOS, the temporary folder of the system usually ignores case, so those tests use it. On Linux, set `UHTTP_CASE_INSENSITIVE_FOLDER` to such a folder, such as a FAT image that you mount, as the CI workflow does. Without that variable, Vitest skips those tests on Linux, while in CI the tests fail, so that CI never passes without them.
+
 ## Repository layout
 
 - `packages/ts` contains the package that the publish workflow releases to npm as `@delali/uhttp`.

@@ -1,13 +1,16 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomInt } from 'node:crypto'
+import { UhttpError } from '../../errors.js'
 import { LOCK_INDEX } from '../../threads/constants.js'
 import { acquireLock, releaseLock, type SharedRegion } from '../../threads/memory.js'
 import {
+  EVICTION_SAMPLE_SIZE,
   INLINE_KEY_BYTES,
   MAX_RATE_LIMIT,
   SLOT_WORDS,
   SWEEP_SPACING_DIVISOR,
   TABLE_HEADER_BYTES,
   TABLE_LOAD_FACTOR_INVERSE,
+  TABLE_SEED_INDEX,
   TABLE_SWEPT_AT_BYTE,
   TABLE_USED_INDEX,
 } from './constants.js'
@@ -19,11 +22,16 @@ const COUNT = 1
 const KEY_LENGTH = 2
 const HASH = 3
 const KEY = 4
+const NO_SLOT = -1
 const KEY_WORDS = INLINE_KEY_BYTES / Int32Array.BYTES_PER_ELEMENT
 const HEADER_WORDS = TABLE_HEADER_BYTES / Int32Array.BYTES_PER_ELEMENT
-const SLOT_BYTES = SLOT_WORDS * Int32Array.BYTES_PER_ELEMENT + Float64Array.BYTES_PER_ELEMENT
-const FNV_OFFSET = 0x811c9dc5
+const SLOT_BYTES = SLOT_WORDS * Int32Array.BYTES_PER_ELEMENT + 2 * Float64Array.BYTES_PER_ELEMENT
 const FNV_PRIME = 0x01000193
+const MURMUR_FINAL_MULTIPLIER = 0x85ebca6b
+const MURMUR_SECOND_FINAL_MULTIPLIER = 0xc2b2ae35
+const MURMUR_HALF_SHIFT = 16
+const MURMUR_MIDDLE_SHIFT = 13
+const MAX_SEED = 0x7fffffff
 
 /**
  * A store returns the count of a key in its current window and the time at which that window ends,
@@ -58,11 +66,31 @@ export function tableBytes(capacity: number): number {
   return TABLE_HEADER_BYTES + capacity * SLOT_BYTES
 }
 
+function mixed(hash: number): number {
+  let mixing = hash ^ (hash >>> MURMUR_HALF_SHIFT)
+  mixing = Math.imul(mixing, MURMUR_FINAL_MULTIPLIER)
+  mixing ^= mixing >>> MURMUR_MIDDLE_SHIFT
+  mixing = Math.imul(mixing, MURMUR_SECOND_FINAL_MULTIPLIER)
+  return mixing ^ (mixing >>> MURMUR_HALF_SHIFT)
+}
+
+function sharedSeed(words: Int32Array): number {
+  acquireLock(words, LOCK_INDEX)
+  try {
+    if (words[TABLE_SEED_INDEX] === 0) words[TABLE_SEED_INDEX] = randomInt(1, MAX_SEED)
+    return words[TABLE_SEED_INDEX] ?? 1
+  } finally {
+    releaseLock(words, LOCK_INDEX)
+  }
+}
+
 /**
  * The built-in store counts requests in this hash table, which it keeps in shared memory, so that
  * every worker thread of a server counts in the same table. Each method takes the lock of the
- * table, finds the slot of the key by linear probing, and then releases the lock. To delete a key,
- * the table shifts the later slots of the cluster back, so that a probe never has to pass a
+ * table, finds the slot of the key by linear probing, and then releases the lock. The table hashes
+ * each key with a random seed that every worker reads from the table header. When the table is
+ * full, it removes the least recently used key of a sample to make room for a new key. To delete a
+ * key, the table shifts the later slots of the cluster back, so that a probe never has to pass a
  * tombstone.
  *
  * @internal
@@ -70,14 +98,18 @@ export function tableBytes(capacity: number): number {
 export class CountTable {
   readonly #words: Int32Array
   readonly #resets: Float64Array
+  readonly #touched: Float64Array
   readonly #sweptAt: Float64Array
   readonly #mask: number
   readonly #maxKeys: number
+  readonly #seed: number
   readonly #key = new Uint8Array(INLINE_KEY_BYTES)
   readonly #keyWords = new Int32Array(this.#key.buffer)
+  #evicted = false
 
   /**
-   * Views a table in a region of shared memory.
+   * Views a table in a region of shared memory, and writes the seed of its hash when no worker has
+   * written one yet.
    *
    * @param region - The caller passes the region, which has room for {@link tableBytes} bytes.
    * @param capacity - The caller passes the number of slots, a power of two.
@@ -85,12 +117,14 @@ export class CountTable {
    */
   constructor(region: SharedRegion, capacity: number, maxKeys: number) {
     const { memory, offset } = region
+    const slotWordsEnd = offset + TABLE_HEADER_BYTES + capacity * SLOT_WORDS * Int32Array.BYTES_PER_ELEMENT
     this.#words = new Int32Array(memory, offset, HEADER_WORDS + capacity * SLOT_WORDS)
-    const resetsOffset = offset + TABLE_HEADER_BYTES + capacity * SLOT_WORDS * Int32Array.BYTES_PER_ELEMENT
-    this.#resets = new Float64Array(memory, resetsOffset, capacity)
+    this.#resets = new Float64Array(memory, slotWordsEnd, capacity)
+    this.#touched = new Float64Array(memory, slotWordsEnd + capacity * Float64Array.BYTES_PER_ELEMENT, capacity)
     this.#sweptAt = new Float64Array(memory, offset + TABLE_SWEPT_AT_BYTE, 1)
     this.#mask = capacity - 1
     this.#maxKeys = maxKeys
+    this.#seed = sharedSeed(this.#words)
   }
 
   #encode(key: string): { length: number; hash: number } {
@@ -102,13 +136,17 @@ export class CountTable {
     }
     this.#key.fill(0)
     this.#key.set(bytes)
-    let hash = FNV_OFFSET ^ length
+    let hash = this.#seed ^ length
     for (const byte of this.#key) hash = Math.imul(hash ^ byte, FNV_PRIME)
-    return { length, hash: hash | 0 }
+    return { length, hash: mixed(hash) }
   }
 
   #base(slot: number): number {
     return HEADER_WORDS + slot * SLOT_WORDS
+  }
+
+  #used(slot: number): boolean {
+    return this.#words[this.#base(slot) + STATE] === USED
   }
 
   #matches(base: number, length: number, hash: number): boolean {
@@ -120,58 +158,111 @@ export class CountTable {
     return true
   }
 
+  #probe(length: number, hash: number): number {
+    let slot = (hash >>> 0) & this.#mask
+    for (let step = 0; step <= this.#mask; step++) {
+      const base = this.#base(slot)
+      if (this.#words[base + STATE] === EMPTY || this.#matches(base, length, hash)) return slot
+      slot = (slot + 1) & this.#mask
+    }
+    return NO_SLOT
+  }
+
   /**
    * Counts one request of a key. When the window of the key has ended, the method starts a new
-   * window of `windowMs` at `now`.
+   * window of `windowMs` at `now`. When the key is new and the table already contains `maxKeys`
+   * keys, the method first removes the least recently used key of a sample.
    *
    * @param key - The caller passes the key of the client.
    * @param windowMs - The caller passes the length of a window.
    * @param now - The caller passes the current time in milliseconds since the epoch.
-   * @returns The method returns the count and the end of the window, or `undefined` when the
-   * table already contains `maxKeys` keys and the key is new.
+   * @returns The method returns the count and the end of the window.
    */
-  increment(key: string, windowMs: number, now: number): RateLimitHit | undefined {
+  increment(key: string, windowMs: number, now: number): RateLimitHit {
     const { length, hash } = this.#encode(key)
     const words = this.#words
     acquireLock(words, LOCK_INDEX)
     try {
-      let slot = (hash >>> 0) & this.#mask
-      for (;;) {
-        const base = this.#base(slot)
-        if (words[base + STATE] === EMPTY) break
-        if (this.#matches(base, length, hash)) {
-          const resetAt = this.#resets[slot] ?? 0
-          if (resetAt <= now) return this.#start(slot, base, windowMs, now)
-          const count = Math.min((words[base + COUNT] ?? 0) + 1, MAX_RATE_LIMIT + 1)
-          words[base + COUNT] = count
-          return { count, resetAt }
+      let slot = this.#probe(length, hash)
+      if (slot !== NO_SLOT && this.#used(slot)) return this.#count(slot, windowMs, now)
+      if (slot === NO_SLOT || (words[TABLE_USED_INDEX] ?? 0) >= this.#maxKeys) {
+        this.#evict(now)
+        slot = this.#probe(length, hash)
+        if (slot === NO_SLOT) {
+          throw new UhttpError('INTERNAL_ERROR', 'The built-in store of rateLimit() found no free slot for a new key.')
         }
-        slot = (slot + 1) & this.#mask
       }
-      const used = words[TABLE_USED_INDEX] ?? 0
-      if (used >= this.#maxKeys) return undefined
       const base = this.#base(slot)
       words[base + STATE] = USED
       words[base + KEY_LENGTH] = length
       words[base + HASH] = hash
       for (let word = 0; word < KEY_WORDS; word++) words[base + KEY + word] = this.#keyWords[word] ?? 0
-      words[TABLE_USED_INDEX] = used + 1
-      return this.#start(slot, base, windowMs, now)
+      words[TABLE_USED_INDEX] = (words[TABLE_USED_INDEX] ?? 0) + 1
+      return this.#start(slot, windowMs, now)
     } finally {
       releaseLock(words, LOCK_INDEX)
     }
   }
 
-  #start(slot: number, base: number, windowMs: number, now: number): RateLimitHit {
+  /**
+   * Returns `true` once, the first time after the table removed a live key to make room for a new
+   * one.
+   *
+   * @returns The method returns `false` when the table removed no live key since the last call.
+   */
+  takeEviction(): boolean {
+    if (!this.#evicted) return false
+    this.#evicted = false
+    return true
+  }
+
+  #count(slot: number, windowMs: number, now: number): RateLimitHit {
+    const resetAt = this.#resets[slot] ?? 0
+    if (resetAt <= now) return this.#start(slot, windowMs, now)
+    const base = this.#base(slot)
+    const count = Math.min((this.#words[base + COUNT] ?? 0) + 1, MAX_RATE_LIMIT + 1)
+    this.#words[base + COUNT] = count
+    this.#touched[slot] = now
+    return { count, resetAt }
+  }
+
+  #start(slot: number, windowMs: number, now: number): RateLimitHit {
     const resetAt = now + windowMs
-    this.#words[base + COUNT] = 1
+    this.#words[this.#base(slot) + COUNT] = 1
     this.#resets[slot] = resetAt
+    this.#touched[slot] = now
     return { count: 1, resetAt }
+  }
+
+  #evict(now: number): void {
+    let slot = Math.floor(Math.random() * (this.#mask + 1))
+    let victim = NO_SLOT
+    let oldest = Number.POSITIVE_INFINITY
+    let sampled = 0
+    for (let step = 0; step <= this.#mask && sampled < EVICTION_SAMPLE_SIZE; step++) {
+      if (this.#used(slot)) {
+        sampled++
+        if ((this.#resets[slot] ?? 0) <= now) {
+          this.#delete(slot)
+          return
+        }
+        const touched = this.#touched[slot] ?? 0
+        if (touched < oldest) {
+          oldest = touched
+          victim = slot
+        }
+      }
+      slot = (slot + 1) & this.#mask
+    }
+    if (victim === NO_SLOT) return
+    this.#evicted = true
+    this.#delete(victim)
   }
 
   /**
    * Deletes every key whose window has ended, unless another thread swept the table less than half
-   * a window ago.
+   * a window ago, and then counts the keys that are left, so that the number of keys stays right
+   * even after a worker stopped in the middle of a change.
    *
    * @param windowMs - The caller passes the length of a window.
    * @param now - The caller passes the current time in milliseconds since the epoch.
@@ -184,10 +275,14 @@ export class CountTable {
       this.#sweptAt[0] = now
       let slot = 0
       while (slot <= this.#mask) {
-        const base = this.#base(slot)
-        if (words[base + STATE] === USED && (this.#resets[slot] ?? 0) <= now) this.#delete(slot)
+        if (this.#used(slot) && (this.#resets[slot] ?? 0) <= now) this.#delete(slot)
         else slot++
       }
+      let used = 0
+      for (let index = 0; index <= this.#mask; index++) {
+        if (this.#used(index)) used++
+      }
+      words[TABLE_USED_INDEX] = used
     } finally {
       releaseLock(words, LOCK_INDEX)
     }
@@ -197,18 +292,20 @@ export class CountTable {
     const words = this.#words
     let hole = slot
     let next = (hole + 1) & this.#mask
-    while (words[this.#base(next) + STATE] === USED) {
+    while (this.#used(next)) {
       const home = ((words[this.#base(next) + HASH] ?? 0) >>> 0) & this.#mask
       const between = hole <= next ? hole < home && home <= next : hole < home || home <= next
       if (!between) {
         words.copyWithin(this.#base(hole), this.#base(next), this.#base(next) + SLOT_WORDS)
         this.#resets[hole] = this.#resets[next] ?? 0
+        this.#touched[hole] = this.#touched[next] ?? 0
         hole = next
       }
       next = (next + 1) & this.#mask
     }
     words.fill(0, this.#base(hole), this.#base(hole) + SLOT_WORDS)
     this.#resets[hole] = 0
-    words[TABLE_USED_INDEX] = (words[TABLE_USED_INDEX] ?? 1) - 1
+    this.#touched[hole] = 0
+    words[TABLE_USED_INDEX] = Math.max(0, (words[TABLE_USED_INDEX] ?? 1) - 1)
   }
 }

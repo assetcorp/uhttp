@@ -26,7 +26,6 @@ export interface RateLimitStore {
  */
 export class MemoryStore implements RateLimitStore {
   readonly #table: CountTable
-  #full = false
 
   /**
    * Creates the store and starts its sweep timer.
@@ -42,30 +41,24 @@ export class MemoryStore implements RateLimitStore {
   }
 
   /**
-   * Counts one request of a key. When the table is full and the key is new, the store lets the
-   * request through as the first of a window, so that the store keeps counting every client that
-   * it already tracks.
+   * Counts one request of a key. When the table is full and the key is new, the store removes the
+   * least recently used key of a sample and counts the new key in its place.
    *
    * @param key - The middleware passes the key of the client.
    * @param windowMs - The middleware passes the length of a window.
    * @returns The method returns the count and the end of the window.
    */
   increment(key: string, windowMs: number): RateLimitHit {
-    const now = Date.now()
-    const hit = this.#table.increment(key, windowMs, now)
-    if (hit !== undefined) return hit
-    this.#full = true
-    return { count: 1, resetAt: now + windowMs }
+    return this.#table.increment(key, windowMs, Date.now())
   }
 
   /**
-   * Returns `true` once, the first time after the full store let a new key through without counting it.
+   * Returns `true` once, the first time after the full store removed a live key to make room for a
+   * new one.
    *
-   * @returns The method returns `false` on every other call.
+   * @returns The method returns `false` when the store removed no live key since the last call.
    */
-  takeFullWarning(): boolean {
-    if (!this.#full) return false
-    this.#full = false
-    return true
+  takeEvictionWarning(): boolean {
+    return this.#table.takeEviction()
   }
 }
