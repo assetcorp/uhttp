@@ -245,12 +245,14 @@ describe('a server on worker threads', () => {
   }, 20_000)
 
   it('ends the process when a worker that has an open connection passes its heap limit', async () => {
-    const host = await startHost({ UHTTP_THREADS: '2', UHTTP_WORKER_HEAP_MB: '32' })
+    const host = await startHost({ UHTTP_THREADS: '2', UHTTP_WORKER_HEAP_MB: '32', UHTTP_WATCHDOG_MS: '2000' })
     const connection = await openConnection(host.port)
 
-    await connection.exchange(requestHead('GET', '/allocate'))
+    const response = await connection.exchange(requestHead('GET', '/allocate'))
+    const exit = await Promise.race([host.exited, pause(15_000).then(() => 'still running')])
 
-    expect(await host.exited).toEqual({ code: null, signal: 'SIGABRT' })
+    expect(response.status).toBe(200)
+    expect(exit, host.output()).toEqual({ code: null, signal: 'SIGABRT' })
   }, 30_000)
 
   it('exits with an error when every worker is dead', async () => {
