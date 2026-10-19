@@ -88,7 +88,7 @@ The maintainers of Fastify send their load with autocannon, a load generator tha
 
 ### Reproduce a run
 
-Install h2load with `brew install nghttp2` on macOS or `sudo apt-get install nghttp2-client` on Ubuntu, and install [uv](https://docs.astral.sh/uv/), with which the suite starts the generator. Then start the suite from the root of the repository:
+Install h2load 1.69.0 or later, because the suite reads the median and the percentiles of the request times, which h2load has printed since that version. On macOS, `brew install nghttp2` installs it. Ubuntu 24.04 packages h2load 1.59.0, so on Ubuntu, build h2load from the nghttp2 release as [`benchmarks/cloud/remote-bootstrap.sh`](benchmarks/cloud/remote-bootstrap.sh) does. Install [uv](https://docs.astral.sh/uv/) as well, since the suite starts the generator through it. Then start the suite from the root of the repository:
 
 ```bash
 pnpm install
@@ -96,6 +96,8 @@ pnpm --dir benchmarks/suite bench
 ```
 
 The suite builds uhttp and measures every server. It then writes a directory under `benchmarks/results/runs/`, named by the UTC time at which the suite started the run, with `machine.json`, `results.json`, `comparison.md`, and a `charts/` directory. When every measurement succeeds, the suite then rewrites this page and the `BENCH:headline` region of both READMEs. With the default settings, the suite starts 30 server processes and applies load to each of them for 240 seconds, which covers 40 seconds of warm-up and 40 seconds at each of five connection counts.
+
+When you record a run on your own computer, the figures describe that computer alone, so record a run for this page on a cloud machine that anybody can rent. The toolkit in [`benchmarks/cloud/`](benchmarks/cloud/README.md) creates a machine on GCP, Hetzner, DigitalOcean, or AWS and starts the suite on it. Once the suite finishes, the toolkit copies the new run directory back into this repository. When you call `./run-cloud.sh all` from `benchmarks/cloud/`, the toolkit records the published profile on a GCP `c3-standard-8`. The README of the toolkit names the default machine on each of the other providers.
 
 To check that the suite works on your machine, start the smoke profile with `pnpm --dir benchmarks/suite bench:smoke`. In the smoke profile, the suite warms each server up for 1 second and measures it for 2 seconds at 10 and at 100 connections. The suite then writes the smoke run under `benchmarks/results/.smoke/runs/`, which git ignores and the generator never reads, so this page stays unchanged. You can find every option of the suite in [`benchmarks/README.md`](benchmarks/README.md).
 

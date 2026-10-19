@@ -15,6 +15,7 @@ import {
   UPLOAD_BODY_BYTES,
   WRITEUP_DIRECTORY,
 } from './constants.ts'
+import { requireH2load } from './load.ts'
 import { machineDetails, serverEntries, uhttpRevision } from './machine.ts'
 import { type MeasureContext, measureTarget } from './measure.ts'
 import { choosePinning, suiteOptions } from './options.ts'
@@ -48,6 +49,7 @@ function runWriteupScript(script: string, args: readonly string[]): boolean {
 }
 
 const options = suiteOptions(process.argv.slice(2), process.env[PROFILE_ENV])
+await requireH2load()
 const createdAt = new Date()
 const id = runId(createdAt)
 const runDirectory = join(repositoryRoot, options.profile === 'smoke' ? SMOKE_RUNS_DIRECTORY : RUNS_DIRECTORY, id)

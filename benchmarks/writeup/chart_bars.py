@@ -7,6 +7,7 @@ from chart_paths import peak_chart
 from chart_style import (
     BASE_FONT_POINTS,
     FIGURE_WIDTH_INCHES,
+    POINTS_PER_INCH,
     caption,
     rate_label,
     save,
@@ -65,10 +66,13 @@ def peak_figure(destination: Path, results: dict, run_id: str, variant: str) -> 
     if not panels:
         return None
     bar_rows = sum(len(entries) for _, entries in panels)
+    height_inches = (
+        TITLE_RESERVE_POINTS / POINTS_PER_INCH + ROW_HEIGHT_INCHES * bar_rows + PANEL_MARGIN_INCHES * len(panels)
+    )
     figure, grid = plt.subplots(
         len(panels),
         1,
-        figsize=(FIGURE_WIDTH_INCHES, ROW_HEIGHT_INCHES * bar_rows + PANEL_MARGIN_INCHES * len(panels)),
+        figsize=(FIGURE_WIDTH_INCHES, height_inches),
         height_ratios=[len(entries) for _, entries in panels],
         squeeze=False,
     )
