@@ -18,6 +18,24 @@ updates:
       prefix: "deps"
       prefix-development: "deps(dev)"
 
+  - package-ecosystem: "npm"
+    directory: "/packages/ts"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 4
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      production:
+        dependency-type: "production"
+      dev-dependencies:
+        dependency-type: "development"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps(dev)"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

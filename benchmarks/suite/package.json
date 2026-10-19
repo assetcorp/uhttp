@@ -1,0 +1,29 @@
+{
+  "name": "uhttp-benchmarks",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The suite that measures uhttp, uWebSockets.js on its own, and other Node.js frameworks for BENCHMARKS.md.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "bench": "pnpm --dir ../../packages/ts run compile && node src/run.ts",
+    "bench:smoke": "BENCH_PROFILE=smoke pnpm run bench",
+    "lint": "biome check --error-on-warnings .",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@delali/uhttp": "workspace:*",
+    "@fastify/helmet": "13.2.0",
+    "@hono/node-server": "2.1.5",
+    "express": "5.3.0",
+    "fastify": "5.12.7",
+    "helmet": "8.3.0",
+    "hono": "4.13.13",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#9ec36de7709996c58dce03d63796216c90a17136"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}
