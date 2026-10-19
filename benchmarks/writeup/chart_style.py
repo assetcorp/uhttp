@@ -11,21 +11,21 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter, LogLocator
 
-UHTTP_RED = "#e7000b"
+UHTTP_VIOLET = "#7c3aed"
 REFERENCE_SLATE = "#64748b"
 CHART_AMBER = "#eda100"
 CHART_GREEN = "#15803d"
-CHART_VIOLET = "#4a3aa7"
+CHART_PINK = "#db2777"
 BACKGROUND_COLOUR = "#ffffff"
 TEXT_COLOUR = "#334155"
 GRID_COLOUR = "#e2e8f0"
 
 SERVER_COLOURS = {
-    "uhttp": UHTTP_RED,
+    "uhttp": UHTTP_VIOLET,
     "uws": REFERENCE_SLATE,
     "hono": CHART_AMBER,
     "fastify": CHART_GREEN,
-    "express": CHART_VIOLET,
+    "express": CHART_PINK,
 }
 
 FIGURE_WIDTH_INCHES = 8.2
