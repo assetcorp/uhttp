@@ -46,6 +46,10 @@ Write an end-to-end test for every behaviour that a client sees on the network, 
 
 The static-file tests in `integration/middleware/static-case.test.ts` and `e2e/case-insensitive-static-files.test.ts` need a folder that ignores the case of file names. On macOS, the temporary folder of the system usually ignores case, so those tests use it. On Linux, set `UHTTP_CASE_INSENSITIVE_FOLDER` to such a folder, such as a FAT image that you mount, as the CI workflow does. Without that variable, Vitest skips those tests on Linux, while in CI the tests fail, so that CI never passes without them.
 
+## Benchmarks
+
+On [`BENCHMARKS.md`](BENCHMARKS.md), you can compare uhttp with uWebSockets.js on its own and with three other Node.js frameworks. A maintainer measures the servers for that page only when somebody asks for new figures, because the suite then keeps a quiet machine busy for about two hours, while it applies load to 30 server processes for 240 seconds each. To check that the suite works on your machine, run `pnpm --dir benchmarks/suite bench:smoke`, which writes a smoke run that git ignores. You can find both profiles and every option of the suite in [`benchmarks/README.md`](benchmarks/README.md).
+
 ## Repository layout
 
 - `packages/ts` contains the package that the publish workflow releases to npm as `@delali/uhttp`.
@@ -59,6 +63,22 @@ The static-file tests in `integration/middleware/static-case.test.ts` and `e2e/c
 - Write a TSDoc comment on every published export, and write no other comment anywhere.
 - Give each optional middleware a directory under `packages/ts/src/middleware/` and an entry of its own in the `exports` map of `packages/ts/package.json`, and add it to the lists in `src/__tests__/package/tree-shaking.test.ts` and `src/__tests__/package/built-package.test.ts`, so that the tests check its entry in the `exports` map and check that a bundler can leave it out of an app that never imports it.
 - Put every test in one of the three groups that the Tests section describes.
+
+## Release
+
+The `Publish` workflow publishes `@delali/uhttp` to npm through a trusted publisher, so the repository holds no npm token, and npm adds a provenance statement to every version that the workflow publishes.
+
+On every push to main, the workflow publishes a prerelease under the `next` dist-tag once its lint, typecheck, build, and test jobs pass. The prerelease takes the next patch after the higher of the version in `packages/ts/package.json` and the newest version on npm, followed by `-next.<run number>.<run attempt>`, such as `0.4.2-next.57.1`. The workflow skips the prerelease when the commit already has a release tag, when main has moved past the commit, and when npm has no version of the package yet.
+
+To cut a release, start the `Publish` workflow by hand on main, with `patch`, `minor`, `major`, or an exact version such as `1.2.3`. Tick the dry run to see every step without a commit, a tag, a release, or a publish. The workflow first checks that the run holds the tip of main, and it then runs the same checks as a prerelease. Then `nx release` writes the version into `packages/ts/package.json` and the entry into `packages/ts/CHANGELOG.md`, commits both, tags the commit `uhttp@v<version>`, pushes, and creates the GitHub release, before `nx release publish` publishes the version under the `latest` dist-tag. The workflow pushes and creates the release with the `RELEASE_PAT` secret, which has to belong to an account that may push to main and create releases.
+
+On npm, you add a trusted publisher in the settings of a package, so the package has to exist before the workflow can publish it. A maintainer therefore publishes the first version by hand:
+
+1. Set the first version in `packages/ts/package.json` through a pull request, and merge it.
+2. On that commit of main, run `pnpm install` and `pnpm nx run uhttp:build`, then run `npm publish` from `packages/ts` while you are signed in to npm.
+3. Tag that commit `uhttp@v<version>`, push the tag, and create the GitHub release for it.
+4. Run `npm trust github @delali/uhttp --file publish.yml --repo assetcorp/uhttp --allow-publish` with npm 12, which has the `npm trust` command.
+5. Within 2 days, cut a release through the workflow, because a trusted publisher expires when nobody publishes through it within 2 days of its creation.
 
 ## Propose a change
 
