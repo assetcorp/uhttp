@@ -1,6 +1,7 @@
 import type { Context } from './context.js'
 import { isClientError, UhttpError } from './errors.js'
 import type { Exchange } from './exchange.js'
+import { isThenable } from './middleware/options.js'
 import { errorReply, Reply } from './reply.js'
 import type { BeforeHandler, Handler, Logger, MiddlewareHandler, Next } from './types.js'
 
@@ -172,8 +173,10 @@ function callBefore(
   before: BeforeHandler,
 ): undefined | Promise<void> {
   let result: unknown
+  let waits: boolean
   try {
     result = before(context)
+    waits = !(result instanceof Reply) && isThenable(result)
   } catch (error) {
     return fail(context, exchange, error)
   }
@@ -181,8 +184,8 @@ function callBefore(
     exchange.assign(result)
     return undefined
   }
-  if (!(result instanceof Promise)) return pass(context, exchange, layers, handler, index)
-  return result.then(
+  if (!waits) return pass(context, exchange, layers, handler, index)
+  return Promise.resolve(result).then(
     value => {
       if (!(value instanceof Reply)) return pass(context, exchange, layers, handler, index)
       exchange.assign(value)
