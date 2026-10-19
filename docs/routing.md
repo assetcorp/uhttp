@@ -95,9 +95,9 @@ const requireLogin: Middleware = {
 }
 ```
 
-Because `next()` always returns a promise, the package has to wait on every request that a middleware function wraps, so before it waits, it copies more of the request and attaches an abort handler. When `before` returns no promise, the package has nothing to wait on, which means that it can send the reply of a synchronous handler inside the same call from uWebSockets.js. When `before` has to wait for something, such as a session lookup, return a promise from it, and the package will wait only on the requests for which `before` returns one. An object can have both a `before` and a `handle` function, in which case the package calls `handle` once `before` passes the request on.
+Because `next()` always returns a promise, the package has to wait on every request that a middleware function wraps, so before it waits, it copies more of the request and attaches an abort handler. When `before` returns no promise, the package has nothing to wait on, which means that it can send the reply of a synchronous handler inside the same call from uWebSockets.js. When `before` has to wait for something, such as a session lookup, it can return a promise, in which case the package waits only on the requests for which `before` returns one. An object can have both a `before` and a `handle` function, in which case the package calls `handle` once `before` passes the request on.
 
-Among the optional middleware of the package, `compression()` and a `cors()` with a list or a function of origins work on the reply after the handler, so the package waits on every request that either of them wraps. `serveStatic()` returns a promise for each GET or HEAD request whose path names a file under its prefix, while `csrf()` and `rateLimit()` return one only when a function or a store that you pass to them returns a promise.
+Among the optional middleware of the package, `compression()` and a `cors()` with a list or a function of origins work on the reply after the handler, so the package waits on every request that either of them wraps. `serveStatic()` returns a promise for each GET or HEAD request for a file under its prefix, while `csrf()` and `rateLimit()` return one only when a function or a store that you pass to them returns a promise.
 
 ## Pass values from middleware to the handler
 

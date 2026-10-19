@@ -1,6 +1,6 @@
 # CORS
 
-A browser lets a script read the response to a cross-origin request only when the server names the origin of that script, or `*`, in `Access-Control-Allow-Origin`. The middleware that `cors()` returns adds that header and the other CORS headers for the origins that you list. It also returns a 204 for the preflight request that a browser sends before a request that a form can't send, such as a `PUT` or a JSON `POST`.
+A browser lets a script read the response to a cross-origin request only when the server sends the origin of that script, or `*`, in `Access-Control-Allow-Origin`. The middleware that `cors()` returns adds that header and the other CORS headers for the origins that you list. It also returns a 204 for the preflight request that a browser sends before a request that a form can't send, such as a `PUT` or a JSON `POST`.
 
 ```ts
 import { createApp } from '@delali/uhttp'

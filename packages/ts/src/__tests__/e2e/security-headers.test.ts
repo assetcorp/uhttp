@@ -135,6 +135,27 @@ describe('security headers over the network', () => {
     expect(connection.state).toBe('open')
   })
 
+  it('sends each header once on the 503 of a handler that passes its time limit, and then closes the connection', async () => {
+    const app = createApp({ timeoutMs: 50 })
+      .use(secureHeaders())
+      .get('/report', async c => {
+        await new Promise(resolve => setTimeout(resolve, 300))
+        return c.text('late report')
+      })
+    const server = await start(app)
+    const connection = await openConnection(server.port)
+
+    const response = await connection.exchange(requestHead('GET', '/report'))
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('connection')).toEqual(['close'])
+    expectWebHeaders(response.headers)
+    expect(JSON.parse(response.body.toString())).toEqual({
+      error: { code: 'HANDLER_TIMEOUT', message: expect.any(String) },
+    })
+    expect(await connection.waitForClose()).toBe('closed')
+  })
+
   it('sends a fresh nonce on each request, which matches the nonce in the page', async () => {
     const server = await start(securedApp())
     const connection = await openConnection(server.port)

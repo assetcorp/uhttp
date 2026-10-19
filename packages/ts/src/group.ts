@@ -116,6 +116,7 @@ function checkOptionsHeaders(value: object): void {
 
 function checkedMiddleware(list: readonly unknown[]): Middleware[] {
   return list.map(entry => {
+    if (typeof entry === 'object' && entry !== null) checkMiddlewareFunctions(entry)
     if (!isMiddleware(entry)) {
       throw new UhttpError(
         'INVALID_ROUTE',
@@ -123,7 +124,6 @@ function checkedMiddleware(list: readonly unknown[]): Middleware[] {
       )
     }
     if (typeof entry !== 'function') {
-      checkMiddlewareFunctions(entry)
       checkDeclarations(entry, 'a middleware', false)
       checkOptionsHeaders(entry)
     }
@@ -146,8 +146,12 @@ function checkRouteLimits(value: object): void {
   if (timeoutMs !== undefined) checkedTimeLimit(timeoutMs, 'INVALID_ROUTE')
 }
 
+function hasMiddlewareKey(value: object): boolean {
+  return Reflect.has(value, 'before') || Reflect.has(value, 'handle')
+}
+
 function isRouteOptions(value: unknown): value is RouteOptions {
-  if (typeof value !== 'object' || value === null || isMiddleware(value)) return false
+  if (typeof value !== 'object' || value === null || hasMiddlewareKey(value)) return false
   checkDeclarations(value, 'a route', true)
   checkRouteLimits(value)
   return true
