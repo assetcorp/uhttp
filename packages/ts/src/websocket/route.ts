@@ -126,14 +126,19 @@ function originsOf(value: unknown): readonly string[] | undefined {
 
 /**
  * Returns `true` when a value can be the {@link WebSocketRoute} that you pass last to
- * {@link Group.ws}, which is an object without a `handle` function.
+ * {@link Group.ws}, which is an object with neither a `before` nor a `handle` function.
  *
  * @param value - The package checks the last argument of the route.
  * @returns The function returns `false` for a middleware definition and for anything other than an object.
  * @internal
  */
 export function isWebSocketRoute(value: unknown): value is AnyRoute {
-  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'handle') !== 'function'
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'handle') !== 'function' &&
+    typeof Reflect.get(value, 'before') !== 'function'
+  )
 }
 
 /**

@@ -86,9 +86,8 @@ export function cookies(options?: CookiesOptions): MiddlewareDefinition {
   const keys = signingKeys(Reflect.get(optionsObject(options, 'cookies()'), 'keys'))
   return {
     headers: [COOKIE_HEADER],
-    handle(context, next) {
+    before(context) {
       jars.set(context, { keys, parsed: undefined })
-      return next()
     },
   }
 }

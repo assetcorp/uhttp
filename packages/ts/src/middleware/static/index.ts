@@ -184,16 +184,11 @@ export function serveStatic(options: ServeStaticOptions): MiddlewareDefinition {
   const plan = staticPlan(optionsObject(options, 'serveStatic()'))
   return {
     headers: [IF_NONE_MATCH_HEADER, IF_MODIFIED_SINCE_HEADER, RANGE_HEADER, IF_RANGE_HEADER],
-    async handle(context, next) {
-      const reply = await staticReply(context, plan)
-      if (reply !== undefined) return reply
-      await next()
-      return undefined
-    },
+    before: context => staticReply(context, plan),
   }
 }
 
-async function staticReply(context: Context, plan: StaticPlan): Promise<Reply | undefined> {
+function staticReply(context: Context, plan: StaticPlan): Promise<Reply | undefined> | undefined {
   const { method, path } = context.req
   if (method !== 'GET' && method !== 'HEAD') return undefined
   const requested = requestedPath(path, plan.prefix, plan.serveHidden)
@@ -202,6 +197,10 @@ async function staticReply(context: Context, plan: StaticPlan): Promise<Reply | 
   const { index } = plan
   if (requested.folder && index === undefined) return undefined
   const segments = requested.folder && index !== undefined ? [...requested.segments, index] : requested.segments
+  return fileFrom(context, plan, segments)
+}
+
+async function fileFrom(context: Context, plan: StaticPlan, segments: readonly string[]): Promise<Reply | undefined> {
   const real = await locate(plan.root, segments)
   const stats = real === undefined ? undefined : await regularFile(real)
   if (real === undefined || stats === undefined) return undefined

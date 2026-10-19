@@ -23,6 +23,9 @@ export interface AppOptions {
 }
 
 // @public
+export type BeforeHandler = (context: Context) => Reply | void | Promise<Reply | undefined> | Promise<void>;
+
+// @public
 export class Context {
     bytes(data: Uint8Array | ArrayBuffer, status?: number, headers?: HeaderRecord): Reply;
     get(key: string): unknown;
@@ -103,8 +106,9 @@ export type Middleware = MiddlewareHandler | MiddlewareDefinition;
 
 // @public
 export interface MiddlewareDefinition {
+    readonly before?: BeforeHandler;
     readonly clientAddress?: boolean;
-    readonly handle: MiddlewareHandler;
+    readonly handle?: MiddlewareHandler;
     readonly headers?: readonly string[];
     readonly optionsHeaders?: readonly string[];
 }

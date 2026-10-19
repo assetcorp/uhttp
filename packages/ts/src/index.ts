@@ -27,6 +27,7 @@ export type { EventStream, EventStreamOptions, EventStreamProducer, ServerSentEv
 export type { TestBody, TestHeaders, TestRequestInit } from './testing/index.js'
 export type {
   AppOptions,
+  BeforeHandler,
   ErrorHandler,
   Handler,
   Logger,
