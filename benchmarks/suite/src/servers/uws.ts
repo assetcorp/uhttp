@@ -1,4 +1,3 @@
-import type { HttpResponse } from 'uWebSockets.js'
 import { createRequire } from 'node:module'
 import { JSON_BODY, JSON_PATH, PLAIN_BODY, PLAIN_PATH, SECURITY_HEADERS, UPLOAD_PATH } from '../constants.ts'
 import { announce, failToListen, securityHeadersRequested } from './announce.ts'
@@ -15,27 +14,24 @@ function headerBytes(text: string): ArrayBuffer {
   return owned
 }
 
-const contentTypeName = headerBytes('content-type')
-const plainContentType = headerBytes('text/plain; charset=UTF-8')
-const jsonContentType = headerBytes('application/json')
-const securityHeaders = securityHeadersRequested()
-  ? Object.entries(SECURITY_HEADERS).map(([name, value]) => [headerBytes(name), headerBytes(value)] as const)
+const securityHeaderLines = securityHeadersRequested()
+  ? Object.entries(SECURITY_HEADERS).map(([name, value]) => `\r\n${name}: ${value}`)
   : []
 
-function writeHead(res: HttpResponse, contentType: ArrayBuffer): void {
-  res.writeHeader(contentTypeName, contentType)
-  for (const [name, value] of securityHeaders) res.writeHeader(name, value)
+function okHead(contentType: string): ArrayBuffer {
+  return headerBytes(`200 OK\r\ncontent-type: ${contentType}${securityHeaderLines.join('')}`)
 }
+
+const plainHead = okHead('text/plain; charset=UTF-8')
+const jsonHead = okHead('application/json')
 
 uws
   .App()
   .get(PLAIN_PATH, res => {
-    writeHead(res, plainContentType)
-    res.end(PLAIN_BODY)
+    res.writeStatus(plainHead).end(PLAIN_BODY)
   })
   .get(JSON_PATH, res => {
-    writeHead(res, jsonContentType)
-    res.end(JSON.stringify(JSON_BODY))
+    res.writeStatus(jsonHead).end(JSON.stringify(JSON_BODY))
   })
   .post(UPLOAD_PATH, res => {
     const chunks: Uint8Array[] = []
@@ -50,8 +46,7 @@ uws
       if (!isLast || aborted) return
       const body = chunks.length === 1 && chunks[0] !== undefined ? chunks[0] : Buffer.concat(chunks, received)
       res.cork(() => {
-        writeHead(res, jsonContentType)
-        res.end(JSON.stringify({ bytes: body.byteLength }))
+        res.writeStatus(jsonHead).end(JSON.stringify({ bytes: body.byteLength }))
       })
     })
   })

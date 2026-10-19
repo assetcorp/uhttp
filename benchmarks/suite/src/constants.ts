@@ -77,6 +77,8 @@ export const SECURITY_HEADERS = {
   'x-xss-protection': '0',
 } as const
 
+export const FRAMING_HEADERS = ['content-type', 'content-length', 'date', 'connection', 'keep-alive', 'uwebsockets']
+
 export const RUNS_DIRECTORY = 'benchmarks/results/runs'
 
 export const SMOKE_RUNS_DIRECTORY = 'benchmarks/results/.smoke/runs'

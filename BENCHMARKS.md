@@ -49,7 +49,7 @@ Before it measures a server, the suite sends one request to each route. It then 
 
 Each server handles its requests on one thread, in a process of its own that the suite starts afresh for every route and every set of headers.
 
-- uWebSockets.js writes each reply in its route handler, where it passes every fixed header name and value as an `ArrayBuffer` that it builds once at start-up, as uhttp does. On the upload route, it copies each chunk of the body before uWebSockets.js frees it, and it joins the chunks into one buffer, as uhttp does, so that every server holds the whole body before it replies.
+- uWebSockets.js writes each reply in its route handler. At start-up, it builds the status line, the content type, and every fixed header into one `ArrayBuffer` for each content type, and it passes that buffer to uWebSockets.js in a single `writeStatus` call, as uhttp does. On the upload route, it copies each chunk of the body before uWebSockets.js frees it, and it joins the chunks into one buffer, as uhttp does, so that every server holds the whole body before it replies.
 - uhttp builds its routes with `createApp()`, serves them with `serve()`, and reads the upload with `c.req.body.bytes()`.
 - Hono serves its routes through `@hono/node-server` and reads the upload with `c.req.arrayBuffer()`.
 - Fastify gives the JSON route a response schema, as the benchmark repository of Fastify does, and reads the upload with a content-type parser that collects the body into a buffer.
@@ -72,7 +72,7 @@ In the second measurement of each route, every server sends these ten headers on
 | `X-Permitted-Cross-Domain-Policies` | `none` |
 | `X-XSS-Protection` | `0` |
 
-These ten headers make up the `web` preset of the `secureHeaders()` middleware of uhttp. uhttp sends them through `secureHeaders()`, Hono through `secureHeaders()` from `hono/secure-headers`, Fastify through `@fastify/helmet`, and Express through `helmet`, while the uWebSockets.js server writes them in each route handler. uhttp sends `Strict-Transport-Security` only over TLS, so the suite switches that header off in Hono, `@fastify/helmet`, and `helmet`. It also switches off `Content-Security-Policy` in `@fastify/helmet` and `helmet`, because neither uhttp nor Hono sends that header by default.
+These ten headers make up the `web` preset of the `secureHeaders()` middleware of uhttp. uhttp sends them through `secureHeaders()`, Hono through `secureHeaders()` from `hono/secure-headers`, Fastify through `@fastify/helmet`, and Express through `helmet`, while the uWebSockets.js server adds them to the buffer that it builds at start-up. uhttp sends `Strict-Transport-Security` only over TLS, so the suite switches that header off in Hono, `@fastify/helmet`, and `helmet`. It also switches off `Content-Security-Policy` in `@fastify/helmet` and `helmet`, because neither uhttp nor Hono sends that header by default.
 
 ### Load
 

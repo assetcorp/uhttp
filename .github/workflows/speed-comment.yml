@@ -20,12 +20,23 @@ jobs:
 
     steps:
       - name: Download the speed report of the Speed run
+        id: report
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
-        run: gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name speed-report --dir speed-report
+        run: |
+          artifact="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+            --jq '.artifacts[] | select(.name == "speed-report" and (.expired | not)) | .id' | head -n 1)"
+          if [ -z "$artifact" ]; then
+            echo "The Speed run stopped before it wrote a speed report, so the job posts nothing. Open the Speed run to see why it stopped."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name speed-report --dir speed-report
+          echo "found=true" >> "$GITHUB_OUTPUT"
 
       - name: Post the tables, or update the comment that an earlier run posted
+        if: steps.report.outputs.found == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}

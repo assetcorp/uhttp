@@ -11,6 +11,14 @@ const jsonRouteSchema = {
   },
 }
 
+const uploadRouteSchema = {
+  schema: {
+    response: {
+      200: { type: 'object', properties: { bytes: { type: 'integer' } } },
+    },
+  },
+}
+
 const app = Fastify()
 if (securityHeadersRequested()) {
   await app.register(helmet, { contentSecurityPolicy: false, strictTransportSecurity: false })
@@ -26,7 +34,7 @@ app.get(PLAIN_PATH, (_request, reply) => {
 app.get(JSON_PATH, jsonRouteSchema, (_request, reply) => {
   reply.send(JSON_BODY)
 })
-app.post(UPLOAD_PATH, (request, reply) => {
+app.post(UPLOAD_PATH, uploadRouteSchema, (request, reply) => {
   if (!Buffer.isBuffer(request.body)) throw new Error('The Fastify upload route received a body without bytes.')
   reply.send({ bytes: request.body.byteLength })
 })
