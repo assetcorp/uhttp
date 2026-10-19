@@ -43,7 +43,7 @@ Every server serves three routes with the same status, media type, and body:
 - `GET /json` returns `{"hello":"world"}` as `application/json`.
 - `POST /upload` reads a 16 KiB body of `application/octet-stream` and returns its length as `{"bytes":16384}`.
 
-Before it measures a server, the suite sends one request to each route. It then compares the status, the media type, and the body with the list above, and the security headers with the table under [Security headers](#security-headers). When a reply differs, the suite stops that server and records the fault in `results.json`. After a run with a fault, the suite leaves this page unchanged.
+Before it measures a server, the suite sends one request to each route. It then compares the status, the media type, and the body with the list above, and the security headers with the table under [Security headers](#security-headers). It also rejects any header outside that table and the framing headers `content-type`, `content-length`, `date`, `connection`, `keep-alive`, and `uwebsockets`, so that no server does work that the others skip. When a reply differs, the suite stops that server and records the fault in `results.json`. After a run with a fault, the suite leaves this page unchanged.
 
 ### The servers
 
@@ -52,8 +52,8 @@ Each server handles its requests on one thread, in a process of its own that the
 - uWebSockets.js writes each reply in its route handler. At start-up, it builds the status line, the content type, and every fixed header into one `ArrayBuffer` for each content type, and it passes that buffer to uWebSockets.js in a single `writeStatus` call, as uhttp does. On the upload route, it copies each chunk of the body before uWebSockets.js frees it, and it joins the chunks into one buffer, as uhttp does, so that every server holds the whole body before it replies.
 - uhttp builds its routes with `createApp()`, serves them with `serve()`, and reads the upload with `c.req.body.bytes()`.
 - Hono serves its routes through `@hono/node-server` and reads the upload with `c.req.arrayBuffer()`.
-- Fastify gives the JSON route a response schema, as the benchmark repository of Fastify does, and reads the upload with a content-type parser that collects the body into a buffer.
-- Express reads the upload with `express.raw()` and sends the plain-text reply with `res.type('text/plain')`.
+- Fastify gives the JSON route and the upload route a response schema, as the benchmark repository of Fastify does, and reads the upload with a content-type parser that collects the body into a buffer.
+- Express switches off its `ETag` and `X-Powered-By` headers, as the benchmark repository of Fastify does, because computing an `ETag` hashes every reply body. It reads the upload with `express.raw()` and sends the plain-text reply with `res.type('text/plain')`.
 
 ### Security headers
 
