@@ -71,7 +71,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes nghttp2-client
 
-      - name: Measure uhttp before and after this PR, and uWebSockets.js on its own
+      - name: Measure uhttp before and after this PR, and uWebSockets.js
         id: compare
         if: steps.main.outputs.comparable == 'true'
         continue-on-error: true
@@ -102,8 +102,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Fail when uhttp after this PR is slower than uWebSockets.js on its own by more than the limit
+      - name: Fail when uhttp after this PR is slower than uWebSockets.js by more than the limit
         if: steps.compare.outputs.beyond_bare_limit == 'true'
         run: |
-          echo "::error title=Speed limit::uhttp after this PR is slower than uWebSockets.js on its own by more than the limit. Read the speed tables in the job summary to see each round."
+          echo "::error title=Speed limit::uhttp after this PR is slower than uWebSockets.js by more than the limit. Read the speed tables in the job summary to see each round."
           exit 1

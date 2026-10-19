@@ -39,7 +39,7 @@ Every parser apart from `bytes()` checks the `Content-Type` of the request befor
 | --- | --- | --- |
 | `json()` | `application/json` and any `application/*+json`, in UTF-8 | The parsed value |
 | `json(schema)` | The same as `json()` | The output of the schema |
-| `text()` | Any `text/*`, decoded in its `charset`, which is UTF-8 when the request names none | A string |
+| `text()` | Any `text/*`, decoded in its `charset`, which is UTF-8 when the content type has no charset | A string |
 | `bytes()` | Any type | A `Uint8Array` |
 | `form()` | `application/x-www-form-urlencoded` | A flat map of names and values |
 

@@ -60,7 +60,7 @@ A worker can wait forever while it builds its app, for example when the module w
 - When a new worker of `server.reload()` takes too long, the reload rejects with `APP_START_FAILED`, while the old workers go on serving.
 - When the replacement for a crashed worker takes too long, the main thread logs 'A worker thread took too long to build its app.' and counts that start as a crash. It then starts another replacement after the delay in [A worker that crashes](#a-worker-that-crashes).
 
-On one thread, the main thread counts those crashes at least `workerStartTimeoutMs` apart, so with the default settings, they never add up to a `crashLimit` of 5 crashes within 10 seconds on their own. A module that never builds its app therefore leaves its thread without a worker, while the main thread logs each try.
+On one thread, the main thread counts those crashes at least `workerStartTimeoutMs` apart, so with the default settings, slow starts never add up to a `crashLimit` of 5 crashes within 10 seconds unless the thread also crashes for another reason. A module that never builds its app therefore leaves its thread without a worker, while the main thread logs each try.
 
 Set `workerStartTimeoutMs` to 0 to let a worker take as long as it needs, in which case `serve()` and `server.reload()` wait until every new worker builds its app.
 

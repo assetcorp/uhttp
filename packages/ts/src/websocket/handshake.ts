@@ -152,8 +152,9 @@ function announceUpgrade(context: Context): void {
 }
 
 /**
- * Answers a GET request to a WebSocket route that asks for no upgrade, with a 426 that names the
- * WebSocket protocol in `upgrade` and its version in `sec-websocket-version`.
+ * Throws the error with which the package replies to a GET request for a WebSocket route that asks
+ * for no upgrade. The reply is a 426 with `websocket` in `upgrade` and the version of the protocol
+ * in `sec-websocket-version`.
  *
  * @param context - The package passes the context of the request.
  * @returns The function never returns.

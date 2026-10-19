@@ -105,7 +105,7 @@ describe('rateLimit() counting', () => {
 })
 
 describe('rateLimit() keys', () => {
-  it('counts each client address on its own', async () => {
+  it('keeps a separate count for each client address', async () => {
     const app = limitedApp({ limit: 1, windowMs: 60000 })
     expect((await hit(app, '192.0.2.4')).status).toBe(200)
     expect((await hit(app, '192.0.2.5')).status).toBe(200)

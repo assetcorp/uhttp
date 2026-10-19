@@ -128,6 +128,91 @@ describe('secureHeaders() changes', () => {
   })
 })
 
+describe('secureHeaders() and the rest of the chain', () => {
+  it('sends the header that an outer middleware sets after next(), on one line', async () => {
+    const app = createApp()
+      .use(async (c, next) => {
+        await next()
+        c.header('x-frame-options', 'DENY')
+      })
+      .use(secureHeaders())
+      .get('/', c => c.text('home'))
+    const response = await app.request('/')
+    expect(response.headers.get('x-frame-options')).toBe('DENY')
+  })
+
+  it('sends only the lines that the handler appended, and no line of the preset beside them', async () => {
+    const app = createApp()
+      .use(secureHeaders())
+      .get('/', c => {
+        c.header('referrer-policy', 'same-origin', { append: true })
+        c.header('referrer-policy', 'strict-origin', { append: true })
+        return c.text('home')
+      })
+    const response = await app.request('/')
+    expect(response.headers.get('referrer-policy')).toBe('same-origin, strict-origin')
+  })
+
+  it('sends the value of the inner secureHeaders() when two of them set the same header', async () => {
+    const app = createApp()
+      .use(secureHeaders())
+      .get('/embed', secureHeaders({ headers: { 'x-frame-options': 'DENY' } }), c => c.text('embed'))
+    const response = await app.request('/embed')
+    expect(securityHeadersOf(response)).toEqual({ ...WEB_HEADERS, 'x-frame-options': 'DENY' })
+  })
+
+  it('keeps a policy that the handler sets in place of the nonce policy', async () => {
+    const app = createApp()
+      .use(secureHeaders({ contentSecurityPolicy: nonce => `script-src 'nonce-${nonce}'` }))
+      .get('/', c => {
+        c.header('content-security-policy', "default-src 'none'", { append: true })
+        return c.text('home')
+      })
+    const response = await app.request('/')
+    expect(response.headers.get('content-security-policy')).toBe("default-src 'none'")
+  })
+
+  it('sends the headers on the 503 of a handler that passes its time limit', async () => {
+    const app = createApp({ timeoutMs: 20 })
+      .use(secureHeaders())
+      .get('/slow', async c => {
+        await new Promise(resolve => setTimeout(resolve, 200))
+        return c.text('late')
+      })
+    const response = await app.request('/slow')
+    const { connection, ...security } = securityHeadersOf(response)
+    expect(response.status).toBe(503)
+    expect(connection).toBe('close')
+    expect(security).toEqual(WEB_HEADERS)
+  })
+
+  it('sends the headers with a reply that an outer middleware puts in place of the reply of the handler', async () => {
+    const app = createApp()
+      .use(async (c, next) => {
+        await next()
+        return c.json({ wrapped: c.reply?.status })
+      })
+      .use(secureHeaders({ preset: 'api' }))
+      .get('/', c => c.text('home', 202))
+    const response = await app.request('/')
+    expect(await response.json()).toEqual({ wrapped: 202 })
+    expect(securityHeadersOf(response)).toEqual(API_HEADERS)
+  })
+
+  it('sends a content type from the headers option only with a reply that has none', async () => {
+    const app = createApp()
+      .use(secureHeaders({ headers: { 'content-type': 'text/plain; charset=UTF-8' } }))
+      .get('/text', c => c.json({ shop: true }))
+      .get('/moved', c => c.redirect('/text'))
+    const text = await app.request('/text')
+    const moved = await app.request('/moved')
+    expect(text.headers.get('content-type')).toBe('application/json')
+    expect(moved.status).toBe(302)
+    expect(moved.headers.get('content-type')).toBe('text/plain; charset=UTF-8')
+    expect(moved.headers.get('x-frame-options')).toBe('SAMEORIGIN')
+  })
+})
+
 describe('secureHeaders() nonce', () => {
   it('sends a CSP with a new nonce on each request, and nonceOf returns the nonce of that policy', async () => {
     const app = createApp()

@@ -9,6 +9,7 @@ const PACKAGE_DIR = resolve(import.meta.dirname, '../../..')
 const SOURCE_DIR = join(PACKAGE_DIR, 'src')
 const OUT_DIR = join(PACKAGE_DIR, '.cache', 'package-test', 'dist')
 const TSC = join(PACKAGE_DIR, 'node_modules', '.bin', 'tsc')
+const NPM_PACK_TIMEOUT_MS = 30_000
 
 function sourceModules(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -143,5 +144,32 @@ describe('the package manifest', () => {
 
   it('lists the Node lines for which uWebSockets.js has binaries', () => {
     expect(readManifest().engines).toEqual({ node: '>=22.15 <23 || >=24 <25 || >=26 <27' })
+  })
+
+  it('publishes with public access', () => {
+    expect(readManifest().publishConfig).toEqual({ access: 'public' })
+  })
+
+  it('packs the MIT licence and the README, and no NOTICE file', { timeout: NPM_PACK_TIMEOUT_MS }, () => {
+    const packed: unknown = JSON.parse(
+      execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: PACKAGE_DIR, encoding: 'utf8' }),
+    )
+    const entries = Array.isArray(packed)
+      ? packed
+      : typeof packed === 'object' && packed !== null
+        ? Object.values(packed)
+        : []
+    if (entries.length !== 1) throw new Error('npm pack listed no single package.')
+    const entry: unknown = entries[0]
+    const files: unknown = typeof entry === 'object' && entry !== null && 'files' in entry ? entry.files : undefined
+    if (!Array.isArray(files)) throw new Error('npm pack listed no files.')
+    const paths = files.map(file =>
+      typeof file === 'object' && file !== null && 'path' in file ? file.path : undefined,
+    )
+
+    expect(paths).toContain('LICENSE')
+    expect(paths).toContain('README.md')
+    expect(paths.filter(path => typeof path === 'string' && /^notice/i.test(path))).toEqual([])
+    expect(readFileSync(join(PACKAGE_DIR, 'LICENSE'), 'utf8')).toMatch(/^MIT License\n/)
   })
 })

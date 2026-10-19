@@ -61,3 +61,23 @@ jobs:
 
       - name: Test with the coverage thresholds
         run: pnpm test:coverage
+
+  benchmark-writeup:
+    name: Benchmark writeup up to date
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv 0.12.21 with astral-sh/setup-uv v10.3.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+        with:
+          version: 0.12.21
+          enable-cache: false
+
+      - name: Check that BENCHMARKS.md, both READMEs, the comparison, and the charts match the newest committed run
+        working-directory: benchmarks/writeup
+        run: uv run --frozen python generate.py --check

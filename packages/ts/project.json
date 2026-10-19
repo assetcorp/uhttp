@@ -75,6 +75,9 @@
         "command": "pnpm run api:write",
         "cwd": "packages/ts"
       }
+    },
+    "nx-release-publish": {
+      "executor": "@nx/js:release-publish"
     }
   }
 }

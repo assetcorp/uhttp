@@ -165,7 +165,7 @@ describe('the Content-Encoding check', () => {
     expect(response.status).toBe(415)
   })
 
-  it('answers 415 when a second Content-Encoding line names a compression after identity', async () => {
+  it('answers 415 when a second Content-Encoding line has a compression after identity', async () => {
     const app = createApp().post('/upload', async c => c.text(await c.req.body.text()))
 
     const response = await app.request('/upload', {

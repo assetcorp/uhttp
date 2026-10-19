@@ -116,7 +116,7 @@ describe('a server on a Unix socket', () => {
     await server.close()
   })
 
-  it('refuses a path that names a regular file or a socket with a running server, and leaves both alone', async () => {
+  it('refuses a path to a regular file or to a socket with a running server, and leaves both alone', async () => {
     const filePath = join(mkdtempSync(join(tmpdir(), 'uhttp-unix-')), 'data.txt')
     writeFileSync(filePath, 'keep me')
     const busyPath = socketPath()

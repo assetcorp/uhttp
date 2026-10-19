@@ -69,7 +69,7 @@ export function accessLog(options?: AccessLogOptions): MiddlewareDefinition {
   const write = checkedWrite(Reflect.get(optionsObject(options, 'accessLog()'), 'write'))
   return {
     clientAddress: true,
-    handle(context, next) {
+    before(context) {
       const started = performance.now()
       const address = clientAddressOf(context)
       const exchange = exchangeOf(context)
@@ -83,7 +83,6 @@ export function accessLog(options?: AccessLogOptions): MiddlewareDefinition {
           logToApp(context, 'error', { err: error }, FAILED_WRITE_MESSAGE)
         }
       })
-      return next()
     },
   }
 }

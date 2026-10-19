@@ -14,6 +14,7 @@ import {
   fixedHeader,
   fixedName,
   invalidOption,
+  isThenable,
   optionsObject,
   stringListOption,
   wholeNumberOption,
@@ -225,30 +226,39 @@ function setHeaders(exchange: Exchange, plan: LimitPlan, hit: RateLimitHit, rese
 export function rateLimit(options: RateLimitOptions): MiddlewareDefinition {
   const plan = limitPlan(optionsObject(options, 'rateLimit()'))
   let warned = false
+  const applyHit = (context: Context, value: unknown): void => {
+    const hit = checkedHit(value)
+    if (!warned && plan.memory?.takeEvictionWarning() === true) {
+      warned = true
+      logToApp(context, 'warn', {}, STORE_FULL_MESSAGE)
+    }
+    const resetSeconds = Math.max(0, Math.ceil((hit.resetAt - Date.now()) / MILLISECONDS_PER_SECOND))
+    const exchange = exchangeOf(context)
+    setHeaders(exchange, plan, hit, resetSeconds)
+    if (hit.count > plan.limit) {
+      exchange.setPrepared(plan.names.retryAfter, String(resetSeconds), false)
+      throw new UhttpError(
+        'RATE_LIMITED',
+        `The client sent more requests than the limit of ${plan.limit} for one window.`,
+      )
+    }
+  }
+  const count = (context: Context, key: unknown): undefined | Promise<void> => {
+    if (typeof key !== 'string') {
+      throw new UhttpError('INTERNAL_ERROR', 'The key function of rateLimit() returned no string.')
+    }
+    const hit: unknown = plan.store.increment(key, plan.windowMs)
+    if (isThenable(hit)) return Promise.resolve(hit).then(value => applyHit(context, value))
+    applyHit(context, hit)
+    return undefined
+  }
   return {
     headers: plan.headers,
     clientAddress: true,
-    async handle(context, next) {
-      const key = plan.key === undefined ? addressKey(context) : await plan.key(context)
-      if (typeof key !== 'string') {
-        throw new UhttpError('INTERNAL_ERROR', 'The key function of rateLimit() returned no string.')
-      }
-      const hit = checkedHit(await plan.store.increment(key, plan.windowMs))
-      if (!warned && plan.memory?.takeEvictionWarning() === true) {
-        warned = true
-        logToApp(context, 'warn', {}, STORE_FULL_MESSAGE)
-      }
-      const resetSeconds = Math.max(0, Math.ceil((hit.resetAt - Date.now()) / MILLISECONDS_PER_SECOND))
-      const exchange = exchangeOf(context)
-      setHeaders(exchange, plan, hit, resetSeconds)
-      if (hit.count > plan.limit) {
-        exchange.setPrepared(plan.names.retryAfter, String(resetSeconds), false)
-        throw new UhttpError(
-          'RATE_LIMITED',
-          `The client sent more requests than the limit of ${plan.limit} for one window.`,
-        )
-      }
-      return next()
+    before(context): undefined | Promise<void> {
+      const key: unknown = plan.key === undefined ? addressKey(context) : plan.key(context)
+      if (isThenable(key)) return Promise.resolve(key).then(value => count(context, value))
+      return count(context, key)
     },
   }
 }
