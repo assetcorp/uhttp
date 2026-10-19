@@ -1,6 +1,6 @@
 {
   "name": "@delali/uhttp",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "An HTTP and WebSocket server for Node.js on uWebSockets.js.",
   "author": "Delali (https://sondelali.com)",
   "license": "MIT",
