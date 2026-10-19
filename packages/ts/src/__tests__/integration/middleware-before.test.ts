@@ -179,6 +179,62 @@ describe('before functions in the chain', () => {
     expect(logged).toHaveLength(1)
   })
 
+  it('waits for a thenable from before that is not a native promise, and never calls the handler when it refuses', async () => {
+    let handled = false
+    const thenableOf = (settle: (resolve: (value: unknown) => void, reject: (error: unknown) => void) => void) =>
+      Object.fromEntries([['then', settle]]) as unknown as Promise<undefined>
+    const app = createApp()
+      .use({
+        headers: ['x-session'],
+        before: c => {
+          const session = c.req.header('x-session')
+          if (session === 'expired') {
+            return thenableOf((_resolve, reject) => {
+              setTimeout(() => reject(new UhttpError('NOT_FOUND', 'The session has expired.')), 1)
+            })
+          }
+          if (session === 'missing') {
+            return thenableOf(resolve => {
+              setTimeout(() => resolve(c.json({ error: 'sign in' }, 401)), 1)
+            })
+          }
+          return thenableOf(resolve => resolve(undefined))
+        },
+      })
+      .get('/basket', c => {
+        handled = true
+        return c.text('basket')
+      })
+
+    const expired = await app.request('/basket', { headers: { 'x-session': 'expired' } })
+    const missing = await app.request('/basket', { headers: { 'x-session': 'missing' } })
+
+    expect([expired.status, missing.status]).toEqual([404, 401])
+    expect(await missing.json()).toEqual({ error: 'sign in' })
+    expect(handled).toBe(false)
+    expect(await (await app.request('/basket', { headers: { 'x-session': 'valid' } })).text()).toBe('basket')
+  })
+
+  it('sends a 500 when reading the then property of the value from before throws', async () => {
+    const trap = Object.defineProperty({}, 'then', {
+      get() {
+        throw new TypeError('The session proxy is closed.')
+      },
+    })
+    let handled = false
+    const app = createApp()
+      .use({ before: () => trap as unknown as undefined })
+      .get('/basket', c => {
+        handled = true
+        return c.text('basket')
+      })
+
+    const response = await app.request('/basket')
+
+    expect(response.status).toBe(500)
+    expect(handled).toBe(false)
+  })
+
   it('passes the request on when before returns a value other than a reply', async () => {
     const app = createApp()
       .use({ before: () => 'ignored' as unknown as undefined })
