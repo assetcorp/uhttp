@@ -1,6 +1,6 @@
 import { CPU_USAGE_REQUEST, HEADER_VARIANT_ENV } from '../constants.ts'
 
-export function wantsSecurityHeaders(): boolean {
+export function securityHeadersRequested(): boolean {
   const variant = process.env[HEADER_VARIANT_ENV]
   if (variant === 'secure') return true
   if (variant === 'plain') return false

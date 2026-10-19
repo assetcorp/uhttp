@@ -1,11 +1,13 @@
-import { execFile } from 'node:child_process'
 import { cpus } from 'node:os'
-import { parseArgs, promisify } from 'node:util'
+import { parseArgs } from 'node:util'
 import {
   BENCH_PROFILES,
   DEFAULT_CONNECTION_LEVELS,
   DEFAULT_LOAD_THREADS,
   DEFAULT_MEASURE_DURATION_MS,
+  DEFAULT_SMOKE_CONNECTION_LEVELS,
+  DEFAULT_SMOKE_MEASURE_DURATION_MS,
+  DEFAULT_SMOKE_WARM_UP_DURATION_MS,
   DEFAULT_WARM_UP_DURATION_MS,
   FIRST_PINNED_LOAD_CPU,
   HEADER_VARIANTS,
@@ -13,14 +15,29 @@ import {
   PROFILE_ENV,
   ROUTE_IDS,
   SERVER_IDS,
-  SMOKE_CONNECTION_LEVELS,
-  SMOKE_MEASURE_DURATION_MS,
-  SMOKE_WARM_UP_DURATION_MS,
   TOOL_OUTPUT_TIMEOUT_MS,
 } from './constants.ts'
+import { runFile } from './tools.ts'
 import type { BenchProfile, HeaderVariant, Pinning, RouteId, ServerId } from './types.ts'
 
-const runFile = promisify(execFile)
+interface ProfileDefaults {
+  readonly connectionLevels: readonly number[]
+  readonly measureDurationMs: number
+  readonly warmUpDurationMs: number
+}
+
+const PROFILE_DEFAULTS: Readonly<Record<BenchProfile, ProfileDefaults>> = {
+  published: {
+    connectionLevels: DEFAULT_CONNECTION_LEVELS,
+    measureDurationMs: DEFAULT_MEASURE_DURATION_MS,
+    warmUpDurationMs: DEFAULT_WARM_UP_DURATION_MS,
+  },
+  smoke: {
+    connectionLevels: DEFAULT_SMOKE_CONNECTION_LEVELS,
+    measureDurationMs: DEFAULT_SMOKE_MEASURE_DURATION_MS,
+    warmUpDurationMs: DEFAULT_SMOKE_WARM_UP_DURATION_MS,
+  },
+}
 
 export interface SuiteOptions {
   readonly profile: BenchProfile
@@ -83,7 +100,7 @@ export function suiteOptions(argv: readonly string[], profileName: string | unde
       threads: { type: 'string' },
     },
   })
-  const smoke = profile === 'smoke'
+  const defaults = PROFILE_DEFAULTS[profile]
   const servers = pick(values.servers, SERVER_IDS, 'servers')
   const routes = pick(values.routes, ROUTE_IDS, 'routes')
   const variants = pick(values.headers, HEADER_VARIANTS, 'headers')
@@ -91,9 +108,9 @@ export function suiteOptions(argv: readonly string[], profileName: string | unde
     servers.length === SERVER_IDS.length &&
     routes.length === ROUTE_IDS.length &&
     variants.length === HEADER_VARIANTS.length
-  if (!smoke && !measuresEveryTarget) {
+  if (profile === 'published' && !measuresEveryTarget) {
     throw new Error(
-      `A published run measures every server, route, and header set, so set ${PROFILE_ENV}=smoke to measure part of them.`,
+      `In the published profile, the suite measures every server, route, and set of headers, so set ${PROFILE_ENV}=smoke to measure only some of them.`,
     )
   }
   return {
@@ -101,17 +118,9 @@ export function suiteOptions(argv: readonly string[], profileName: string | unde
     servers,
     routes,
     variants,
-    connectionLevels: connectionLevels(values.connections, smoke ? SMOKE_CONNECTION_LEVELS : DEFAULT_CONNECTION_LEVELS),
-    measureDurationMs: seconds(
-      values.duration,
-      smoke ? SMOKE_MEASURE_DURATION_MS : DEFAULT_MEASURE_DURATION_MS,
-      'duration',
-    ),
-    warmUpDurationMs: seconds(
-      values['warm-up'],
-      smoke ? SMOKE_WARM_UP_DURATION_MS : DEFAULT_WARM_UP_DURATION_MS,
-      'warm-up',
-    ),
+    connectionLevels: connectionLevels(values.connections, defaults.connectionLevels),
+    measureDurationMs: seconds(values.duration, defaults.measureDurationMs, 'duration'),
+    warmUpDurationMs: seconds(values['warm-up'], defaults.warmUpDurationMs, 'warm-up'),
     loadThreads: values.threads === undefined ? DEFAULT_LOAD_THREADS : positiveInteger(values.threads, 'threads'),
   }
 }

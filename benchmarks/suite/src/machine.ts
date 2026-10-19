@@ -1,12 +1,9 @@
-import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { arch, cpus, release, totalmem } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import { TOOL_OUTPUT_TIMEOUT_MS } from './constants.ts'
+import { runFile } from './tools.ts'
 import type { Pinning, ServerEntry, ServerId, UhttpRevision } from './types.ts'
-
-const runFile = promisify(execFile)
 
 export interface MachineDetails {
   readonly cpu: { readonly model: string; readonly logical_cores: number }

@@ -1,10 +1,10 @@
 import express from 'express'
 import helmet from 'helmet'
 import { JSON_BODY, JSON_PATH, PLAIN_BODY, PLAIN_PATH, UPLOAD_CONTENT_TYPE, UPLOAD_PATH } from '../constants.ts'
-import { announce, failToListen, wantsSecurityHeaders } from './announce.ts'
+import { announce, failToListen, securityHeadersRequested } from './announce.ts'
 
 const app = express()
-if (wantsSecurityHeaders()) app.use(helmet({ contentSecurityPolicy: false, strictTransportSecurity: false }))
+if (securityHeadersRequested()) app.use(helmet({ contentSecurityPolicy: false, strictTransportSecurity: false }))
 
 app.get(PLAIN_PATH, (_request, response) => {
   response.type('text/plain').send(PLAIN_BODY)

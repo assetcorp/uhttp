@@ -56,7 +56,7 @@ const mainTip = () => remoteRefs(['--heads']).find(({ ref }) => ref === MAIN_BRA
 const releaseParts = version => {
   const parts = String(version).split(/[-+]/)[0].split('.').map(Number)
   if (parts.length !== 3 || parts.some(part => !Number.isSafeInteger(part) || part < 0)) {
-    throw new Error(`Cannot read a major.minor.patch version from "${version}"`)
+    throw new Error(`The script cannot read a major.minor.patch version from "${version}"`)
   }
   return parts
 }
@@ -101,18 +101,20 @@ const main = async () => {
   const runNumber = process.env.GITHUB_RUN_NUMBER
   const runAttempt = process.env.GITHUB_RUN_ATTEMPT
   if (commit === undefined || runNumber === undefined || runAttempt === undefined) {
-    throw new Error('GITHUB_SHA, GITHUB_RUN_NUMBER, and GITHUB_RUN_ATTEMPT must all be set')
+    throw new Error(
+      'The script reads GITHUB_SHA, GITHUB_RUN_NUMBER, and GITHUB_RUN_ATTEMPT, which GitHub Actions sets, and one of them is missing.',
+    )
   }
 
   const tip = mainTip()
   if (tip !== commit) {
-    skip(`${commit} is no longer the tip of main, which is at ${tip ?? 'an unknown commit'}, so it gets no prerelease.`)
+    skip(`The workflow publishes no prerelease for ${commit}, because main points at ${tip ?? 'an unknown commit'}.`)
     return
   }
 
   const releaseTags = releaseTagsOn(commit)
   if (releaseTags.length > 0) {
-    skip(`${commit} already has the release tag ${releaseTags[0]}, so it gets no prerelease.`)
+    skip(`${commit} already has the release tag ${releaseTags[0]}, so the workflow publishes no prerelease for it.`)
     return
   }
 
@@ -125,7 +127,7 @@ const main = async () => {
 
   const [major, minor, patch] = higherRelease(manifest.version, latest)
   const version = `${major}.${minor}.${patch + 1}-${PRERELEASE_IDENTIFIER}.${runNumber}.${runAttempt}`
-  console.log(`Publishing ${version} under the ${PRERELEASE_IDENTIFIER} dist-tag.`)
+  console.log(`The workflow publishes ${version} under the ${PRERELEASE_IDENTIFIER} dist-tag.`)
   writeOutput('publish', 'true')
   writeOutput('version', version)
 }

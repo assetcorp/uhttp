@@ -25,6 +25,8 @@ LEGEND_COLUMNS = 5
 LEGEND_ANCHOR_BELOW_AXES = (0.5, -0.4)
 PANEL_HEIGHT_INCHES = 2.4
 PANEL_RATIOS = (1.1, 1.1, 0.8)
+CAPTION_HEIGHT_INCHES = 0.6
+PANEL_GAP_FRACTION = 0.16
 
 
 def _series(found: list[dict], pick) -> tuple[list[int], list[float]]:
@@ -57,9 +59,9 @@ def sweep_figure(destination: Path, results: dict, run_id: str, route: str, vari
     if len(levels) < 2 or not servers:
         return None
     figure, grid = plt.subplots(
-        3,
+        len(PANEL_RATIOS),
         1,
-        figsize=(FIGURE_WIDTH_INCHES, PANEL_HEIGHT_INCHES * 3 + 0.6),
+        figsize=(FIGURE_WIDTH_INCHES, PANEL_HEIGHT_INCHES * len(PANEL_RATIOS) + CAPTION_HEIGHT_INCHES),
         sharex=True,
         height_ratios=PANEL_RATIOS,
         squeeze=False,
@@ -93,5 +95,5 @@ def sweep_figure(destination: Path, results: dict, run_id: str, route: str, vari
         f"{route_title(results, route)} route {VARIANT_TITLES[variant]}, across connections",
         f"{pipelined} pipelined requests per connection · run {run_id}",
     )
-    figure.subplots_adjust(hspace=0.16)
+    figure.subplots_adjust(hspace=PANEL_GAP_FRACTION)
     return save(figure, destination / sweep_chart(route, variant))

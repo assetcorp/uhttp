@@ -71,7 +71,7 @@ process.once('SIGTERM', async () => {
 })
 ```
 
-`secureHeaders()` adds the security headers that a browser checks, such as `X-Content-Type-Options: nosniff` and `X-Frame-Options: SAMEORIGIN`, to every response. `server.close()` waits for each request in progress, for up to 10 seconds by default, before it stops the server. The package installs no signal handler of its own, so the quick start calls `server.close()` when the process receives `SIGTERM`.
+`secureHeaders()` adds the security headers that a browser checks, such as `X-Content-Type-Options: nosniff` and `X-Frame-Options: SAMEORIGIN`, to every response. `server.close()` waits for each request in progress, for up to 10 seconds by default, before it stops the server. The package installs no signal handler of its own, so in the quick start, a handler for `SIGTERM` calls `server.close()` when the process receives that signal.
 
 In a test, you can send a request through the app without opening a port:
 
@@ -157,15 +157,17 @@ const app = createApp().post('/photos', { maxBodyBytes: 20 * 1024 * 1024 }, asyn
 
 ### Serve one port from four threads
 
+On the main thread, `server.ts` passes `serve()` the URL of the app module:
+
 ```ts
-// server.ts
 import { serve } from '@delali/uhttp'
 
 await serve({ app: new URL('./app.js', import.meta.url), port: 3000, threads: 4 })
 ```
 
+Each of the four worker threads imports `app.js` and builds its app from the function that the module exports by default:
+
 ```ts
-// app.js
 import { createApp } from '@delali/uhttp'
 
 export default () => createApp().get('/hello', c => c.text('Hello from a worker.'))

@@ -13,6 +13,11 @@
       "!{projectRoot}/benchmarks/**/*"
     ]
   },
+  "pluginsConfig": {
+    "@nx/js": {
+      "analyzeSourceFiles": false
+    }
+  },
   "release": {
     "projects": ["uhttp"],
     "projectsRelationship": "independent",

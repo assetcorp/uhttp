@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from data import REFERENCE_SERVER, SUBJECT_SERVER, at_connections, headline_connections, rate, server_ids
+from data import REFERENCE_SERVER, SUBJECT_SERVER, at_connections, created_date, headline_connections, rate, server_ids
 from render import integer, percent
 from sources import Run
 
@@ -78,8 +78,7 @@ def _secure_sentence(results: dict, connections: int) -> str | None:
 def headline_block(run: Run, benchmarks_link: str) -> str:
     results = run.results
     connections = headline_connections(results)
-    created = results.get("created_at")
-    date = created[:10] if isinstance(created, str) and created else "an unrecorded date"
+    date = created_date(results)
     model = (run.machine.get("cpu") or {}).get("model") or "an unrecorded CPU"
     system = (run.machine.get("os") or {}).get("name") or "an unrecorded operating system"
     sentences = [

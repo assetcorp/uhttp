@@ -34,6 +34,10 @@ CAPTION_RESERVE_POINTS = 46
 LATENCY_MINOR_SUBDIVISIONS = (2.0, 5.0)
 LINE_WIDTH = 1.8
 MARKER_SIZE = 4
+POINTS_PER_INCH = 72
+CAPTION_LEFT_FRACTION = 0.008
+TITLE_TOP_OFFSET_POINTS = 12
+SUBTITLE_TOP_OFFSET_POINTS = 28
 
 _RC = {
     "figure.dpi": 100,
@@ -103,10 +107,24 @@ def latency_axis(axes) -> None:
 
 
 def caption(figure: Figure, title: str, subtitle: str, reserve_points: float = CAPTION_RESERVE_POINTS) -> None:
-    height_points = figure.get_size_inches()[1] * 72
-    figure.text(0.008, 1 - 12 / height_points, title, ha="left", va="top", fontsize=BASE_FONT_POINTS + 3, fontweight="bold")
+    height_points = figure.get_size_inches()[1] * POINTS_PER_INCH
     figure.text(
-        0.008, 1 - 28 / height_points, subtitle, ha="left", va="top", fontsize=BASE_FONT_POINTS - 1, color=REFERENCE_SLATE
+        CAPTION_LEFT_FRACTION,
+        1 - TITLE_TOP_OFFSET_POINTS / height_points,
+        title,
+        ha="left",
+        va="top",
+        fontsize=BASE_FONT_POINTS + 3,
+        fontweight="bold",
+    )
+    figure.text(
+        CAPTION_LEFT_FRACTION,
+        1 - SUBTITLE_TOP_OFFSET_POINTS / height_points,
+        subtitle,
+        ha="left",
+        va="top",
+        fontsize=BASE_FONT_POINTS - 1,
+        color=REFERENCE_SLATE,
     )
     figure.subplots_adjust(top=1 - reserve_points / height_points)
 

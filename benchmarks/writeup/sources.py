@@ -29,7 +29,7 @@ def _read_json(path: Path) -> dict:
     except FileNotFoundError as error:
         raise SystemExit(f"benchmark writeup: {path} is missing") from error
     except json.JSONDecodeError as error:
-        raise SystemExit(f"benchmark writeup: {path} holds invalid JSON: {error}") from error
+        raise SystemExit(f"benchmark writeup: the generator cannot parse {path} as JSON: {error}") from error
     if not isinstance(parsed, dict):
         raise SystemExit(f"benchmark writeup: {path} must contain a JSON object")
     return parsed
@@ -37,10 +37,13 @@ def _read_json(path: Path) -> dict:
 
 def load_run(directory: Path) -> Run:
     if not _RUN_ID.match(directory.name):
-        raise SystemExit(f"benchmark writeup: {directory} is not a run directory named by its UTC time")
+        raise SystemExit(f"benchmark writeup: name the run directory {directory} by its UTC time, such as 20261019T004707Z")
     results = _read_json(directory / RESULTS_FILE)
     if results.get("schema") != SUPPORTED_SCHEMA:
-        raise SystemExit(f"benchmark writeup: {directory / RESULTS_FILE} uses schema {results.get('schema')}")
+        raise SystemExit(
+            f"benchmark writeup: {directory / RESULTS_FILE} has schema {results.get('schema')}, "
+            f"and the generator reads schema {SUPPORTED_SCHEMA} alone"
+        )
     return Run(run_id=directory.name, directory=directory, results=results, machine=_read_json(directory / MACHINE_FILE))
 
 
@@ -49,7 +52,8 @@ def latest_run(root: Path = REPO_ROOT) -> Run:
     names = [entry.name for entry in runs_root.iterdir() if entry.is_dir() and _RUN_ID.match(entry.name)] if runs_root.is_dir() else []
     if not names:
         raise SystemExit(
-            f"benchmark writeup: {runs_root} holds no run; run the suite with `pnpm --dir benchmarks/suite bench` first"
+            f"benchmark writeup: the suite has written no run into {runs_root} yet, "
+            "so start it with `pnpm --dir benchmarks/suite bench` first"
         )
     return load_run(runs_root / max(names))
 

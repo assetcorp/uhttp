@@ -2,10 +2,10 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { secureHeaders } from 'hono/secure-headers'
 import { JSON_BODY, JSON_PATH, PLAIN_BODY, PLAIN_PATH, UPLOAD_PATH } from '../constants.ts'
-import { announce, wantsSecurityHeaders } from './announce.ts'
+import { announce, securityHeadersRequested } from './announce.ts'
 
 const app = new Hono()
-if (wantsSecurityHeaders()) app.use(secureHeaders({ strictTransportSecurity: false }))
+if (securityHeadersRequested()) app.use(secureHeaders({ strictTransportSecurity: false }))
 
 app.get(PLAIN_PATH, c => c.text(PLAIN_BODY))
 app.get(JSON_PATH, c => c.json(JSON_BODY))

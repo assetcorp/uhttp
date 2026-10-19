@@ -6,6 +6,7 @@ import {
   SERVER_START_TIMEOUT_MS,
   SERVER_STOP_TIMEOUT_MS,
 } from './constants.ts'
+import { pinnedCommand } from './tools.ts'
 
 export interface ServerProcess {
   readonly origin: string
@@ -99,9 +100,8 @@ function requestCpuSeconds(child: ChildProcess, label: string): Promise<number> 
 }
 
 export async function startServer(launch: ServerLaunch): Promise<ServerProcess> {
-  const command = [process.execPath, launch.script]
-  const pinned = launch.cpu === null ? command : ['taskset', '-c', String(launch.cpu), ...command]
-  const [program = process.execPath, ...args] = pinned
+  const cpu = launch.cpu === null ? null : String(launch.cpu)
+  const [program, args] = pinnedCommand(cpu, process.execPath, [launch.script])
   const child = spawn(program, args, {
     env: { ...process.env, ...launch.env },
     stdio: ['ignore', 'pipe', 'inherit', 'ipc'],

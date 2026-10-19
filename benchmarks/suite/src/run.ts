@@ -30,11 +30,11 @@ function runId(now: Date): string {
     .replace(/[-:]/g, '')
 }
 
-function json(value: unknown): string {
+function formatJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`
 }
 
-function writeup(script: string, args: readonly string[]): boolean {
+function runWriteupScript(script: string, args: readonly string[]): boolean {
   const writeupDirectory = join(repositoryRoot, WRITEUP_DIRECTORY)
   const result = spawnSync('uv', ['run', '--frozen', 'python', script, ...args], {
     cwd: writeupDirectory,
@@ -98,20 +98,20 @@ const results: Results = {
 }
 
 await mkdir(runDirectory, { recursive: true })
-await writeFile(join(runDirectory, MACHINE_FILE), json(await machineDetails(pinning)))
-await writeFile(join(runDirectory, RESULTS_FILE), json(results))
+await writeFile(join(runDirectory, MACHINE_FILE), formatJson(await machineDetails(pinning)))
+await writeFile(join(runDirectory, RESULTS_FILE), formatJson(results))
 
-const drawn = writeup('draw.py', [runDirectory])
+const drawn = runWriteupScript('draw.py', [runDirectory])
 if (failures.length > 0) {
   console.error(
     `${failures.length} measurement(s) failed, so the suite left BENCHMARKS.md unchanged. Read ${RESULTS_FILE} for each error.`,
   )
   process.exitCode = 1
 } else if (!drawn) {
-  console.error('The comparison and the charts failed to draw, so the suite left BENCHMARKS.md unchanged.')
+  console.error('The suite could not draw the comparison and the charts, so it left BENCHMARKS.md unchanged.')
   process.exitCode = 1
 } else if (options.profile === 'smoke') {
-  console.log(`The smoke run is in ${runDirectory}, which git ignores and the generator never reads.`)
-} else if (!writeup('generate.py', [])) {
+  console.log(`The suite wrote the smoke run to ${runDirectory}, which git ignores and the generator never reads.`)
+} else if (!runWriteupScript('generate.py', [])) {
   process.exitCode = 1
 }

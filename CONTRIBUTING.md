@@ -48,7 +48,7 @@ The static-file tests in `integration/middleware/static-case.test.ts` and `e2e/c
 
 ## Benchmarks
 
-On [`BENCHMARKS.md`](BENCHMARKS.md), you can compare uhttp with uWebSockets.js on its own and with three other Node.js frameworks. A maintainer measures the servers for that page only when somebody asks for new figures, because the suite then keeps a quiet machine busy for about two hours, while it applies load to 30 server processes for 240 seconds each. To check that the suite works on your machine, run `pnpm --dir benchmarks/suite bench:smoke`, which writes a smoke run that git ignores. You can find both profiles and every option of the suite in [`benchmarks/README.md`](benchmarks/README.md).
+On [`BENCHMARKS.md`](BENCHMARKS.md), you can compare uhttp with uWebSockets.js on its own and with three other Node.js frameworks. A maintainer measures the servers for that page only when somebody asks for new figures, because the suite then keeps a quiet machine busy for about two hours, while it applies load to 30 server processes for 240 seconds each. To check that the suite works on your machine, start the smoke profile with `pnpm --dir benchmarks/suite bench:smoke`, in which the suite writes a smoke run that git ignores. You can find both profiles and every option of the suite in [`benchmarks/README.md`](benchmarks/README.md).
 
 ## Repository layout
 
@@ -70,14 +70,14 @@ The `Publish` workflow publishes `@delali/uhttp` to npm through a trusted publis
 
 On every push to main, the workflow publishes a prerelease under the `next` dist-tag once its lint, typecheck, build, and test jobs pass. The prerelease takes the next patch after the higher of the version in `packages/ts/package.json` and the newest version on npm, followed by `-next.<run number>.<run attempt>`, such as `0.4.2-next.57.1`. The workflow skips the prerelease when the commit already has a release tag, when main has moved past the commit, and when npm has no version of the package yet.
 
-To cut a release, start the `Publish` workflow by hand on main, with `patch`, `minor`, `major`, or an exact version such as `1.2.3`. Tick the dry run to see every step without a commit, a tag, a release, or a publish. The workflow first checks that the run holds the tip of main, and it then runs the same checks as a prerelease. Then `nx release` writes the version into `packages/ts/package.json` and the entry into `packages/ts/CHANGELOG.md`, commits both, tags the commit `uhttp@v<version>`, pushes, and creates the GitHub release, before `nx release publish` publishes the version under the `latest` dist-tag. The workflow pushes and creates the release with the `RELEASE_PAT` secret, which has to belong to an account that may push to main and create releases.
+To cut a release, start the `Publish` workflow by hand on main, with `patch`, `minor`, `major`, or an exact version such as `1.2.3`. When you tick the dry run, the workflow goes through every step and prints the changes that a real release makes, but it makes no commit, no tag, no release, and no publish. The workflow first checks that main still points at the commit that it checked out, and it then repeats the lint, typecheck, build, and test jobs of a prerelease. Next, `nx release` writes the version into `packages/ts/package.json` and the entry into `packages/ts/CHANGELOG.md`, commits both files, and tags the commit `uhttp@v<version>`. It then pushes the commit and the tag and creates the GitHub release, after which `nx release publish` publishes the version under the `latest` dist-tag. The workflow pushes and creates the release with the `RELEASE_PAT` secret, which has to belong to an account that may push to main and create releases.
 
 On npm, you add a trusted publisher in the settings of a package, so the package has to exist before the workflow can publish it. A maintainer therefore publishes the first version by hand:
 
 1. Set the first version in `packages/ts/package.json` through a pull request, and merge it.
-2. On that commit of main, run `pnpm install` and `pnpm nx run uhttp:build`, then run `npm publish` from `packages/ts` while you are signed in to npm.
+2. On that commit of main, install the dependencies with `pnpm install` and build the package with `pnpm nx run uhttp:build`. Then publish it with `npm publish` from `packages/ts` while you are signed in to npm.
 3. Tag that commit `uhttp@v<version>`, push the tag, and create the GitHub release for it.
-4. Run `npm trust github @delali/uhttp --file publish.yml --repo assetcorp/uhttp --allow-publish` with npm 12, which has the `npm trust` command.
+4. Add the trusted publisher with `npm trust github @delali/uhttp --file publish.yml --repo assetcorp/uhttp --allow-publish` from npm 12, which has the `npm trust` command.
 5. Within 2 days, cut a release through the workflow, because a trusted publisher expires when nobody publishes through it within 2 days of its creation.
 
 ## Propose a change

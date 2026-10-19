@@ -1,9 +1,6 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-import { LOAD_OUTPUT_MAX_BYTES, LOAD_TIMEOUT_GRACE_MS, PIPELINED_REQUESTS, UPLOAD_CONTENT_TYPE } from './constants.ts'
+import { LOAD_TIMEOUT_GRACE_MS, MAX_LOAD_OUTPUT_BYTES, PIPELINED_REQUESTS, UPLOAD_CONTENT_TYPE } from './constants.ts'
+import { pinnedCommand, runFile } from './tools.ts'
 import type { LatencySummary } from './types.ts'
-
-const runFile = promisify(execFile)
 
 export interface LoadRequest {
   readonly url: string
@@ -79,13 +76,11 @@ function h2loadArguments(request: LoadRequest): string[] {
 }
 
 async function runH2load(request: LoadRequest): Promise<string> {
-  const args = h2loadArguments(request)
-  const [program, ...programArgs] =
-    request.loadCpus === null ? ['h2load', ...args] : ['taskset', '-c', request.loadCpus, 'h2load', ...args]
+  const [program, programArgs] = pinnedCommand(request.loadCpus, 'h2load', h2loadArguments(request))
   try {
-    const { stdout } = await runFile(program ?? 'h2load', programArgs, {
+    const { stdout } = await runFile(program, programArgs, {
       timeout: request.durationMs + LOAD_TIMEOUT_GRACE_MS,
-      maxBuffer: LOAD_OUTPUT_MAX_BYTES,
+      maxBuffer: MAX_LOAD_OUTPUT_BYTES,
     })
     return stdout
   } catch (error) {

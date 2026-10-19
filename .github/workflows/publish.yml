@@ -19,12 +19,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   plan:
-    name: Decide whether this push gets a prerelease
+    name: Decide whether to publish a prerelease for this push
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
@@ -228,13 +228,13 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
 
-      - name: Check that this run holds the tip of main
+      - name: Check that main still points at the checked-out commit
         run: |
           git fetch origin main
           CHECKED_OUT_SHA="$(git rev-parse HEAD)"
           MAIN_TIP_SHA="$(git rev-parse FETCH_HEAD)"
           if [ "$CHECKED_OUT_SHA" != "$MAIN_TIP_SHA" ]; then
-            echo "::error::This run holds $CHECKED_OUT_SHA while main is at $MAIN_TIP_SHA, so GitHub would reject the release commit. Dispatch a new run, because a re-run checks out the commit of the first dispatch."
+            echo "::error::The workflow checked out $CHECKED_OUT_SHA while main points at $MAIN_TIP_SHA, so GitHub would reject the release commit. Dispatch the workflow again, because a re-run checks out the commit of the first dispatch."
             exit 1
           fi
 
@@ -281,7 +281,12 @@ jobs:
           pnpm nx release "$VERSION" "$@"
 
       - name: Publish with provenance through the trusted publisher
-        if: ${{ !inputs.dry-run }}
         env:
+          DRY_RUN: ${{ inputs.dry-run }}
           NPM_CONFIG_PROVENANCE: true
-        run: pnpm nx release publish --projects=uhttp
+        run: |
+          set -- --projects=uhttp
+          if [ "$DRY_RUN" = "true" ]; then
+            set -- "$@" --dry-run
+          fi
+          pnpm nx release publish "$@"
