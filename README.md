@@ -8,7 +8,7 @@
 [![types](https://img.shields.io/badge/types-TypeScript-blue)](https://www.npmjs.com/package/@delali/uhttp)
 [![license](https://img.shields.io/npm/l/@delali/uhttp)](https://github.com/assetcorp/uhttp/blob/main/LICENSE)
 
-uhttp is an HTTP and WebSocket server for Node.js on uWebSockets.js. With it, you can add routes and WebSocket routes, put middleware such as a login check in front of them, parse JSON bodies and file uploads, and build replies with helpers. Before any asynchronous step, the package copies only the parts of the raw request that the code of a route uses, so that uhttp can serve requests nearly as fast as uWebSockets.js. To keep it that way, the speed check on every pull request fails when uhttp serves requests more than 5% more slowly than uWebSockets.js.
+uhttp is an HTTP and WebSocket server for Node.js on uWebSockets.js. With it, you can add routes and WebSocket routes, put middleware such as a login check in front of them, parse JSON bodies and file uploads, and build replies with helpers. Before any asynchronous step, the package copies only the parts of the raw request that the code of a route uses, so that uhttp adds as little work as it can to each request. The speed check on every pull request sends one request at a time on each of 100 connections, and it fails when uhttp serves those requests more than 5% more slowly than uWebSockets.js. On the benchmark page, each connection carries 10 requests at once, so less of the time of each request goes to the network. The work that uhttp adds therefore makes up a larger share of each request there, which is why the page shows a larger gap between uhttp and uWebSockets.js.
 
 <!-- BENCH:headline START -->
 <!-- BENCH:headline END -->
