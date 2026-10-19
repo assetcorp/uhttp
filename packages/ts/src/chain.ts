@@ -6,8 +6,8 @@ import { errorReply, Reply } from './reply.js'
 import type { BeforeHandler, Handler, Logger, MiddlewareHandler, Next } from './types.js'
 
 /**
- * The package calls each middleware of a chain through this form, which holds the `before` and the
- * `handle` function of the middleware, either of which can be missing.
+ * The package calls each middleware of a chain in this form, with the `before` and the `handle`
+ * function of the middleware, either of which can be missing.
  *
  * @internal
  */

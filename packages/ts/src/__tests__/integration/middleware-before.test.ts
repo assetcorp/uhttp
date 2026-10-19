@@ -309,7 +309,21 @@ describe('before functions in the chain', () => {
     )
   })
 
-  it('refuses a WebSocket route whose last argument is a before middleware', () => {
+  it('throws INVALID_ROUTE for a route middleware whose before or handle is set to a value other than a function', () => {
+    const app = createApp()
+    const checkLogin = { headers: ['authorization'], before: 'check' }
+    const misspelled = { headers: ['authorization'], before: undefined }
+    const handled = { handle: null }
+    const add = (middleware: object) => () =>
+      app.get('/account', middleware as unknown as Middleware, c => c.text('account'))
+    expect(add(checkLogin)).toThrow('Set the before of a middleware to a function, or leave it out.')
+    expect(add(misspelled)).toThrow(
+      'Pass each middleware as a function or as an object with a before function, a handle function, or both.',
+    )
+    expect(add(handled)).toThrow(expect.objectContaining({ code: 'INVALID_ROUTE' }))
+  })
+
+  it('throws INVALID_ROUTE for a WebSocket route whose last argument is a before middleware', () => {
     const app = createApp()
     expect(() => app.ws('/live', { before: () => undefined } as never)).toThrow(UhttpError)
   })

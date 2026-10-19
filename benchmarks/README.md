@@ -48,7 +48,7 @@ The suite accepts `--servers`, `--routes`, and `--headers` in the smoke profile 
 
 ## The files of a run
 
-For each run, the suite writes a directory, which it names by the UTC time at which it started the run, such as `20261019T004707Z`:
+For each run, the suite writes a directory whose name is the UTC time at which the suite started the run, such as `20261019T004707Z`:
 
 - In `machine.json`, the suite records the label from `BENCH_MACHINE_LABEL` when you set it, the CPU, the memory, the operating system, the versions of Node.js and h2load, and the CPUs to which it pinned each process.
 - In `results.json`, the suite records the settings, the version of each server, and every measurement, together with each failure.

@@ -58,7 +58,7 @@ app.use(
 )
 ```
 
-The middleware checks and encodes every header once, when you call `secureHeaders()`, so it does none of that work on each request. On a 200 with a text or JSON body, the package writes the fixed headers of the outermost `secureHeaders()` in the same call to uWebSockets.js as the status line, unless your code sets one of them, so the package makes no extra call for those headers. `secureHeaders()` throws `INVALID_MIDDLEWARE_OPTIONS` for a name that is not an HTTP token, for a value with a control character, or for a framing header such as `Content-Length`.
+The middleware checks and encodes every header once, when you call `secureHeaders()`, so it does none of that work on each request. On a 200 with a text or JSON body, the package writes the fixed headers of the outermost `secureHeaders()` in the same call to uWebSockets.js as the status line, unless your code or an inner `secureHeaders()` sets one of them, so the package makes no extra call for those headers. `secureHeaders()` throws `INVALID_MIDDLEWARE_OPTIONS` for a name that is not an HTTP token, for a value with a control character, or for a framing header such as `Content-Length`.
 
 When your handler or any other middleware sets one of the headers itself, the package sends that value in place of the value of `secureHeaders()`. When two `secureHeaders()` middleware set the same header, the package sends the value of the inner one, such as the one on the route. You can therefore send `Cross-Origin-Resource-Policy: cross-origin` from a route that serves a file for other sites to embed, such as a badge:
 

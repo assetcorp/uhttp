@@ -40,7 +40,7 @@ export interface RequestBody {
   bytes(): Promise<Uint8Array>
   /**
    * Returns the body as text in the charset of its `text/*` content type, which is UTF-8 when the
-   * request names none.
+   * content type has no charset.
    *
    * @returns The promise resolves to the decoded text.
    * @throws {@link UhttpError} with the code `UNSUPPORTED_MEDIA_TYPE` for another content type or for

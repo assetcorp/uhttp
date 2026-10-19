@@ -26,8 +26,8 @@ export interface SecureHeadersOptions {
    */
   readonly preset?: 'web' | 'api'
   /**
-   * You change a header of the preset by naming it with a new value, switch it off with `false`,
-   * and add a header that is missing from the preset by naming it with a value. The package
+   * You change a header of the preset when you set it to a new value here, switch it off with
+   * `false`, and add a header that is missing from the preset when you set it to a value. The package
    * matches the names without regard to case.
    */
   readonly headers?: Readonly<Record<string, string | false>>
@@ -125,10 +125,13 @@ export function nonceOf(context: Context): string | undefined {
  * reads the protocol that your proxy reports.
  *
  * The middleware sends each header with every reply of the request, including an error reply and
- * the 503 of a handler that passes its time limit, unless the reply or your code sets a header of
- * the same name. It checks and encodes every fixed header once, when you call this function, and
- * the package writes them in the same call into uWebSockets.js as the status line of a 200 with a
- * text or a JSON body, so the middleware adds no asynchronous step to a request.
+ * the 503 of a handler that passes its time limit, unless the reply, your code, or an inner
+ * `secureHeaders()` sets a header of the same name. It checks and encodes every fixed header once,
+ * when you call this function. Because it does its work in a `before` function that returns no
+ * promise, the package never has to wait on a request for this middleware. On a 200 with a text or
+ * a JSON body, the package writes the fixed headers of the outermost `secureHeaders()` in the same
+ * call into uWebSockets.js as the status line, unless another header of the same name replaces one
+ * of them.
  *
  * @param options - You can choose the preset, change any header, and ask for a policy with a nonce.
  * @returns The function returns the middleware.

@@ -54,7 +54,7 @@ export function optionsObject(value: unknown, owner: string): object {
  * Returns `true` for a value with a `then` function, for which `await` waits, such as the promise
  * that an async function of your code returns.
  *
- * @param value - The middleware passes the value that a function of your code returned.
+ * @param value - The package passes the value that a function of your code returned.
  * @returns The function returns `false` for every value that `await` returns unchanged.
  * @internal
  */

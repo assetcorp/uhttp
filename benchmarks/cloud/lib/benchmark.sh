@@ -132,7 +132,7 @@ cmd_fetch() {
   while IFS= read -r id; do
     [ -n "$id" ] || continue
     if ! [[ "$id" =~ $RUN_ID_PATTERN ]]; then
-      log "skip $(printf '%q' "$id"), which the suite never names a run directory"
+      log "skip $(printf '%q' "$id"), because the suite never gives a run directory a name of that form"
       continue
     fi
     if [ -e "$REPO_ROOT/$runs_dir/$id" ]; then

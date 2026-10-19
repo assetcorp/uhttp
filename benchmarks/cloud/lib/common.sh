@@ -174,7 +174,7 @@ package_working_tree() {
 cmd_sync() {
   command -v git >/dev/null 2>&1 || die "git is required to package the working tree"
   require_idle_vm "a sync"
-  log "package the working tree through git, which leaves out what .gitignore names and keeps .git for the commit stamp"
+  log "package the working tree through git, which leaves out the paths in .gitignore and keeps .git for the commit stamp"
   local unpack="rm -rf $REMOTE_REPO.new && mkdir $REMOTE_REPO.new && tar --no-same-owner -xzf $REMOTE_REPO.tgz -C $REMOTE_REPO.new && rm -f $REMOTE_REPO.tgz && bash $REMOTE_REPO.new/benchmarks/cloud/remote-replace-tree.sh"
   if [ "$DRY_RUN" = "1" ]; then
     prov_scp_up "<working-tree>.tgz" "$REMOTE_REPO.tgz"
