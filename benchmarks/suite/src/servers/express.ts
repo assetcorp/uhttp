@@ -4,6 +4,8 @@ import { JSON_BODY, JSON_PATH, PLAIN_BODY, PLAIN_PATH, UPLOAD_CONTENT_TYPE, UPLO
 import { announce, failToListen, securityHeadersRequested } from './announce.ts'
 
 const app = express()
+app.disable('etag')
+app.disable('x-powered-by')
 if (securityHeadersRequested()) app.use(helmet({ contentSecurityPolicy: false, strictTransportSecurity: false }))
 
 app.get(PLAIN_PATH, (_request, response) => {

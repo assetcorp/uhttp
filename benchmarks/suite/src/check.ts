@@ -1,4 +1,5 @@
 import {
+  FRAMING_HEADERS,
   PLAIN_BODY,
   RESPONSE_CHECK_TIMEOUT_MS,
   ROUTE_IDS,
@@ -43,11 +44,10 @@ function securityHeaderFaults(headers: Headers, variant: HeaderVariant): string[
     if (variant === 'secure' && sent !== value) faults.push(`${name} was '${sent}' in place of '${value}'`)
     if (variant === 'plain' && sent !== null) faults.push(`${name} was '${sent}' on a server without security headers`)
   }
-  if (headers.get('strict-transport-security') !== null) {
-    faults.push('the server sent strict-transport-security over plain HTTP')
-  }
-  if (headers.get('content-security-policy') !== null) {
-    faults.push('the server sent content-security-policy, which no server in the suite sets')
+  for (const name of headers.keys()) {
+    if (!FRAMING_HEADERS.includes(name) && !Object.hasOwn(SECURITY_HEADERS, name)) {
+      faults.push(`the server sent ${name}, which every other server leaves out`)
+    }
   }
   return faults
 }
