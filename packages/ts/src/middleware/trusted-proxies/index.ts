@@ -182,7 +182,7 @@ export function trustedProxies(options?: TrustedProxiesOptions): MiddlewareDefin
   return {
     headers: [FORWARDED_FOR_HEADER, FORWARDED_PROTO_HEADER, FORWARDED_HOST_HEADER],
     clientAddress: true,
-    handle(context, next) {
+    before(context) {
       const peer = context.req.clientAddress
       const peerAddress = peer === '' || !trustsAddresses ? undefined : parseAddress(peer)
       const trusted = peer === '' ? trust.unix : peerAddress !== undefined && trusts(trust, peerAddress)
@@ -192,7 +192,6 @@ export function trustedProxies(options?: TrustedProxiesOptions): MiddlewareDefin
         logToApp(context, 'warn', { address: forwarded.address }, UNTRUSTED_FORWARDING_MESSAGE)
       }
       setForwardedClient(context, forwarded)
-      return next()
     },
   }
 }

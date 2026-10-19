@@ -1,6 +1,6 @@
 # Security headers
 
-The middleware that `secureHeaders()` returns adds response headers, so that a browser blocks framing by other sites, content sniffing, and other behaviour that an attacker can abuse. When you add it with `app.use()`, the middleware adds the headers to every response, including a 404 or a 500.
+The middleware that `secureHeaders()` returns adds response headers, so that a browser blocks framing by other sites, content sniffing, and other behaviour that an attacker can abuse. When you add it with `app.use()`, the middleware adds the headers to every response, including a 404, a 500, and the 503 that the package sends when a handler passes its time limit.
 
 ```ts
 import { createApp } from '@delali/uhttp'
@@ -38,7 +38,7 @@ With the `api` preset, the middleware sends the headers that OWASP recommends fo
 | `X-Content-Type-Options` | `nosniff` |
 | `X-Frame-Options` | `DENY` |
 
-With either preset, the middleware also sends `Strict-Transport-Security: max-age=15552000; includeSubDomains`, so that a browser uses HTTPS for the site and its subdomains for the next 180 days. The middleware sends that header only on a TLS connection, or when a proxy that `trustedProxies()` trusts reports `https`, because a browser ignores the header on a response over plain HTTP. Read [Trusted proxies](trusted-proxies.md) to learn how the package finds the protocol behind a proxy.
+With either preset, the middleware also sends `Strict-Transport-Security: max-age=15552000; includeSubDomains`, so that a browser uses HTTPS for the site and its subdomains for the next 180 days. The middleware sends that header only on a TLS connection, or when a proxy that `trustedProxies()` trusts reports `https`, because a browser ignores the header on a response over plain HTTP. The middleware reads the protocol before the handler, so add `trustedProxies()` before `secureHeaders()`, and read [Trusted proxies](trusted-proxies.md) to learn how the package finds the protocol behind a proxy.
 
 ## Change a header
 
@@ -58,7 +58,9 @@ app.use(
 )
 ```
 
-The middleware checks and encodes every header once, when you call `secureHeaders()`, so it does none of that work on each request. `secureHeaders()` throws `INVALID_MIDDLEWARE_OPTIONS` for a name that is not an HTTP token, for a value with a control character, or for a framing header such as `Content-Length`. When your handler or an inner middleware sets one of the headers itself, the middleware leaves that value in place, so that you can send `Cross-Origin-Resource-Policy: cross-origin` from a route that serves a file for other sites to embed, such as a badge:
+The middleware checks and encodes every header once, when you call `secureHeaders()`, so it does none of that work on each request. On a 200 with a text or JSON body, the package writes the fixed headers of the outermost `secureHeaders()` in the same call to uWebSockets.js as the status line, unless your code sets one of them, so the package makes no extra call for those headers. `secureHeaders()` throws `INVALID_MIDDLEWARE_OPTIONS` for a name that is not an HTTP token, for a value with a control character, or for a framing header such as `Content-Length`.
+
+When your handler or any other middleware sets one of the headers itself, the package sends that value in place of the value of `secureHeaders()`. When two `secureHeaders()` middleware set the same header, the package sends the value of the inner one, such as the one on the route. You can therefore send `Cross-Origin-Resource-Policy: cross-origin` from a route that serves a file for other sites to embed, such as a badge:
 
 ```ts
 app.get('/badge.svg', c =>

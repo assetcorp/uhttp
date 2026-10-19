@@ -80,7 +80,17 @@ function stateOf(group: Group): GroupState {
 
 function isMiddleware(value: unknown): value is Middleware {
   if (typeof value === 'function') return true
-  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'handle') === 'function'
+  if (typeof value !== 'object' || value === null) return false
+  return typeof Reflect.get(value, 'before') === 'function' || typeof Reflect.get(value, 'handle') === 'function'
+}
+
+function checkMiddlewareFunctions(value: object): void {
+  for (const name of ['before', 'handle']) {
+    const entry: unknown = Reflect.get(value, name)
+    if (entry !== undefined && typeof entry !== 'function') {
+      throw new UhttpError('INVALID_ROUTE', `Set the ${name} of a middleware to a function, or leave it out.`)
+    }
+  }
 }
 
 function checkDeclarations(value: object, owner: string, allowAll: boolean): void {
@@ -109,10 +119,11 @@ function checkedMiddleware(list: readonly unknown[]): Middleware[] {
     if (!isMiddleware(entry)) {
       throw new UhttpError(
         'INVALID_ROUTE',
-        'Pass each middleware as a function or as an object with a handle function.',
+        'Pass each middleware as a function or as an object with a before function, a handle function, or both.',
       )
     }
     if (typeof entry !== 'function') {
+      checkMiddlewareFunctions(entry)
       checkDeclarations(entry, 'a middleware', false)
       checkOptionsHeaders(entry)
     }

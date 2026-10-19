@@ -35,8 +35,24 @@ export type MiddlewareHandler = (
 ) => Reply | void | Promise<Reply | undefined> | Promise<void>
 
 /**
+ * A `before` function receives the {@link Context} of one request before the handler and every
+ * inner middleware. It returns nothing to pass the request on, or a {@link Reply} to end the
+ * request with that reply. When it returns a promise, the package waits for the promise and then
+ * does the same with its value.
+ *
+ * @param context - The package passes the context of the request to the function.
+ * @returns The function returns a reply to end the request, or nothing to pass it on.
+ */
+export type BeforeHandler = (context: Context) => Reply | void | Promise<Reply | undefined> | Promise<void>
+
+/**
  * You write a middleware in this form when it uses request headers or the client address, so that
- * the package copies them before the first `await`.
+ * the package copies them before the first `await`, and when it only has work to do before the
+ * handler. Give the object a `before` function, a `handle` function, or both. A `before` function
+ * that returns no promise adds no asynchronous step to the request, so the package can send the
+ * reply of a synchronous handler inside the call from uWebSockets.js. A `handle` function always
+ * adds one, because `next` returns a promise. When the object has both, the package calls `handle`
+ * after `before` passes the request on.
  */
 export interface MiddlewareDefinition {
   /** The package copies these request headers for every route that this middleware wraps. */
@@ -49,8 +65,10 @@ export interface MiddlewareDefinition {
   readonly optionsHeaders?: readonly string[]
   /** When this is `true`, the package copies the client address for every route that this middleware wraps. */
   readonly clientAddress?: boolean
-  /** The package calls this function for each request that passes through the middleware. */
-  readonly handle: MiddlewareHandler
+  /** The package calls this function for each request that reaches the middleware, before any inner middleware and the handler. */
+  readonly before?: BeforeHandler
+  /** The package calls this function for each request that passes through the middleware, after `before` when the object has both. */
+  readonly handle?: MiddlewareHandler
 }
 
 /**

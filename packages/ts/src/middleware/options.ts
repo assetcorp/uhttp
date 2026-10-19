@@ -51,6 +51,19 @@ export function optionsObject(value: unknown, owner: string): object {
 }
 
 /**
+ * Returns `true` for a value with a `then` function, for which `await` waits, such as the promise
+ * that an async function of your code returns.
+ *
+ * @param value - The middleware passes the value that a function of your code returned.
+ * @returns The function returns `false` for every value that `await` returns unchanged.
+ * @internal
+ */
+export function isThenable(value: unknown): value is PromiseLike<unknown> {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false
+  return typeof Reflect.get(value, 'then') === 'function'
+}
+
+/**
  * Returns a whole-number option after checking its range.
  *
  * @param value - The middleware passes the value of the option.

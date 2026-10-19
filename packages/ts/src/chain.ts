@@ -2,7 +2,20 @@ import type { Context } from './context.js'
 import { isClientError, UhttpError } from './errors.js'
 import type { Exchange } from './exchange.js'
 import { errorReply, Reply } from './reply.js'
-import type { Handler, Logger, MiddlewareHandler, Next } from './types.js'
+import type { BeforeHandler, Handler, Logger, MiddlewareHandler, Next } from './types.js'
+
+/**
+ * The package calls each middleware of a chain through this form, which holds the `before` and the
+ * `handle` function of the middleware, either of which can be missing.
+ *
+ * @internal
+ */
+export interface ChainLayer {
+  /** The package calls this function first, without `next`. */
+  readonly before: BeforeHandler | undefined
+  /** The package calls this function after `before` passes the request on, with `next`. */
+  readonly handle: MiddlewareHandler | undefined
+}
 
 const INTERNAL_ERROR_MESSAGE = 'The request failed.'
 const MISSING_REPLY_MESSAGE =
@@ -128,19 +141,61 @@ function callHandler(context: Context, exchange: Exchange, handler: Handler): un
 function dispatch(
   context: Context,
   exchange: Exchange,
-  layers: readonly MiddlewareHandler[],
+  layers: readonly ChainLayer[],
   handler: Handler,
   index: number,
 ): undefined | Promise<void> {
   const layer = layers[index]
   if (layer === undefined) return callHandler(context, exchange, handler)
-  return callLayer(context, exchange, layers, handler, index, layer)
+  if (layer.before !== undefined) return callBefore(context, exchange, layers, handler, index, layer.before)
+  return pass(context, exchange, layers, handler, index)
+}
+
+function pass(
+  context: Context,
+  exchange: Exchange,
+  layers: readonly ChainLayer[],
+  handler: Handler,
+  index: number,
+): undefined | Promise<void> {
+  const handle = layers[index]?.handle
+  if (handle === undefined) return dispatch(context, exchange, layers, handler, index + 1)
+  return callLayer(context, exchange, layers, handler, index, handle)
+}
+
+function callBefore(
+  context: Context,
+  exchange: Exchange,
+  layers: readonly ChainLayer[],
+  handler: Handler,
+  index: number,
+  before: BeforeHandler,
+): undefined | Promise<void> {
+  let result: unknown
+  try {
+    result = before(context)
+  } catch (error) {
+    return fail(context, exchange, error)
+  }
+  if (result instanceof Reply) {
+    exchange.assign(result)
+    return undefined
+  }
+  if (!(result instanceof Promise)) return pass(context, exchange, layers, handler, index)
+  return result.then(
+    value => {
+      if (!(value instanceof Reply)) return pass(context, exchange, layers, handler, index)
+      exchange.assign(value)
+      return undefined
+    },
+    error => fail(context, exchange, error),
+  )
 }
 
 function callLayer(
   context: Context,
   exchange: Exchange,
-  layers: readonly MiddlewareHandler[],
+  layers: readonly ChainLayer[],
   handler: Handler,
   index: number,
   layer: MiddlewareHandler,
@@ -191,7 +246,7 @@ function ensureReply(context: Context, exchange: Exchange): undefined | Promise<
 export function runChain(
   context: Context,
   exchange: Exchange,
-  layers: readonly MiddlewareHandler[],
+  layers: readonly ChainLayer[],
   handler: Handler,
 ): undefined | Promise<void> {
   const result = dispatch(context, exchange, layers, handler, 0)

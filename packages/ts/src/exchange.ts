@@ -6,6 +6,7 @@ import { type Drain, SERVING } from './native/drain.js'
 import type { Reply } from './reply.js'
 import {
   type ContextHeaders,
+  type DefaultHeaders,
   type EncodedHeader,
   type PreparedHeader,
   type PreparedName,
@@ -56,6 +57,7 @@ export class Exchange implements ResponseParts {
   #final = false
   #replySetAt = 0
   #headers: ContextHeaders | undefined
+  #defaults: DefaultHeaders[] | undefined
   #clock = 0
   #counted = false
   #arrival: BodyArrival | undefined
@@ -287,6 +289,22 @@ export class Exchange implements ResponseParts {
   /** The package keeps the headers that code set through the context here, and this is `undefined` until code sets one. */
   get contextHeaders(): ContextHeaders | undefined {
     return this.#headers
+  }
+
+  /** Middleware attached these blocks of headers in this order, and this is `undefined` until a middleware attaches one. */
+  get defaultHeaders(): readonly DefaultHeaders[] | undefined {
+    return this.#defaults
+  }
+
+  /**
+   * Attaches a block of headers that the package sends with whatever reply the request ends with,
+   * apart from each header that the reply or your code sets.
+   *
+   * @param block - The middleware passes the block of headers.
+   */
+  addDefaultHeaders(block: DefaultHeaders): void {
+    if (this.#defaults === undefined) this.#defaults = [block]
+    else this.#defaults.push(block)
   }
 
   /**
