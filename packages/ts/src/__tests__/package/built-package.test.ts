@@ -9,6 +9,7 @@ const PACKAGE_DIR = resolve(import.meta.dirname, '../../..')
 const SOURCE_DIR = join(PACKAGE_DIR, 'src')
 const OUT_DIR = join(PACKAGE_DIR, '.cache', 'package-test', 'dist')
 const TSC = join(PACKAGE_DIR, 'node_modules', '.bin', 'tsc')
+const NPM_PACK_TIMEOUT_MS = 30_000
 
 function sourceModules(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -149,7 +150,7 @@ describe('the package manifest', () => {
     expect(readManifest().publishConfig).toEqual({ access: 'public' })
   })
 
-  it('packs the MIT licence and the README, and no NOTICE file', () => {
+  it('packs the MIT licence and the README, and no NOTICE file', { timeout: NPM_PACK_TIMEOUT_MS }, () => {
     const packed: unknown = JSON.parse(
       execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: PACKAGE_DIR, encoding: 'utf8' }),
     )
