@@ -25,7 +25,9 @@ def machine_bullets(run: Run) -> list[str]:
     os = machine.get("os") or {}
     tools = machine.get("tools") or {}
     pinning = machine.get("pinning") or {}
-    bullets = [
+    label = machine.get("label")
+    bullets = [f"- The machine was {label.strip()}."] if isinstance(label, str) and label.strip() else []
+    bullets += [
         f"- The CPU was the {cpu.get('model') or 'unrecorded model'}, with {integer(cpu.get('logical_cores'))} logical "
         "cores.",
         f"- The machine had {gibibytes(machine.get('memory_bytes'))} of memory.",

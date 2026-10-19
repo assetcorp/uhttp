@@ -4,9 +4,18 @@ The suite in `suite/` measures uhttp, uWebSockets.js on its own, Hono, Fastify, 
 
 ## Before you start the suite
 
-Install h2load, which sends the load, with `brew install nghttp2` on macOS or `sudo apt-get install nghttp2-client` on Ubuntu. Install [uv](https://docs.astral.sh/uv/) too, because the suite starts the generator through `uv run`. uv then installs the versions of Python and matplotlib that `writeup/pyproject.toml` pins. Then install the workspace from the root of the repository with `pnpm install`.
+Install h2load 1.69.0 or later, which sends the load, because the suite reads the median and the percentiles of the request times that h2load has printed since that version. The suite checks the version before it starts any server. On macOS, `brew install nghttp2` installs it. Ubuntu 24.04 packages h2load 1.59.0, so on Ubuntu, build h2load from the nghttp2 release as [`cloud/remote-bootstrap.sh`](cloud/remote-bootstrap.sh) does. Install [uv](https://docs.astral.sh/uv/) too, because the suite starts the generator through `uv run`. uv then installs the versions of Python and matplotlib that `writeup/pyproject.toml` pins. Then install the workspace from the root of the repository with `pnpm install`.
 
 On Linux with `taskset` and at least 6 CPUs, the suite pins each server to CPU 1 and the 4 threads of h2load to CPUs 2 to 5, so that the server and h2load never share a CPU. On any other machine, the suite pins nothing, which it records in `machine.json`.
+
+## Record a run on a cloud machine
+
+When you record a run on your own computer, the figures describe that computer alone, so record a run for the published page on a cloud machine that anybody can rent. The toolkit in [`cloud/`](cloud/README.md) creates that machine on GCP, Hetzner, DigitalOcean, or AWS, installs what the suite needs, and starts the suite on it in either profile. Once the suite finishes, the toolkit copies the new run directory back into `results/runs/` or `results/.smoke/runs/`:
+
+```bash
+cd benchmarks/cloud
+PROVIDER=gcp ./run-cloud.sh all
+```
 
 ## Profiles
 
@@ -41,7 +50,7 @@ The suite accepts `--servers`, `--routes`, and `--headers` in the smoke profile 
 
 For each run, the suite writes a directory, which it names by the UTC time at which it started the run, such as `20261019T004707Z`:
 
-- In `machine.json`, the suite records the CPU, the memory, the operating system, the versions of Node.js and h2load, and the CPUs to which it pinned each process.
+- In `machine.json`, the suite records the label from `BENCH_MACHINE_LABEL` when you set it, the CPU, the memory, the operating system, the versions of Node.js and h2load, and the CPUs to which it pinned each process.
 - In `results.json`, the suite records the settings, the version of each server, and every measurement, together with each failure.
 - In `comparison.md`, the generator writes the tables of the run, and in `charts/`, it draws the charts, each with the name of the run directory in its caption.
 

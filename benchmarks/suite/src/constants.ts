@@ -32,6 +32,8 @@ export const MAX_LOAD_OUTPUT_BYTES = 16_777_216
 
 export const TOOL_OUTPUT_TIMEOUT_MS = 10_000
 
+export const MIN_H2LOAD_VERSION = [1, 69, 0] as const
+
 export const SERVER_START_TIMEOUT_MS = 10_000
 
 export const SERVER_STOP_TIMEOUT_MS = 5_000
@@ -80,6 +82,8 @@ export const RUNS_DIRECTORY = 'benchmarks/results/runs'
 export const SMOKE_RUNS_DIRECTORY = 'benchmarks/results/.smoke/runs'
 
 export const PROFILE_ENV = 'BENCH_PROFILE'
+
+export const MACHINE_LABEL_ENV = 'BENCH_MACHINE_LABEL'
 
 export const BENCH_PROFILES = ['published', 'smoke'] as const
 

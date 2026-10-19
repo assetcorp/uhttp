@@ -1,4 +1,11 @@
-import { LOAD_TIMEOUT_GRACE_MS, MAX_LOAD_OUTPUT_BYTES, PIPELINED_REQUESTS, UPLOAD_CONTENT_TYPE } from './constants.ts'
+import {
+  LOAD_TIMEOUT_GRACE_MS,
+  MAX_LOAD_OUTPUT_BYTES,
+  MIN_H2LOAD_VERSION,
+  PIPELINED_REQUESTS,
+  TOOL_OUTPUT_TIMEOUT_MS,
+  UPLOAD_CONTENT_TYPE,
+} from './constants.ts'
 import { pinnedCommand, runFile } from './tools.ts'
 import type { LatencySummary } from './types.ts'
 
@@ -18,6 +25,34 @@ export interface LoadOutcome {
 }
 
 const UNIT_TO_MS: Readonly<Record<string, number>> = { us: 0.001, ms: 1, s: 1_000 }
+
+const MIN_H2LOAD_VERSION_TEXT = MIN_H2LOAD_VERSION.join('.')
+
+const H2LOAD_INSTALL_HINT = `Install h2load ${MIN_H2LOAD_VERSION_TEXT} or later, which prints the median and the percentiles of the request times that the suite reads. On macOS, brew install nghttp2 installs it. Ubuntu 24.04 packages h2load 1.59.0, so on Ubuntu, build h2load from the nghttp2 release as benchmarks/cloud/remote-bootstrap.sh does.`
+
+function isOlderThanMinimum(version: readonly number[]): boolean {
+  for (const [index, minimum] of MIN_H2LOAD_VERSION.entries()) {
+    const part = version[index] ?? 0
+    if (part !== minimum) return part < minimum
+  }
+  return false
+}
+
+export async function requireH2load(): Promise<void> {
+  let stdout: string
+  try {
+    stdout = (await runFile('h2load', ['--version'], { timeout: TOOL_OUTPUT_TIMEOUT_MS })).stdout
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new Error(H2LOAD_INSTALL_HINT)
+    throw error
+  }
+  const version = /nghttp2\/(\d+)\.(\d+)\.(\d+)/.exec(stdout)?.slice(1).map(Number)
+  if (version === undefined)
+    throw new Error(`h2load printed the version '${stdout.trim()}', which the suite cannot read.`)
+  if (isOlderThanMinimum(version)) {
+    throw new Error(`The suite found h2load ${version.join('.')}. ${H2LOAD_INSTALL_HINT}`)
+  }
+}
 
 function countIn(output: string, pattern: RegExp, label: string): number {
   const digits = pattern.exec(output)?.[1]
@@ -84,11 +119,7 @@ async function runH2load(request: LoadRequest): Promise<string> {
     })
     return stdout
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      throw new Error(
-        'Install h2load before you run the suite: brew install nghttp2 on macOS, or sudo apt-get install nghttp2-client on Ubuntu.',
-      )
-    }
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new Error(H2LOAD_INSTALL_HINT)
     throw error
   }
 }

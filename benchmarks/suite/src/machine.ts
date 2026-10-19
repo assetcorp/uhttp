@@ -1,11 +1,12 @@
 import { readFile } from 'node:fs/promises'
 import { arch, cpus, release, totalmem } from 'node:os'
 import { join } from 'node:path'
-import { TOOL_OUTPUT_TIMEOUT_MS } from './constants.ts'
+import { MACHINE_LABEL_ENV, TOOL_OUTPUT_TIMEOUT_MS } from './constants.ts'
 import { runFile } from './tools.ts'
 import type { Pinning, ServerEntry, ServerId, UhttpRevision } from './types.ts'
 
 export interface MachineDetails {
+  readonly label: string | null
   readonly cpu: { readonly model: string; readonly logical_cores: number }
   readonly memory_bytes: number
   readonly os: { readonly name: string; readonly kernel: string; readonly arch: string }
@@ -75,7 +76,9 @@ export async function serverEntries(suiteDirectory: string, servers: readonly Se
 export async function machineDetails(pinning: Pinning): Promise<MachineDetails> {
   const processors = cpus()
   const h2load = await output('h2load', ['--version'])
+  const label = process.env[MACHINE_LABEL_ENV]?.trim()
   return {
+    label: label === undefined || label === '' ? null : label,
     cpu: { model: processors[0]?.model.trim() ?? 'unknown', logical_cores: processors.length },
     memory_bytes: totalmem(),
     os: { name: await operatingSystemName(), kernel: release(), arch: arch() },
