@@ -14,7 +14,7 @@ uWebSockets.js v20.71.0 applies each of these limits whatever options you pass t
 | HTTP/1.0 | It answers 400 to every HTTP/1.0 request. | The proxy sends HTTP/1.1, including in its health checks. |
 | Pipelining | When a request arrives while the reply to an earlier request on the same connection is pending, it closes the connection without a reply to either request. | The proxy sends each request only after the response to the previous request on that connection. |
 
-uWebSockets.js adds the headers `Date` and `uWebSockets: 20` to every response. From the second header, a client can learn which server software you use, so each configuration below makes the proxy remove it.
+uWebSockets.js adds the headers `Date` and `uWebSockets: 20` to every response. From the second header, a client can learn which server software you use, so in each configuration below, the proxy removes that header.
 
 You can find every request to which uWebSockets.js answers 400 itself, before it calls uhttp, in [Errors](errors.md#errors-that-uwebsocketsjs-sends-itself).
 
@@ -100,7 +100,7 @@ HAProxy differs from nginx on two of the limits:
 - HAProxy closes half of the idle connections to a server every `pool-purge-delay`, which is 5 seconds by default, so an idle connection can stay open for longer than 10 seconds. With a lower `pool-purge-delay`, such as the 4 seconds in this configuration, HAProxy closes idle connections sooner.
 - With `option http-buffer-request`, HAProxy waits for the whole body or for a full request buffer, which is 16 KiB under the default `tune.bufsize`. HAProxy therefore sends the rest of a larger body to uhttp at the speed of the client, so uWebSockets.js can close the connection of a client that uploads more slowly than 16 KiB a second.
 
-The manual of HAProxy describes its default keep-alive mode as one in which HAProxy processes each request and its response in turn on a connection, so HAProxy sends uhttp no pipelined requests.
+In its default keep-alive mode, according to its manual, HAProxy processes each request and its response in turn on a connection, so HAProxy sends uhttp no pipelined requests.
 
 ## Raise the header limit
 

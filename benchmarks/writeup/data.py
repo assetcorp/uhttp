@@ -19,13 +19,9 @@ def route_title(results: dict, route: str) -> str:
     return f"{kibibytes(size)} upload" if is_number(size) else "Upload"
 
 
-def route_phrase(results: dict, route: str) -> str:
-    if route == "plain":
-        return "the plain-text route"
-    if route == "json":
-        return "the JSON route"
-    size = (results.get("settings") or {}).get("upload_body_bytes")
-    return f"the route that reads a {kibibytes(size)} upload" if is_number(size) else "the upload route"
+def created_date(results: dict) -> str:
+    created = results.get("created_at")
+    return created[:10] if isinstance(created, str) and created else "an unrecorded date"
 
 
 def server_ids(results: dict) -> list[str]:

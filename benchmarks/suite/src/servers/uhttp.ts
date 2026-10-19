@@ -1,10 +1,10 @@
 import { createApp, serve } from '@delali/uhttp'
 import { secureHeaders } from '@delali/uhttp/secure-headers'
 import { JSON_BODY, JSON_PATH, PLAIN_BODY, PLAIN_PATH, UPLOAD_PATH } from '../constants.ts'
-import { announce, failToListen, wantsSecurityHeaders } from './announce.ts'
+import { announce, failToListen, securityHeadersRequested } from './announce.ts'
 
 const app = createApp()
-if (wantsSecurityHeaders()) app.use(secureHeaders())
+if (securityHeadersRequested()) app.use(secureHeaders())
 
 app
   .get(PLAIN_PATH, c => c.text(PLAIN_BODY))

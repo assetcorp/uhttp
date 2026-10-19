@@ -1,7 +1,7 @@
 import helmet from '@fastify/helmet'
 import Fastify from 'fastify'
 import { JSON_BODY, JSON_PATH, PLAIN_BODY, PLAIN_PATH, UPLOAD_CONTENT_TYPE, UPLOAD_PATH } from '../constants.ts'
-import { announce, failToListen, wantsSecurityHeaders } from './announce.ts'
+import { announce, failToListen, securityHeadersRequested } from './announce.ts'
 
 const jsonRouteSchema = {
   schema: {
@@ -12,7 +12,7 @@ const jsonRouteSchema = {
 }
 
 const app = Fastify()
-if (wantsSecurityHeaders()) {
+if (securityHeadersRequested()) {
   await app.register(helmet, { contentSecurityPolicy: false, strictTransportSecurity: false })
 }
 

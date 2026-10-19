@@ -16,11 +16,11 @@ export const DEFAULT_WARM_UP_DURATION_MS = 40_000
 
 export const DEFAULT_LOAD_THREADS = 4
 
-export const SMOKE_MEASURE_DURATION_MS = 2_000
+export const DEFAULT_SMOKE_MEASURE_DURATION_MS = 2_000
 
-export const SMOKE_WARM_UP_DURATION_MS = 1_000
+export const DEFAULT_SMOKE_WARM_UP_DURATION_MS = 1_000
 
-export const SMOKE_CONNECTION_LEVELS = [10, 100] as const
+export const DEFAULT_SMOKE_CONNECTION_LEVELS = [10, 100] as const
 
 export const PINNED_SERVER_CPU = 1
 
@@ -28,7 +28,7 @@ export const FIRST_PINNED_LOAD_CPU = 2
 
 export const LOAD_TIMEOUT_GRACE_MS = 30_000
 
-export const LOAD_OUTPUT_MAX_BYTES = 16_777_216
+export const MAX_LOAD_OUTPUT_BYTES = 16_777_216
 
 export const TOOL_OUTPUT_TIMEOUT_MS = 10_000
 
@@ -53,6 +53,8 @@ export const JSON_PATH = '/json'
 export const JSON_BODY = { hello: 'world' } as const
 
 export const UPLOAD_PATH = '/upload'
+
+export const ROUTE_PATHS = { plain: PLAIN_PATH, json: JSON_PATH, upload: UPLOAD_PATH } as const
 
 export const UPLOAD_BODY_BYTES = 16_384
 

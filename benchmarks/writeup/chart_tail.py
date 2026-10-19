@@ -23,6 +23,8 @@ FIGURE_HEIGHT_INCHES = 3.6
 TAIL_LINE_WIDTH = 1.6
 TAIL_MARKER_SIZE = 3.5
 CONNECTIONS_LABEL_MARGIN = -0.6
+CONNECTIONS_LABEL_OFFSET_POINTS = (-5, 0)
+PANEL_GAP_FRACTION = 0.12
 
 
 def _profile(item: dict | None) -> list[tuple[int, float]]:
@@ -62,7 +64,7 @@ def latency_figure(destination: Path, results: dict, run_id: str, variant: str) 
             axes.annotate(
                 str(best.get("connections")),
                 xy=(first_position, first_value),
-                xytext=(-5, 0),
+                xytext=CONNECTIONS_LABEL_OFFSET_POINTS,
                 textcoords="offset points",
                 ha="right",
                 va="center",
@@ -90,5 +92,5 @@ def latency_figure(destination: Path, results: dict, run_id: str, variant: str) 
                 handles.append(handle)
                 labels.append(label)
     figure.legend(handles, labels, loc="lower center", ncols=len(labels), fontsize=BASE_FONT_POINTS - 1)
-    figure.subplots_adjust(wspace=0.12, bottom=LEGEND_RESERVE)
+    figure.subplots_adjust(wspace=PANEL_GAP_FRACTION, bottom=LEGEND_RESERVE)
     return save(figure, destination / latency_chart(variant))

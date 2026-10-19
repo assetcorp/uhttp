@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
-import { checkReplies, routePath } from './check.ts'
-import { HEADER_VARIANT_ENV, HEADLINE_CONNECTIONS } from './constants.ts'
+import { checkReplies } from './check.ts'
+import { HEADER_VARIANT_ENV, HEADLINE_CONNECTIONS, ROUTE_PATHS } from './constants.ts'
 import { applyLoad, type LoadRequest } from './load.ts'
 import type { SuiteOptions } from './options.ts'
 import { type ServerProcess, startServer } from './process.ts'
@@ -41,7 +41,7 @@ function loadRequest(
   durationMs: number,
 ): LoadRequest {
   return {
-    url: `${origin}${routePath(target.route)}`,
+    url: `${origin}${ROUTE_PATHS[target.route]}`,
     connections,
     threads: context.options.loadThreads,
     durationMs,

@@ -66,5 +66,5 @@ def settings_sentences(run: Run) -> str:
         f"{integer(settings.get('headline_connections'))} connections, and measured it for "
         f"{_seconds(settings.get('measure_seconds'))} at each of {and_join(levels)} connections. h2load sent a {upload} "
         "body with every request to the upload route. The suite counted the CPU time of each server process during each "
-        "measurement and divided it by the time that the measurement took, so a server that kept one core busy scored 1."
+        "measurement and divided it by the time that the measurement took, so a server that kept one core busy for the whole measurement had a value of 1."
     )

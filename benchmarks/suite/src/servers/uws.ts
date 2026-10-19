@@ -1,26 +1,40 @@
 import type { HttpResponse } from 'uWebSockets.js'
 import { createRequire } from 'node:module'
 import { JSON_BODY, JSON_PATH, PLAIN_BODY, PLAIN_PATH, SECURITY_HEADERS, UPLOAD_PATH } from '../constants.ts'
-import { announce, failToListen, wantsSecurityHeaders } from './announce.ts'
+import { announce, failToListen, securityHeadersRequested } from './announce.ts'
 
 type Uws = typeof import('uWebSockets.js')
 
 const uws = createRequire(import.meta.url)('uWebSockets.js') as Uws
-const securityHeaders = wantsSecurityHeaders() ? Object.entries(SECURITY_HEADERS) : []
+const encoder = new TextEncoder()
 
-function writeHead(res: HttpResponse, contentType: string): void {
-  res.writeHeader('content-type', contentType)
+function headerBytes(text: string): ArrayBuffer {
+  const bytes = encoder.encode(text)
+  const owned = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(owned).set(bytes)
+  return owned
+}
+
+const contentTypeName = headerBytes('content-type')
+const plainContentType = headerBytes('text/plain; charset=UTF-8')
+const jsonContentType = headerBytes('application/json')
+const securityHeaders = securityHeadersRequested()
+  ? Object.entries(SECURITY_HEADERS).map(([name, value]) => [headerBytes(name), headerBytes(value)] as const)
+  : []
+
+function writeHead(res: HttpResponse, contentType: ArrayBuffer): void {
+  res.writeHeader(contentTypeName, contentType)
   for (const [name, value] of securityHeaders) res.writeHeader(name, value)
 }
 
 uws
   .App()
   .get(PLAIN_PATH, res => {
-    writeHead(res, 'text/plain; charset=UTF-8')
+    writeHead(res, plainContentType)
     res.end(PLAIN_BODY)
   })
   .get(JSON_PATH, res => {
-    writeHead(res, 'application/json')
+    writeHead(res, jsonContentType)
     res.end(JSON.stringify(JSON_BODY))
   })
   .post(UPLOAD_PATH, res => {
@@ -33,7 +47,7 @@ uws
       received += chunk.byteLength
       if (!isLast || aborted) return
       res.cork(() => {
-        writeHead(res, 'application/json')
+        writeHead(res, jsonContentType)
         res.end(JSON.stringify({ bytes: received }))
       })
     })

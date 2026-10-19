@@ -1,21 +1,16 @@
 from __future__ import annotations
 
 from chart_paths import figure, latency_chart, peak_chart, published, sweep_chart
-from data import VARIANT_TITLES, route_title, routes_present, variants_present
+from data import VARIANT_TITLES, created_date, route_title, routes_present, variants_present
 from run_details import machine_bullets, settings_sentences
 from sources import COMPARISON_FILE, RUNS_DIRECTORY, Run
 from tables import table_sections
 
 
-def _created_date(run: Run) -> str:
-    created = run.results.get("created_at")
-    return created[:10] if isinstance(created, str) and created else "an unrecorded date"
-
-
 def run_block(run: Run) -> str:
     link = f"{RUNS_DIRECTORY}/{run.run_id}/{COMPARISON_FILE}"
     return (
-        f"The suite recorded every figure on this page on {_created_date(run)}, in run [`{run.run_id}`]({link}). "
+        f"The suite recorded every figure on this page on {created_date(run.results)}, in run [`{run.run_id}`]({link}). "
         "You can find the hardware and the software of that run under [The machine](#the-machine)."
     )
 
