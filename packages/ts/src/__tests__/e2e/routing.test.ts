@@ -157,7 +157,7 @@ describe('the native router and the JavaScript matcher', () => {
     expect(entries.filter(entry => entry.level === 'warn')).toEqual([])
   })
 
-  it('give the same status and body for an upgrade request to every sample path, each on its own connection', async () => {
+  it('give the same status and body for an upgrade request to every sample path, each over a new connection', async () => {
     const { entries, logger } = memoryLogger()
     const app = buildApp(logger)
     const server = await start(app)

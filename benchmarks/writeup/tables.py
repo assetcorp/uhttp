@@ -18,7 +18,7 @@ from render import decimal, integer, milliseconds, percent, table
 HEADERS = (
     "Server",
     "Requests a second",
-    "Share of uWebSockets.js on its own",
+    "Share of the uWebSockets.js rate",
     "p50 (ms)",
     "p99 (ms)",
     "Server CPU cores",
