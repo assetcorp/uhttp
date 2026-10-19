@@ -64,22 +64,6 @@ On [`BENCHMARKS.md`](BENCHMARKS.md), you can compare uhttp with uWebSockets.js o
 - Give each optional middleware a directory under `packages/ts/src/middleware/` and an entry of its own in the `exports` map of `packages/ts/package.json`, and add it to the lists in `src/__tests__/package/tree-shaking.test.ts` and `src/__tests__/package/built-package.test.ts`, so that the tests check its entry in the `exports` map and check that a bundler can leave it out of an app that never imports it.
 - Put every test in one of the three groups that the Tests section describes.
 
-## Release
-
-The `Publish` workflow publishes `@delali/uhttp` to npm through a trusted publisher, so the repository holds no npm token, and npm adds a provenance statement to every version that the workflow publishes.
-
-On every push to main, the workflow publishes a prerelease under the `next` dist-tag once its lint, typecheck, build, and test jobs pass. The prerelease takes the next patch after the higher of the version in `packages/ts/package.json` and the newest version on npm, followed by `-next.<run number>.<run attempt>`, such as `0.4.2-next.57.1`. The workflow skips the prerelease when the commit already has a release tag, when main has moved past the commit, and when npm has no version of the package yet.
-
-To cut a release, start the `Publish` workflow by hand on main, with `patch`, `minor`, `major`, or an exact version such as `1.2.3`. When you tick the dry run, the workflow goes through every step and prints the changes that a real release makes, but it makes no commit, no tag, no release, and no publish. The workflow first checks that main still points at the commit that it checked out, and it then repeats the lint, typecheck, build, and test jobs of a prerelease. Next, `nx release` writes the version into `packages/ts/package.json` and the entry into `packages/ts/CHANGELOG.md`, commits both files, and tags the commit `uhttp@v<version>`. It then pushes the commit and the tag and creates the GitHub release, after which `nx release publish` publishes the version under the `latest` dist-tag. The workflow pushes and creates the release with the `RELEASE_PAT` secret, which has to belong to an account that may push to main and create releases.
-
-On npm, you add a trusted publisher in the settings of a package, so the package has to exist before the workflow can publish it. A maintainer therefore publishes the first version by hand:
-
-1. Set the first version in `packages/ts/package.json` through a pull request, and merge it.
-2. On that commit of main, install the dependencies with `pnpm install` and build the package with `pnpm nx run uhttp:build`. Then publish it with `npm publish` from `packages/ts` while you are signed in to npm.
-3. Tag that commit `uhttp@v<version>`, push the tag, and create the GitHub release for it.
-4. Add the trusted publisher with `npm trust github @delali/uhttp --file publish.yml --repo assetcorp/uhttp --allow-publish` from npm 12, which has the `npm trust` command.
-5. Within 2 days, cut a release through the workflow, because a trusted publisher expires when nobody publishes through it within 2 days of its creation.
-
 ## Propose a change
 
 - For a small first change, look for issues that carry the `good first issue` label.

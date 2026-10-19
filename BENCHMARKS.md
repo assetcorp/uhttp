@@ -49,7 +49,7 @@ Before it measures a server, the suite sends one request to each route. It then 
 
 Each server handles its requests on one thread, in a process of its own that the suite starts afresh for every route and every set of headers.
 
-- uWebSockets.js on its own writes each reply in its route handler, where it passes every fixed header name and value as an `ArrayBuffer` that it builds once at start-up, as uhttp does.
+- uWebSockets.js on its own writes each reply in its route handler, where it passes every fixed header name and value as an `ArrayBuffer` that it builds once at start-up, as uhttp does. On the upload route, it copies each chunk of the body before uWebSockets.js frees it, and it joins the chunks into one buffer, as uhttp does, so that every server holds the whole body before it replies.
 - uhttp builds its routes with `createApp()`, serves them with `serve()`, and reads the upload with `c.req.body.bytes()`.
 - Hono serves its routes through `@hono/node-server` and reads the upload with `c.req.arrayBuffer()`.
 - Fastify gives the JSON route a response schema, as the benchmark repository of Fastify does, and reads the upload with a content-type parser that collects the body into a buffer.

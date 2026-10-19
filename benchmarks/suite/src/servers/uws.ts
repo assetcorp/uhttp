@@ -38,17 +38,20 @@ uws
     res.end(JSON.stringify(JSON_BODY))
   })
   .post(UPLOAD_PATH, res => {
+    const chunks: Uint8Array[] = []
     let received = 0
     let aborted = false
     res.onAborted(() => {
       aborted = true
     })
     res.onData((chunk, isLast) => {
+      chunks.push(new Uint8Array(chunk.slice(0)))
       received += chunk.byteLength
       if (!isLast || aborted) return
+      const body = chunks.length === 1 && chunks[0] !== undefined ? chunks[0] : Buffer.concat(chunks, received)
       res.cork(() => {
         writeHead(res, jsonContentType)
-        res.end(JSON.stringify({ bytes: received }))
+        res.end(JSON.stringify({ bytes: body.byteLength }))
       })
     })
   })
