@@ -1,0 +1,2471 @@
+{
+  "schema": 1,
+  "run_id": "20261019T212015Z",
+  "created_at": "2026-10-19T21:20:15.113Z",
+  "uhttp_commit": "a2d4d757bf4c",
+  "uhttp_uncommitted_changes": false,
+  "settings": {
+    "connection_levels": [
+      10,
+      50,
+      100,
+      250,
+      500
+    ],
+    "headline_connections": 100,
+    "pipelined_requests": 10,
+    "warm_up_seconds": 40,
+    "measure_seconds": 40,
+    "load_threads": 4,
+    "upload_body_bytes": 16384,
+    "load_generator": "h2load",
+    "pinning": {
+      "server_cpu": 1,
+      "load_cpus": "2-5"
+    }
+  },
+  "servers": [
+    {
+      "id": "uws",
+      "name": "uWebSockets.js",
+      "packages": {
+        "uWebSockets.js": "20.71.0"
+      }
+    },
+    {
+      "id": "uhttp",
+      "name": "uhttp",
+      "packages": {
+        "@delali/uhttp": "0.1.0",
+        "uWebSockets.js": "20.71.0"
+      }
+    },
+    {
+      "id": "hono",
+      "name": "Hono",
+      "packages": {
+        "hono": "4.13.13",
+        "@hono/node-server": "2.1.5"
+      }
+    },
+    {
+      "id": "fastify",
+      "name": "Fastify",
+      "packages": {
+        "fastify": "5.12.7",
+        "@fastify/helmet": "13.2.0"
+      }
+    },
+    {
+      "id": "express",
+      "name": "Express",
+      "packages": {
+        "express": "5.3.0",
+        "helmet": "8.3.0"
+      }
+    }
+  ],
+  "measurements": [
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 10,
+      "requests": 21682880,
+      "requests_per_second": 542072,
+      "latency": {
+        "p50_ms": 0.167,
+        "p95_ms": 0.336,
+        "p99_ms": 0.358,
+        "max_ms": 1.05,
+        "mean_ms": 0.185
+      },
+      "cpu_cores_busy": 0.9974144326000327
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 50,
+      "requests": 26522490,
+      "requests_per_second": 663062.25,
+      "latency": {
+        "p50_ms": 0.722,
+        "p95_ms": 0.8310000000000001,
+        "p99_ms": 1.44,
+        "max_ms": 4.21,
+        "mean_ms": 0.749
+      },
+      "cpu_cores_busy": 0.997360635656017
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 100,
+      "requests": 26569150,
+      "requests_per_second": 664228.75,
+      "latency": {
+        "p50_ms": 1.5,
+        "p95_ms": 1.68,
+        "p99_ms": 1.78,
+        "max_ms": 4.84,
+        "mean_ms": 1.54
+      },
+      "cpu_cores_busy": 0.997115161014872
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 250,
+      "requests": 23618250,
+      "requests_per_second": 590456.25,
+      "latency": {
+        "p50_ms": 4.34,
+        "p95_ms": 4.48,
+        "p99_ms": 4.56,
+        "max_ms": 11.94,
+        "mean_ms": 4.27
+      },
+      "cpu_cores_busy": 0.9967678978595249
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 500,
+      "requests": 21202180,
+      "requests_per_second": 530054.5,
+      "latency": {
+        "p50_ms": 9.52,
+        "p95_ms": 10.23,
+        "p99_ms": 10.42,
+        "max_ms": 17.89,
+        "mean_ms": 9.5
+      },
+      "cpu_cores_busy": 0.9967634805936046
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 10,
+      "requests": 17308430,
+      "requests_per_second": 432710.75,
+      "latency": {
+        "p50_ms": 0.212,
+        "p95_ms": 0.426,
+        "p99_ms": 0.441,
+        "max_ms": 0.649,
+        "mean_ms": 0.22
+      },
+      "cpu_cores_busy": 0.9973846028485881
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 50,
+      "requests": 20831470,
+      "requests_per_second": 520786.75,
+      "latency": {
+        "p50_ms": 0.9390000000000001,
+        "p95_ms": 1.03,
+        "p99_ms": 1.87,
+        "max_ms": 13.86,
+        "mean_ms": 0.964
+      },
+      "cpu_cores_busy": 0.9973720119911188
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 100,
+      "requests": 20876480,
+      "requests_per_second": 521912,
+      "latency": {
+        "p50_ms": 2.05,
+        "p95_ms": 2.24,
+        "p99_ms": 2.39,
+        "max_ms": 4.71,
+        "mean_ms": 1.97
+      },
+      "cpu_cores_busy": 0.997179963915765
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 250,
+      "requests": 16925530,
+      "requests_per_second": 423138.25,
+      "latency": {
+        "p50_ms": 5.94,
+        "p95_ms": 6.1,
+        "p99_ms": 6.25,
+        "max_ms": 17.95,
+        "mean_ms": 5.93
+      },
+      "cpu_cores_busy": 0.9966909268034361
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 500,
+      "requests": 18154770,
+      "requests_per_second": 453869.25,
+      "latency": {
+        "p50_ms": 10.96,
+        "p95_ms": 11.58,
+        "p99_ms": 12.08,
+        "max_ms": 36.04,
+        "mean_ms": 11.01
+      },
+      "cpu_cores_busy": 0.9967688299774834
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 10,
+      "requests": 3924934,
+      "requests_per_second": 98123.35,
+      "latency": {
+        "p50_ms": 1,
+        "p95_ms": 1.14,
+        "p99_ms": 1.31,
+        "max_ms": 15.31,
+        "mean_ms": 0.985
+      },
+      "cpu_cores_busy": 0.9973840314068839
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 50,
+      "requests": 4201381,
+      "requests_per_second": 105034.52,
+      "latency": {
+        "p50_ms": 4.59,
+        "p95_ms": 5.4,
+        "p99_ms": 5.66,
+        "max_ms": 161.67,
+        "mean_ms": 4.86
+      },
+      "cpu_cores_busy": 0.9976064771053021
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 100,
+      "requests": 3816531,
+      "requests_per_second": 95413.27,
+      "latency": {
+        "p50_ms": 10.49,
+        "p95_ms": 10.92,
+        "p99_ms": 11.24,
+        "max_ms": 323.08,
+        "mean_ms": 10.53
+      },
+      "cpu_cores_busy": 0.997683535066676
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 250,
+      "requests": 4194280,
+      "requests_per_second": 104857,
+      "latency": {
+        "p50_ms": 23.39,
+        "p95_ms": 27.03,
+        "p99_ms": 27.21,
+        "max_ms": 2230,
+        "mean_ms": 24.29
+      },
+      "cpu_cores_busy": 0.9981699308778078
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 500,
+      "requests": 4181340,
+      "requests_per_second": 104533.5,
+      "latency": {
+        "p50_ms": 46.85,
+        "p95_ms": 47.97,
+        "p99_ms": 48.29,
+        "max_ms": 8300,
+        "mean_ms": 48.45
+      },
+      "cpu_cores_busy": 0.9994803720095166
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 10,
+      "requests": 4152291,
+      "requests_per_second": 103807.27,
+      "latency": {
+        "p50_ms": 0.967,
+        "p95_ms": 1.07,
+        "p99_ms": 1.28,
+        "max_ms": 20.93,
+        "mean_ms": 0.962
+      },
+      "cpu_cores_busy": 0.9974278893943709
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 50,
+      "requests": 4301345,
+      "requests_per_second": 107533.62,
+      "latency": {
+        "p50_ms": 4.48,
+        "p95_ms": 5.25,
+        "p99_ms": 5.57,
+        "max_ms": 143.08,
+        "mean_ms": 4.75
+      },
+      "cpu_cores_busy": 0.9976478333879115
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 100,
+      "requests": 3928801,
+      "requests_per_second": 98220.02,
+      "latency": {
+        "p50_ms": 10.03,
+        "p95_ms": 11.38,
+        "p99_ms": 11.76,
+        "max_ms": 300.64,
+        "mean_ms": 10.06
+      },
+      "cpu_cores_busy": 0.9976676741625558
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 250,
+      "requests": 4286214,
+      "requests_per_second": 107155.35,
+      "latency": {
+        "p50_ms": 22.57,
+        "p95_ms": 26.31,
+        "p99_ms": 26.71,
+        "max_ms": 2630,
+        "mean_ms": 23.4
+      },
+      "cpu_cores_busy": 0.9979951996402758
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 500,
+      "requests": 4242747,
+      "requests_per_second": 106068.68,
+      "latency": {
+        "p50_ms": 45.17,
+        "p95_ms": 52.99,
+        "p99_ms": 53.46,
+        "max_ms": 9240,
+        "mean_ms": 48
+      },
+      "cpu_cores_busy": 0.9997852149733162
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 10,
+      "requests": 2467543,
+      "requests_per_second": 61688.57,
+      "latency": {
+        "p50_ms": 1.62,
+        "p95_ms": 1.76,
+        "p99_ms": 2.01,
+        "max_ms": 20.56,
+        "mean_ms": 1.61
+      },
+      "cpu_cores_busy": 0.9974370021552572
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 50,
+      "requests": 2747971,
+      "requests_per_second": 68699.27,
+      "latency": {
+        "p50_ms": 7.08,
+        "p95_ms": 8.23,
+        "p99_ms": 8.54,
+        "max_ms": 208.17,
+        "mean_ms": 7.36
+      },
+      "cpu_cores_busy": 0.9977407385910975
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 100,
+      "requests": 2592410,
+      "requests_per_second": 64810.25,
+      "latency": {
+        "p50_ms": 15.78,
+        "p95_ms": 16.36,
+        "p99_ms": 17.99,
+        "max_ms": 447.22,
+        "mean_ms": 15.71
+      },
+      "cpu_cores_busy": 0.9980114971753041
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 250,
+      "requests": 2538148,
+      "requests_per_second": 63453.7,
+      "latency": {
+        "p50_ms": 39.98,
+        "p95_ms": 40.92,
+        "p99_ms": 41.58,
+        "max_ms": 3340,
+        "mean_ms": 39.14
+      },
+      "cpu_cores_busy": 0.9991184695018638
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "plain",
+      "connections": 500,
+      "requests": 2624311,
+      "requests_per_second": 65607.77,
+      "latency": {
+        "p50_ms": 72.69,
+        "p95_ms": 89.47,
+        "p99_ms": 89.78,
+        "max_ms": 12450,
+        "mean_ms": 77.5
+      },
+      "cpu_cores_busy": 1.0003236833843179
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 10,
+      "requests": 19121400,
+      "requests_per_second": 478035,
+      "latency": {
+        "p50_ms": 0.187,
+        "p95_ms": 0.379,
+        "p99_ms": 0.391,
+        "max_ms": 2.9,
+        "mean_ms": 0.211
+      },
+      "cpu_cores_busy": 0.9974446187483916
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 50,
+      "requests": 24209360,
+      "requests_per_second": 605234,
+      "latency": {
+        "p50_ms": 0.765,
+        "p95_ms": 1.09,
+        "p99_ms": 1.57,
+        "max_ms": 3.62,
+        "mean_ms": 0.8170000000000001
+      },
+      "cpu_cores_busy": 0.9973721015613408
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 100,
+      "requests": 22897210,
+      "requests_per_second": 572430.25,
+      "latency": {
+        "p50_ms": 1.81,
+        "p95_ms": 1.95,
+        "p99_ms": 3.34,
+        "max_ms": 6.01,
+        "mean_ms": 1.79
+      },
+      "cpu_cores_busy": 0.9971243092130794
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 250,
+      "requests": 19754990,
+      "requests_per_second": 493874.75,
+      "latency": {
+        "p50_ms": 5.1,
+        "p95_ms": 5.24,
+        "p99_ms": 5.28,
+        "max_ms": 17.59,
+        "mean_ms": 5.08
+      },
+      "cpu_cores_busy": 0.9967690403528305
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 500,
+      "requests": 20108230,
+      "requests_per_second": 502705.75,
+      "latency": {
+        "p50_ms": 10,
+        "p95_ms": 10.29,
+        "p99_ms": 10.53,
+        "max_ms": 20.25,
+        "mean_ms": 9.74
+      },
+      "cpu_cores_busy": 0.996858705707004
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 10,
+      "requests": 16227290,
+      "requests_per_second": 405682.25,
+      "latency": {
+        "p50_ms": 0.229,
+        "p95_ms": 0.456,
+        "p99_ms": 0.483,
+        "max_ms": 2.08,
+        "mean_ms": 0.251
+      },
+      "cpu_cores_busy": 0.997405014497608
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 50,
+      "requests": 17401300,
+      "requests_per_second": 435032.5,
+      "latency": {
+        "p50_ms": 1.14,
+        "p95_ms": 1.25,
+        "p99_ms": 2.28,
+        "max_ms": 11.98,
+        "mean_ms": 1.16
+      },
+      "cpu_cores_busy": 0.9973367089456435
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 100,
+      "requests": 18575320,
+      "requests_per_second": 464383,
+      "latency": {
+        "p50_ms": 2.3,
+        "p95_ms": 2.46,
+        "p99_ms": 2.49,
+        "max_ms": 6.04,
+        "mean_ms": 2.22
+      },
+      "cpu_cores_busy": 0.997104424300968
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 250,
+      "requests": 15041010,
+      "requests_per_second": 376025.25,
+      "latency": {
+        "p50_ms": 6.64,
+        "p95_ms": 6.72,
+        "p99_ms": 6.76,
+        "max_ms": 18.51,
+        "mean_ms": 6.64
+      },
+      "cpu_cores_busy": 0.9968047626772599
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 500,
+      "requests": 15798320,
+      "requests_per_second": 394958,
+      "latency": {
+        "p50_ms": 12.72,
+        "p95_ms": 13.11,
+        "p99_ms": 13.43,
+        "max_ms": 40.53,
+        "mean_ms": 12.55
+      },
+      "cpu_cores_busy": 0.9969467313915581
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 10,
+      "requests": 2107300,
+      "requests_per_second": 52682.5,
+      "latency": {
+        "p50_ms": 1.86,
+        "p95_ms": 2.12,
+        "p99_ms": 2.36,
+        "max_ms": 20.38,
+        "mean_ms": 1.9
+      },
+      "cpu_cores_busy": 0.9974849671131355
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 50,
+      "requests": 2293420,
+      "requests_per_second": 57335.5,
+      "latency": {
+        "p50_ms": 8.62,
+        "p95_ms": 9.52,
+        "p99_ms": 9.89,
+        "max_ms": 218.13,
+        "mean_ms": 8.75
+      },
+      "cpu_cores_busy": 0.9978435693861073
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 100,
+      "requests": 2245289,
+      "requests_per_second": 56132.22,
+      "latency": {
+        "p50_ms": 17.54,
+        "p95_ms": 19.49,
+        "p99_ms": 20.12,
+        "max_ms": 437,
+        "mean_ms": 17.89
+      },
+      "cpu_cores_busy": 0.998041674897216
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 250,
+      "requests": 2213080,
+      "requests_per_second": 55327,
+      "latency": {
+        "p50_ms": 44.65,
+        "p95_ms": 45.14,
+        "p99_ms": 47.32,
+        "max_ms": 5090,
+        "mean_ms": 45.4
+      },
+      "cpu_cores_busy": 0.9986777528438368
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 500,
+      "requests": 2203191,
+      "requests_per_second": 55079.78,
+      "latency": {
+        "p50_ms": 82.9,
+        "p95_ms": 98.27,
+        "p99_ms": 99.76,
+        "max_ms": 16960,
+        "mean_ms": 90.96
+      },
+      "cpu_cores_busy": 1.0003550419925662
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 10,
+      "requests": 2660060,
+      "requests_per_second": 66501.5,
+      "latency": {
+        "p50_ms": 1.49,
+        "p95_ms": 1.53,
+        "p99_ms": 1.88,
+        "max_ms": 21.12,
+        "mean_ms": 1.51
+      },
+      "cpu_cores_busy": 0.9974918109492789
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 50,
+      "requests": 2670760,
+      "requests_per_second": 66769,
+      "latency": {
+        "p50_ms": 7.64,
+        "p95_ms": 8.29,
+        "p99_ms": 8.56,
+        "max_ms": 201.26,
+        "mean_ms": 7.56
+      },
+      "cpu_cores_busy": 0.9977408536459711
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 100,
+      "requests": 2660180,
+      "requests_per_second": 66504.5,
+      "latency": {
+        "p50_ms": 15.42,
+        "p95_ms": 17.23,
+        "p99_ms": 17.34,
+        "max_ms": 452.74,
+        "mean_ms": 15.42
+      },
+      "cpu_cores_busy": 0.9978988054705776
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 250,
+      "requests": 2768075,
+      "requests_per_second": 69201.88,
+      "latency": {
+        "p50_ms": 35.74,
+        "p95_ms": 36.53,
+        "p99_ms": 38.98,
+        "max_ms": 3920,
+        "mean_ms": 36.24
+      },
+      "cpu_cores_busy": 0.9984514903597238
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 500,
+      "requests": 2758910,
+      "requests_per_second": 68972.75,
+      "latency": {
+        "p50_ms": 68.96,
+        "p95_ms": 72.48,
+        "p99_ms": 73.11,
+        "max_ms": 13710,
+        "mean_ms": 72.81
+      },
+      "cpu_cores_busy": 1.000340821936671
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 10,
+      "requests": 1823346,
+      "requests_per_second": 45583.65,
+      "latency": {
+        "p50_ms": 2.22,
+        "p95_ms": 2.3,
+        "p99_ms": 2.58,
+        "max_ms": 23.98,
+        "mean_ms": 2.21
+      },
+      "cpu_cores_busy": 0.9975018773225179
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 50,
+      "requests": 2059000,
+      "requests_per_second": 51475,
+      "latency": {
+        "p50_ms": 9.4,
+        "p95_ms": 11.16,
+        "p99_ms": 11.52,
+        "max_ms": 271.18,
+        "mean_ms": 9.76
+      },
+      "cpu_cores_busy": 0.9978609089438186
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 100,
+      "requests": 1893341,
+      "requests_per_second": 47333.53,
+      "latency": {
+        "p50_ms": 21.04,
+        "p95_ms": 22.74,
+        "p99_ms": 23.08,
+        "max_ms": 585.43,
+        "mean_ms": 21.2
+      },
+      "cpu_cores_busy": 0.9980961792327595
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 250,
+      "requests": 2036080,
+      "requests_per_second": 50902,
+      "latency": {
+        "p50_ms": 48.9,
+        "p95_ms": 49.29,
+        "p99_ms": 50,
+        "max_ms": 4250,
+        "mean_ms": 49.19
+      },
+      "cpu_cores_busy": 0.9988739671624021
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "plain",
+      "connections": 500,
+      "requests": 2025220,
+      "requests_per_second": 50630.5,
+      "latency": {
+        "p50_ms": 95.3,
+        "p95_ms": 97.66,
+        "p99_ms": 105.45,
+        "max_ms": 15630,
+        "mean_ms": 99.45
+      },
+      "cpu_cores_busy": 1.0016288439233452
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "json",
+      "connections": 10,
+      "requests": 19544600,
+      "requests_per_second": 488615,
+      "latency": {
+        "p50_ms": 0.189,
+        "p95_ms": 0.379,
+        "p99_ms": 0.40800000000000003,
+        "max_ms": 2.84,
+        "mean_ms": 0.21
+      },
+      "cpu_cores_busy": 0.9974163285176474
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "json",
+      "connections": 50,
+      "requests": 22312740,
+      "requests_per_second": 557818.5,
+      "latency": {
+        "p50_ms": 0.865,
+        "p95_ms": 0.991,
+        "p99_ms": 1.73,
+        "max_ms": 3.49,
+        "mean_ms": 0.893
+      },
+      "cpu_cores_busy": 0.9973610175957415
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "json",
+      "connections": 100,
+      "requests": 22610270,
+      "requests_per_second": 565256.75,
+      "latency": {
+        "p50_ms": 1.76,
+        "p95_ms": 2.1,
+        "p99_ms": 2.22,
+        "max_ms": 4.85,
+        "mean_ms": 1.82
+      },
+      "cpu_cores_busy": 0.997122839427511
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "json",
+      "connections": 250,
+      "requests": 20506150,
+      "requests_per_second": 512653.75,
+      "latency": {
+        "p50_ms": 4.86,
+        "p95_ms": 5.45,
+        "p99_ms": 5.56,
+        "max_ms": 17.09,
+        "mean_ms": 4.99
+      },
+      "cpu_cores_busy": 0.9968022187878703
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "json",
+      "connections": 500,
+      "requests": 18723040,
+      "requests_per_second": 468076,
+      "latency": {
+        "p50_ms": 11.03,
+        "p95_ms": 11.53,
+        "p99_ms": 11.99,
+        "max_ms": 17.76,
+        "mean_ms": 10.74
+      },
+      "cpu_cores_busy": 0.9968220687450631
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "json",
+      "connections": 10,
+      "requests": 18206520,
+      "requests_per_second": 455163,
+      "latency": {
+        "p50_ms": 0.20700000000000002,
+        "p95_ms": 0.417,
+        "p99_ms": 0.441,
+        "max_ms": 5.28,
+        "mean_ms": 0.226
+      },
+      "cpu_cores_busy": 0.9974855970691664
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "json",
+      "connections": 50,
+      "requests": 16320660,
+      "requests_per_second": 408016.5,
+      "latency": {
+        "p50_ms": 1.19,
+        "p95_ms": 1.32,
+        "p99_ms": 2.36,
+        "max_ms": 15.88,
+        "mean_ms": 1.22
+      },
+      "cpu_cores_busy": 0.9973872138989457
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "json",
+      "connections": 100,
+      "requests": 17897550,
+      "requests_per_second": 447438.75,
+      "latency": {
+        "p50_ms": 2.36,
+        "p95_ms": 2.72,
+        "p99_ms": 2.75,
+        "max_ms": 5.39,
+        "mean_ms": 2.31
+      },
+      "cpu_cores_busy": 0.9972028542598285
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "json",
+      "connections": 250,
+      "requests": 15367170,
+      "requests_per_second": 384179.25,
+      "latency": {
+        "p50_ms": 6.52,
+        "p95_ms": 6.67,
+        "p99_ms": 6.72,
+        "max_ms": 14.46,
+        "mean_ms": 6.52
+      },
+      "cpu_cores_busy": 0.9968641505021806
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "json",
+      "connections": 500,
+      "requests": 15755980,
+      "requests_per_second": 393899.5,
+      "latency": {
+        "p50_ms": 12.59,
+        "p95_ms": 13.03,
+        "p99_ms": 13.26,
+        "max_ms": 36.71,
+        "mean_ms": 12.62
+      },
+      "cpu_cores_busy": 0.9968472957082938
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "json",
+      "connections": 10,
+      "requests": 3548644,
+      "requests_per_second": 88716.1,
+      "latency": {
+        "p50_ms": 1.13,
+        "p95_ms": 1.18,
+        "p99_ms": 1.43,
+        "max_ms": 15.37,
+        "mean_ms": 1.13
+      },
+      "cpu_cores_busy": 0.9974575672543494
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "json",
+      "connections": 50,
+      "requests": 4055380,
+      "requests_per_second": 101384.5,
+      "latency": {
+        "p50_ms": 4.77,
+        "p95_ms": 5.67,
+        "p99_ms": 5.97,
+        "max_ms": 149.15,
+        "mean_ms": 5.03
+      },
+      "cpu_cores_busy": 0.9976818838061886
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "json",
+      "connections": 100,
+      "requests": 3894041,
+      "requests_per_second": 97351.02,
+      "latency": {
+        "p50_ms": 10.84,
+        "p95_ms": 11.69,
+        "p99_ms": 12.63,
+        "max_ms": 341.42,
+        "mean_ms": 10.61
+      },
+      "cpu_cores_busy": 0.9977854714804468
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "json",
+      "connections": 250,
+      "requests": 3843460,
+      "requests_per_second": 96086.5,
+      "latency": {
+        "p50_ms": 25.18,
+        "p95_ms": 29.44,
+        "p99_ms": 31.05,
+        "max_ms": 2840,
+        "mean_ms": 26.81
+      },
+      "cpu_cores_busy": 0.9984765157758418
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "json",
+      "connections": 500,
+      "requests": 3665191,
+      "requests_per_second": 91629.77,
+      "latency": {
+        "p50_ms": 50.42,
+        "p95_ms": 58.06,
+        "p99_ms": 58.39,
+        "max_ms": 9120,
+        "mean_ms": 54.56
+      },
+      "cpu_cores_busy": 0.9996717259998517
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "json",
+      "connections": 10,
+      "requests": 3854022,
+      "requests_per_second": 96350.55,
+      "latency": {
+        "p50_ms": 1.03,
+        "p95_ms": 1.09,
+        "p99_ms": 1.35,
+        "max_ms": 16.49,
+        "mean_ms": 1.04
+      },
+      "cpu_cores_busy": 0.997467389085391
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "json",
+      "connections": 50,
+      "requests": 4405653,
+      "requests_per_second": 110141.32,
+      "latency": {
+        "p50_ms": 4.49,
+        "p95_ms": 4.78,
+        "p99_ms": 4.91,
+        "max_ms": 113.35,
+        "mean_ms": 4.53
+      },
+      "cpu_cores_busy": 0.9977663804768268
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "json",
+      "connections": 100,
+      "requests": 3940151,
+      "requests_per_second": 98503.77,
+      "latency": {
+        "p50_ms": 10.32,
+        "p95_ms": 10.84,
+        "p99_ms": 11.99,
+        "max_ms": 331.64,
+        "mean_ms": 10.28
+      },
+      "cpu_cores_busy": 0.9976864851958659
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "json",
+      "connections": 250,
+      "requests": 4180321,
+      "requests_per_second": 104508.02,
+      "latency": {
+        "p50_ms": 23.44,
+        "p95_ms": 26.71,
+        "p99_ms": 26.88,
+        "max_ms": 2090,
+        "mean_ms": 24.59
+      },
+      "cpu_cores_busy": 0.9981855256083443
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "json",
+      "connections": 500,
+      "requests": 3988904,
+      "requests_per_second": 99722.6,
+      "latency": {
+        "p50_ms": 47.09,
+        "p95_ms": 54.84,
+        "p99_ms": 55.13,
+        "max_ms": 8350,
+        "mean_ms": 50.36
+      },
+      "cpu_cores_busy": 0.9996670753263431
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "json",
+      "connections": 10,
+      "requests": 2330711,
+      "requests_per_second": 58267.78,
+      "latency": {
+        "p50_ms": 1.7,
+        "p95_ms": 1.81,
+        "p99_ms": 2.07,
+        "max_ms": 19.98,
+        "mean_ms": 1.72
+      },
+      "cpu_cores_busy": 0.9974362763126685
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "json",
+      "connections": 50,
+      "requests": 2631780,
+      "requests_per_second": 65794.5,
+      "latency": {
+        "p50_ms": 7.33,
+        "p95_ms": 8.86,
+        "p99_ms": 9.16,
+        "max_ms": 218.11,
+        "mean_ms": 7.66
+      },
+      "cpu_cores_busy": 0.9978252838942999
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "json",
+      "connections": 100,
+      "requests": 2467871,
+      "requests_per_second": 61696.78,
+      "latency": {
+        "p50_ms": 16.43,
+        "p95_ms": 16.97,
+        "p99_ms": 17.2,
+        "max_ms": 493.11,
+        "mean_ms": 16.26
+      },
+      "cpu_cores_busy": 0.9979083036333937
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "json",
+      "connections": 250,
+      "requests": 2570480,
+      "requests_per_second": 64262,
+      "latency": {
+        "p50_ms": 37.7,
+        "p95_ms": 42.83,
+        "p99_ms": 43.19,
+        "max_ms": 4370,
+        "mean_ms": 39.55
+      },
+      "cpu_cores_busy": 0.9984830921281804
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "json",
+      "connections": 500,
+      "requests": 2562406,
+      "requests_per_second": 64060.15,
+      "latency": {
+        "p50_ms": 73.29,
+        "p95_ms": 75.9,
+        "p99_ms": 84.16,
+        "max_ms": 15140,
+        "mean_ms": 79.07
+      },
+      "cpu_cores_busy": 1.0000031243871288
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "json",
+      "connections": 10,
+      "requests": 17992110,
+      "requests_per_second": 449802.75,
+      "latency": {
+        "p50_ms": 0.199,
+        "p95_ms": 0.403,
+        "p99_ms": 0.444,
+        "max_ms": 2.76,
+        "mean_ms": 0.23
+      },
+      "cpu_cores_busy": 0.9974358023507066
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "json",
+      "connections": 50,
+      "requests": 21663970,
+      "requests_per_second": 541599.25,
+      "latency": {
+        "p50_ms": 0.893,
+        "p95_ms": 1.02,
+        "p99_ms": 1.8,
+        "max_ms": 3.52,
+        "mean_ms": 0.926
+      },
+      "cpu_cores_busy": 0.9973294164421266
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "json",
+      "connections": 100,
+      "requests": 22285160,
+      "requests_per_second": 557129,
+      "latency": {
+        "p50_ms": 1.82,
+        "p95_ms": 2.01,
+        "p99_ms": 2.1,
+        "max_ms": 4.94,
+        "mean_ms": 1.85
+      },
+      "cpu_cores_busy": 0.9971990063025353
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "json",
+      "connections": 250,
+      "requests": 17458300,
+      "requests_per_second": 436457.5,
+      "latency": {
+        "p50_ms": 5.7,
+        "p95_ms": 5.83,
+        "p99_ms": 5.89,
+        "max_ms": 17.7,
+        "mean_ms": 5.72
+      },
+      "cpu_cores_busy": 0.9968382007552671
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "json",
+      "connections": 500,
+      "requests": 17564500,
+      "requests_per_second": 439112.5,
+      "latency": {
+        "p50_ms": 11.34,
+        "p95_ms": 11.55,
+        "p99_ms": 11.64,
+        "max_ms": 17.97,
+        "mean_ms": 11.33
+      },
+      "cpu_cores_busy": 0.9968592059864048
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "json",
+      "connections": 10,
+      "requests": 15041320,
+      "requests_per_second": 376033,
+      "latency": {
+        "p50_ms": 0.246,
+        "p95_ms": 0.496,
+        "p99_ms": 0.527,
+        "max_ms": 1.71,
+        "mean_ms": 0.278
+      },
+      "cpu_cores_busy": 0.99744757881081
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "json",
+      "connections": 50,
+      "requests": 13831700,
+      "requests_per_second": 345792.5,
+      "latency": {
+        "p50_ms": 1.41,
+        "p95_ms": 1.49,
+        "p99_ms": 2.81,
+        "max_ms": 14.6,
+        "mean_ms": 1.44
+      },
+      "cpu_cores_busy": 0.9974263926293161
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "json",
+      "connections": 100,
+      "requests": 16195100,
+      "requests_per_second": 404877.5,
+      "latency": {
+        "p50_ms": 2.39,
+        "p95_ms": 2.91,
+        "p99_ms": 3.1,
+        "max_ms": 6.26,
+        "mean_ms": 2.49
+      },
+      "cpu_cores_busy": 0.9972526054487638
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "json",
+      "connections": 250,
+      "requests": 14298930,
+      "requests_per_second": 357473.25,
+      "latency": {
+        "p50_ms": 6.96,
+        "p95_ms": 7.14,
+        "p99_ms": 7.21,
+        "max_ms": 14.89,
+        "mean_ms": 6.97
+      },
+      "cpu_cores_busy": 0.9968608608967804
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "json",
+      "connections": 500,
+      "requests": 15987530,
+      "requests_per_second": 399688.25,
+      "latency": {
+        "p50_ms": 13.16,
+        "p95_ms": 14.54,
+        "p99_ms": 14.66,
+        "max_ms": 41.63,
+        "mean_ms": 12.71
+      },
+      "cpu_cores_busy": 0.9970401124006374
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "json",
+      "connections": 10,
+      "requests": 2024220,
+      "requests_per_second": 50605.5,
+      "latency": {
+        "p50_ms": 1.9,
+        "p95_ms": 2.15,
+        "p99_ms": 2.42,
+        "max_ms": 24.13,
+        "mean_ms": 1.93
+      },
+      "cpu_cores_busy": 0.9974571071326136
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "json",
+      "connections": 50,
+      "requests": 2183910,
+      "requests_per_second": 54597.75,
+      "latency": {
+        "p50_ms": 8.85,
+        "p95_ms": 10.02,
+        "p99_ms": 10.51,
+        "max_ms": 263.11,
+        "mean_ms": 9.19
+      },
+      "cpu_cores_busy": 0.9977656310537555
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "json",
+      "connections": 100,
+      "requests": 2092520,
+      "requests_per_second": 52313,
+      "latency": {
+        "p50_ms": 19.35,
+        "p95_ms": 20.01,
+        "p99_ms": 20.21,
+        "max_ms": 515.3,
+        "mean_ms": 18.82
+      },
+      "cpu_cores_busy": 0.998670990597194
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "json",
+      "connections": 250,
+      "requests": 2167259,
+      "requests_per_second": 54181.47,
+      "latency": {
+        "p50_ms": 45.18,
+        "p95_ms": 49.89,
+        "p99_ms": 50.15,
+        "max_ms": 4780,
+        "mean_ms": 46.61
+      },
+      "cpu_cores_busy": 0.9988833930341686
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "json",
+      "connections": 500,
+      "requests": 2098826,
+      "requests_per_second": 52470.65,
+      "latency": {
+        "p50_ms": 90.03,
+        "p95_ms": 98.21,
+        "p99_ms": 100.23,
+        "max_ms": 18830,
+        "mean_ms": 96.78
+      },
+      "cpu_cores_busy": 1.0011887097288028
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "json",
+      "connections": 10,
+      "requests": 2356867,
+      "requests_per_second": 58921.68,
+      "latency": {
+        "p50_ms": 1.61,
+        "p95_ms": 1.8,
+        "p99_ms": 2.11,
+        "max_ms": 24.2,
+        "mean_ms": 1.66
+      },
+      "cpu_cores_busy": 0.9973941810581644
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "json",
+      "connections": 50,
+      "requests": 2801830,
+      "requests_per_second": 70045.75,
+      "latency": {
+        "p50_ms": 6.98,
+        "p95_ms": 7.43,
+        "p99_ms": 8.05,
+        "max_ms": 190.32,
+        "mean_ms": 7.09
+      },
+      "cpu_cores_busy": 0.9977829641596606
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "json",
+      "connections": 100,
+      "requests": 2623735,
+      "requests_per_second": 65593.38,
+      "latency": {
+        "p50_ms": 15.84,
+        "p95_ms": 16.35,
+        "p99_ms": 16.53,
+        "max_ms": 429.46,
+        "mean_ms": 15.58
+      },
+      "cpu_cores_busy": 0.9978007436815498
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "json",
+      "connections": 250,
+      "requests": 2696480,
+      "requests_per_second": 67412,
+      "latency": {
+        "p50_ms": 36.56,
+        "p95_ms": 39.63,
+        "p99_ms": 40.35,
+        "max_ms": 4160,
+        "mean_ms": 37.35
+      },
+      "cpu_cores_busy": 0.9985498289269318
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "json",
+      "connections": 500,
+      "requests": 2607640,
+      "requests_per_second": 65191,
+      "latency": {
+        "p50_ms": 73.28,
+        "p95_ms": 80.71,
+        "p99_ms": 80.96,
+        "max_ms": 14460,
+        "mean_ms": 77.28
+      },
+      "cpu_cores_busy": 1.0005146388907469
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "json",
+      "connections": 10,
+      "requests": 1740217,
+      "requests_per_second": 43505.43,
+      "latency": {
+        "p50_ms": 2.29,
+        "p95_ms": 2.38,
+        "p99_ms": 2.65,
+        "max_ms": 21.78,
+        "mean_ms": 2.29
+      },
+      "cpu_cores_busy": 0.9975172224542905
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "json",
+      "connections": 50,
+      "requests": 2071105,
+      "requests_per_second": 51777.62,
+      "latency": {
+        "p50_ms": 9.54,
+        "p95_ms": 10.57,
+        "p99_ms": 11.05,
+        "max_ms": 300.87,
+        "mean_ms": 9.69
+      },
+      "cpu_cores_busy": 0.9977838177358256
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "json",
+      "connections": 100,
+      "requests": 2008331,
+      "requests_per_second": 50208.28,
+      "latency": {
+        "p50_ms": 19.68,
+        "p95_ms": 21.55,
+        "p99_ms": 23.01,
+        "max_ms": 506.57,
+        "mean_ms": 20.14
+      },
+      "cpu_cores_busy": 0.9979879721377388
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "json",
+      "connections": 250,
+      "requests": 2016521,
+      "requests_per_second": 50413.03,
+      "latency": {
+        "p50_ms": 48.95,
+        "p95_ms": 50.04,
+        "p99_ms": 53.46,
+        "max_ms": 5160,
+        "mean_ms": 49.31
+      },
+      "cpu_cores_busy": 0.9992545378018337
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "json",
+      "connections": 500,
+      "requests": 1881881,
+      "requests_per_second": 47047.03,
+      "latency": {
+        "p50_ms": 98.89,
+        "p95_ms": 110.25,
+        "p99_ms": 120.94,
+        "max_ms": 18230,
+        "mean_ms": 108.41
+      },
+      "cpu_cores_busy": 1.0013716581914245
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 10,
+      "requests": 2942321,
+      "requests_per_second": 73558.02,
+      "latency": {
+        "p50_ms": 0.11,
+        "p95_ms": 0.223,
+        "p99_ms": 0.247,
+        "max_ms": 0.9520000000000001,
+        "mean_ms": 0.135
+      },
+      "cpu_cores_busy": 0.99746243479868
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 50,
+      "requests": 2942175,
+      "requests_per_second": 73554.38,
+      "latency": {
+        "p50_ms": 0.645,
+        "p95_ms": 1.19,
+        "p99_ms": 1.31,
+        "max_ms": 4.84,
+        "mean_ms": 0.682
+      },
+      "cpu_cores_busy": 0.9974326688209693
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 100,
+      "requests": 3265151,
+      "requests_per_second": 81628.77,
+      "latency": {
+        "p50_ms": 1.2,
+        "p95_ms": 1.49,
+        "p99_ms": 1.74,
+        "max_ms": 3.2,
+        "mean_ms": 1.2
+      },
+      "cpu_cores_busy": 0.9971801087467471
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 250,
+      "requests": 2747591,
+      "requests_per_second": 68689.77,
+      "latency": {
+        "p50_ms": 3.56,
+        "p95_ms": 4.31,
+        "p99_ms": 4.38,
+        "max_ms": 15.86,
+        "mean_ms": 3.64
+      },
+      "cpu_cores_busy": 0.9968657792421188
+    },
+    {
+      "server": "uws",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 500,
+      "requests": 2732747,
+      "requests_per_second": 68318.68,
+      "latency": {
+        "p50_ms": 7.18,
+        "p95_ms": 8.01,
+        "p99_ms": 8.15,
+        "max_ms": 15.24,
+        "mean_ms": 7.32
+      },
+      "cpu_cores_busy": 0.9969231801595193
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 10,
+      "requests": 2041240,
+      "requests_per_second": 51031,
+      "latency": {
+        "p50_ms": 0.17500000000000002,
+        "p95_ms": 0.35100000000000003,
+        "p99_ms": 0.424,
+        "max_ms": 0.883,
+        "mean_ms": 0.194
+      },
+      "cpu_cores_busy": 0.9974995753547357
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 50,
+      "requests": 2086835,
+      "requests_per_second": 52170.88,
+      "latency": {
+        "p50_ms": 0.9400000000000001,
+        "p95_ms": 1.23,
+        "p99_ms": 1.88,
+        "max_ms": 12.68,
+        "mean_ms": 0.9490000000000001
+      },
+      "cpu_cores_busy": 0.9974139017986843
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 100,
+      "requests": 2035542,
+      "requests_per_second": 50888.55,
+      "latency": {
+        "p50_ms": 1.96,
+        "p95_ms": 2.44,
+        "p99_ms": 2.56,
+        "max_ms": 18.01,
+        "mean_ms": 1.94
+      },
+      "cpu_cores_busy": 0.9973241794928326
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 250,
+      "requests": 1903351,
+      "requests_per_second": 47583.78,
+      "latency": {
+        "p50_ms": 5.15,
+        "p95_ms": 5.73,
+        "p99_ms": 5.82,
+        "max_ms": 17.43,
+        "mean_ms": 5.24
+      },
+      "cpu_cores_busy": 0.9968215332046805
+    },
+    {
+      "server": "uhttp",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 500,
+      "requests": 1971765,
+      "requests_per_second": 49294.12,
+      "latency": {
+        "p50_ms": 10.17,
+        "p95_ms": 10.79,
+        "p99_ms": 10.94,
+        "max_ms": 30.63,
+        "mean_ms": 10.07
+      },
+      "cpu_cores_busy": 0.9971189034760578
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 10,
+      "requests": 1099415,
+      "requests_per_second": 27485.38,
+      "latency": {
+        "p50_ms": 0.271,
+        "p95_ms": 0.549,
+        "p99_ms": 4.35,
+        "max_ms": 12.4,
+        "mean_ms": 0.373
+      },
+      "cpu_cores_busy": 0.9978068568528691
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 50,
+      "requests": 1126857,
+      "requests_per_second": 28171.42,
+      "latency": {
+        "p50_ms": 1.4,
+        "p95_ms": 3.09,
+        "p99_ms": 10.18,
+        "max_ms": 43.45,
+        "mean_ms": 1.77
+      },
+      "cpu_cores_busy": 0.9976038340807447
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 100,
+      "requests": 1081771,
+      "requests_per_second": 27044.28,
+      "latency": {
+        "p50_ms": 3.03,
+        "p95_ms": 10.31,
+        "p99_ms": 12.5,
+        "max_ms": 37.15,
+        "mean_ms": 3.69
+      },
+      "cpu_cores_busy": 0.9979002675487667
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 250,
+      "requests": 1002894,
+      "requests_per_second": 25072.35,
+      "latency": {
+        "p50_ms": 7.56,
+        "p95_ms": 19.04,
+        "p99_ms": 19.84,
+        "max_ms": 1020,
+        "mean_ms": 9.97
+      },
+      "cpu_cores_busy": 0.9976581453341885
+    },
+    {
+      "server": "hono",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 500,
+      "requests": 919127,
+      "requests_per_second": 22978.17,
+      "latency": {
+        "p50_ms": 15.91,
+        "p95_ms": 34.56,
+        "p99_ms": 38.67,
+        "max_ms": 2500,
+        "mean_ms": 21.75
+      },
+      "cpu_cores_busy": 0.9982888929360141
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 10,
+      "requests": 1360474,
+      "requests_per_second": 34011.85,
+      "latency": {
+        "p50_ms": 0.216,
+        "p95_ms": 0.45,
+        "p99_ms": 4.2,
+        "max_ms": 20.13,
+        "mean_ms": 0.301
+      },
+      "cpu_cores_busy": 0.9979406275368979
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 50,
+      "requests": 1285883,
+      "requests_per_second": 32147.08,
+      "latency": {
+        "p50_ms": 1.29,
+        "p95_ms": 5.16,
+        "p99_ms": 10.35,
+        "max_ms": 106.59,
+        "mean_ms": 1.58
+      },
+      "cpu_cores_busy": 0.9978088323513599
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 100,
+      "requests": 1303508,
+      "requests_per_second": 32587.7,
+      "latency": {
+        "p50_ms": 2.34,
+        "p95_ms": 8.42,
+        "p99_ms": 11.83,
+        "max_ms": 51.41,
+        "mean_ms": 3.07
+      },
+      "cpu_cores_busy": 0.9977425440345082
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 250,
+      "requests": 1227535,
+      "requests_per_second": 30688.38,
+      "latency": {
+        "p50_ms": 6.68,
+        "p95_ms": 15.84,
+        "p99_ms": 17.21,
+        "max_ms": 842.66,
+        "mean_ms": 8.09
+      },
+      "cpu_cores_busy": 0.9972548014532634
+    },
+    {
+      "server": "fastify",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 500,
+      "requests": 1151021,
+      "requests_per_second": 28775.53,
+      "latency": {
+        "p50_ms": 13.83,
+        "p95_ms": 25.72,
+        "p99_ms": 26.66,
+        "max_ms": 1950,
+        "mean_ms": 17.32
+      },
+      "cpu_cores_busy": 0.9977023611195396
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 10,
+      "requests": 941578,
+      "requests_per_second": 23539.45,
+      "latency": {
+        "p50_ms": 0.327,
+        "p95_ms": 0.659,
+        "p99_ms": 3.97,
+        "max_ms": 10.85,
+        "mean_ms": 0.423
+      },
+      "cpu_cores_busy": 0.9980083101275894
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 50,
+      "requests": 965884,
+      "requests_per_second": 24147.1,
+      "latency": {
+        "p50_ms": 1.7,
+        "p95_ms": 5.76,
+        "p99_ms": 8.9,
+        "max_ms": 90.85,
+        "mean_ms": 2.07
+      },
+      "cpu_cores_busy": 0.9979882331092744
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 100,
+      "requests": 947726,
+      "requests_per_second": 23693.15,
+      "latency": {
+        "p50_ms": 3.85,
+        "p95_ms": 9.75,
+        "p99_ms": 11.84,
+        "max_ms": 75.05,
+        "mean_ms": 4.22
+      },
+      "cpu_cores_busy": 0.997936215262433
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 250,
+      "requests": 1007670,
+      "requests_per_second": 25191.75,
+      "latency": {
+        "p50_ms": 8.74,
+        "p95_ms": 17.41,
+        "p99_ms": 18.73,
+        "max_ms": 1120,
+        "mean_ms": 9.92
+      },
+      "cpu_cores_busy": 0.997386524372176
+    },
+    {
+      "server": "express",
+      "headers": "plain",
+      "route": "upload",
+      "connections": 500,
+      "requests": 861392,
+      "requests_per_second": 21534.8,
+      "latency": {
+        "p50_ms": 18.73,
+        "p95_ms": 33.34,
+        "p99_ms": 37.88,
+        "max_ms": 2280,
+        "mean_ms": 23.21
+      },
+      "cpu_cores_busy": 0.99861547539434
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 10,
+      "requests": 3068446,
+      "requests_per_second": 76711.15,
+      "latency": {
+        "p50_ms": 0.105,
+        "p95_ms": 0.214,
+        "p99_ms": 0.23500000000000001,
+        "max_ms": 0.926,
+        "mean_ms": 0.129
+      },
+      "cpu_cores_busy": 0.997494568346015
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 50,
+      "requests": 3101170,
+      "requests_per_second": 77529.25,
+      "latency": {
+        "p50_ms": 0.612,
+        "p95_ms": 1.09,
+        "p99_ms": 1.24,
+        "max_ms": 4.49,
+        "mean_ms": 0.642
+      },
+      "cpu_cores_busy": 0.9974273808951019
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 100,
+      "requests": 3196574,
+      "requests_per_second": 79914.35,
+      "latency": {
+        "p50_ms": 1.23,
+        "p95_ms": 1.58,
+        "p99_ms": 1.65,
+        "max_ms": 3.07,
+        "mean_ms": 1.26
+      },
+      "cpu_cores_busy": 0.9971966870127058
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 250,
+      "requests": 3227339,
+      "requests_per_second": 80683.48,
+      "latency": {
+        "p50_ms": 3.05,
+        "p95_ms": 3.69,
+        "p99_ms": 3.89,
+        "max_ms": 10.61,
+        "mean_ms": 3.09
+      },
+      "cpu_cores_busy": 0.9968724761215739
+    },
+    {
+      "server": "uws",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 500,
+      "requests": 2955058,
+      "requests_per_second": 73876.45,
+      "latency": {
+        "p50_ms": 6.72,
+        "p95_ms": 7.46,
+        "p99_ms": 7.59,
+        "max_ms": 14.54,
+        "mean_ms": 6.77
+      },
+      "cpu_cores_busy": 0.996940568877859
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 10,
+      "requests": 2233253,
+      "requests_per_second": 55831.32,
+      "latency": {
+        "p50_ms": 0.168,
+        "p95_ms": 0.335,
+        "p99_ms": 0.40800000000000003,
+        "max_ms": 0.905,
+        "mean_ms": 0.184
+      },
+      "cpu_cores_busy": 0.9974722593664505
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 50,
+      "requests": 2294296,
+      "requests_per_second": 57357.4,
+      "latency": {
+        "p50_ms": 0.871,
+        "p95_ms": 1.21,
+        "p99_ms": 1.76,
+        "max_ms": 8.57,
+        "mean_ms": 0.877
+      },
+      "cpu_cores_busy": 0.9974178116625942
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 100,
+      "requests": 2247541,
+      "requests_per_second": 56188.53,
+      "latency": {
+        "p50_ms": 1.76,
+        "p95_ms": 2.03,
+        "p99_ms": 2.18,
+        "max_ms": 13.9,
+        "mean_ms": 1.79
+      },
+      "cpu_cores_busy": 0.99730522348582
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 250,
+      "requests": 2024341,
+      "requests_per_second": 50608.53,
+      "latency": {
+        "p50_ms": 4.85,
+        "p95_ms": 5.29,
+        "p99_ms": 5.4,
+        "max_ms": 17.14,
+        "mean_ms": 4.94
+      },
+      "cpu_cores_busy": 0.9968378934101924
+    },
+    {
+      "server": "uhttp",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 500,
+      "requests": 2135032,
+      "requests_per_second": 53375.8,
+      "latency": {
+        "p50_ms": 9.45,
+        "p95_ms": 10.5,
+        "p99_ms": 10.69,
+        "max_ms": 29.93,
+        "mean_ms": 9.28
+      },
+      "cpu_cores_busy": 0.9970617833150897
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 10,
+      "requests": 1094273,
+      "requests_per_second": 27356.83,
+      "latency": {
+        "p50_ms": 0.34,
+        "p95_ms": 0.7010000000000001,
+        "p99_ms": 0.798,
+        "max_ms": 4.47,
+        "mean_ms": 0.369
+      },
+      "cpu_cores_busy": 0.9976972896536582
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 50,
+      "requests": 1141310,
+      "requests_per_second": 28532.75,
+      "latency": {
+        "p50_ms": 1.79,
+        "p95_ms": 2.32,
+        "p99_ms": 3.58,
+        "max_ms": 52.33,
+        "mean_ms": 1.77
+      },
+      "cpu_cores_busy": 0.9975079459182954
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 100,
+      "requests": 950376,
+      "requests_per_second": 23759.4,
+      "latency": {
+        "p50_ms": 4.35,
+        "p95_ms": 5.07,
+        "p99_ms": 5.19,
+        "max_ms": 122.76,
+        "mean_ms": 4.21
+      },
+      "cpu_cores_busy": 0.9976974820433158
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 250,
+      "requests": 980058,
+      "requests_per_second": 24501.45,
+      "latency": {
+        "p50_ms": 10,
+        "p95_ms": 11.22,
+        "p99_ms": 11.47,
+        "max_ms": 1030,
+        "mean_ms": 10.2
+      },
+      "cpu_cores_busy": 0.9978876334056007
+    },
+    {
+      "server": "hono",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 500,
+      "requests": 765281,
+      "requests_per_second": 19132.03,
+      "latency": {
+        "p50_ms": 20.65,
+        "p95_ms": 40.53,
+        "p99_ms": 43.74,
+        "max_ms": 3500,
+        "mean_ms": 26.13
+      },
+      "cpu_cores_busy": 0.9988632069168594
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 10,
+      "requests": 935398,
+      "requests_per_second": 23384.95,
+      "latency": {
+        "p50_ms": 0.318,
+        "p95_ms": 0.632,
+        "p99_ms": 4.43,
+        "max_ms": 22.49,
+        "mean_ms": 0.426
+      },
+      "cpu_cores_busy": 0.9980401364844479
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 50,
+      "requests": 1060831,
+      "requests_per_second": 26520.78,
+      "latency": {
+        "p50_ms": 1.33,
+        "p95_ms": 6.18,
+        "p99_ms": 10.45,
+        "max_ms": 113.93,
+        "mean_ms": 1.88
+      },
+      "cpu_cores_busy": 0.9975700168593984
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 100,
+      "requests": 968262,
+      "requests_per_second": 24206.55,
+      "latency": {
+        "p50_ms": 3.25,
+        "p95_ms": 11.13,
+        "p99_ms": 14.16,
+        "max_ms": 73.51,
+        "mean_ms": 4.13
+      },
+      "cpu_cores_busy": 0.9976641911714363
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 250,
+      "requests": 906730,
+      "requests_per_second": 22668.25,
+      "latency": {
+        "p50_ms": 8.54,
+        "p95_ms": 20.49,
+        "p99_ms": 21.81,
+        "max_ms": 1050,
+        "mean_ms": 11.03
+      },
+      "cpu_cores_busy": 0.9980741899761699
+    },
+    {
+      "server": "fastify",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 500,
+      "requests": 893838,
+      "requests_per_second": 22345.95,
+      "latency": {
+        "p50_ms": 17.31,
+        "p95_ms": 34.75,
+        "p99_ms": 38.88,
+        "max_ms": 2740,
+        "mean_ms": 22.37
+      },
+      "cpu_cores_busy": 0.9980146721407877
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 10,
+      "requests": 852703,
+      "requests_per_second": 21317.58,
+      "latency": {
+        "p50_ms": 0.377,
+        "p95_ms": 0.772,
+        "p99_ms": 3.86,
+        "max_ms": 11.68,
+        "mean_ms": 0.47100000000000003
+      },
+      "cpu_cores_busy": 0.9981534429922004
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 50,
+      "requests": 866428,
+      "requests_per_second": 21660.7,
+      "latency": {
+        "p50_ms": 2,
+        "p95_ms": 4.04,
+        "p99_ms": 9.52,
+        "max_ms": 57.42,
+        "mean_ms": 2.31
+      },
+      "cpu_cores_busy": 0.9982423446726453
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 100,
+      "requests": 873844,
+      "requests_per_second": 21846.1,
+      "latency": {
+        "p50_ms": 4.02,
+        "p95_ms": 10.84,
+        "p99_ms": 13.02,
+        "max_ms": 95.53,
+        "mean_ms": 4.58
+      },
+      "cpu_cores_busy": 0.9983200055267965
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 250,
+      "requests": 787458,
+      "requests_per_second": 19686.45,
+      "latency": {
+        "p50_ms": 10.58,
+        "p95_ms": 21.57,
+        "p99_ms": 22.62,
+        "max_ms": 1280,
+        "mean_ms": 12.7
+      },
+      "cpu_cores_busy": 0.9982297615550989
+    },
+    {
+      "server": "express",
+      "headers": "secure",
+      "route": "upload",
+      "connections": 500,
+      "requests": 776564,
+      "requests_per_second": 19414.1,
+      "latency": {
+        "p50_ms": 20.87,
+        "p95_ms": 37.03,
+        "p99_ms": 39.45,
+        "max_ms": 3050,
+        "mean_ms": 25.75
+      },
+      "cpu_cores_busy": 0.9983041892636609
+    }
+  ],
+  "failures": []
+}
