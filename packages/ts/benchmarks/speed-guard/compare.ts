@@ -149,31 +149,32 @@ function summarise(rounds: readonly Round[]): Summary {
 }
 
 function mainVerdict({ moved, threshold, consistent }: Summary, roundCount: number): string {
-  const median = `The median moved ${formatShare(Math.abs(moved))} against a threshold of ${formatShare(threshold)}.`
+  const gap = formatGap(moved)
+  const noise = `the ${formatShare(threshold)} that the job treats as machine noise`
   if (Math.abs(moved) <= threshold) {
-    return `**This PR changes the speed of uhttp by less than the machine noise.** ${median}`
+    return `**uhttp is ${gap} after this PR than before it, which is less than ${noise}, so this PR leaves the speed of uhttp unchanged.**`
   }
   if (!consistent) {
-    return `**uhttp after this PR was faster in some rounds and slower in others, so the job treats its speed as unchanged.** ${median}`
+    return `**uhttp is ${gap} after this PR than before it in the median round, but it was faster in some rounds and slower in others, so this PR leaves the speed of uhttp unchanged.**`
   }
   const direction = moved < 0 ? 'slower' : 'faster'
-  return `**This PR makes uhttp ${formatGap(moved)}.** uhttp after this PR was ${direction} in all ${roundCount} rounds. ${median}`
+  return `**This PR makes uhttp ${gap}.** uhttp after this PR was ${direction} in all ${roundCount} rounds, by more than ${noise}.`
 }
 
 function bareVerdict({ changeVsBare, mainVsBare, noise }: Summary): string {
   const limit = formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)
+  const figures = `After this PR, uhttp is ${formatGap(changeVsBare)} than uWebSockets.js, and before this PR, it was ${formatGap(mainVsBare)}.`
   const noisy =
     noise > MAX_SLOWDOWN_FROM_BARE_RATIO
       ? ` Rerun the job before you act on this result, because the median machine noise of ${formatShare(noise)} is larger than the ${limit} limit.`
       : ''
   if (!beyondBareLimit(changeVsBare)) {
-    return `**uhttp after this PR is within ${limit} of uWebSockets.js on its own.** Before this PR, it was ${formatGap(mainVsBare)}.${noisy}`
+    return `**${figures}** The job passes, because the limit is ${limit} slower.${noisy}`
   }
-  const figures = `After this PR, it was ${formatGap(changeVsBare)}, and before this PR, it was ${formatGap(mainVsBare)}.${noisy}`
   if (beyondBareLimit(mainVsBare)) {
-    return `**uhttp is more than ${limit} slower than uWebSockets.js on its own, both before and after this PR, so the job fails.** ${figures}`
+    return `**${figures}** The job fails, because the limit is ${limit} slower, and uhttp was past that limit before this PR too.${noisy}`
   }
-  return `**This PR makes uhttp more than ${limit} slower than uWebSockets.js on its own, so the job fails.** ${figures}`
+  return `**${figures}** The job fails, because this PR takes uhttp past the limit of ${limit} slower.${noisy}`
 }
 
 function tableRow(label: string, cells: readonly string[]): string {
@@ -203,7 +204,7 @@ function prTable(rounds: readonly Round[], summary: Summary): string {
 }
 
 function bareTable(rounds: readonly Round[], summary: Summary): string {
-  const headings = ['uWebSockets.js on its own', 'uhttp after this PR', 'Difference', 'Machine noise']
+  const headings = ['uWebSockets.js', 'uhttp after this PR', 'Difference', 'Machine noise']
   const row = (bare: number, after: number, changeVsBare: number, noise: number): string[] => [
     formatRate(bare),
     formatRate(after),
@@ -221,7 +222,7 @@ function report(rounds: readonly Round[], summary: Summary): string {
   return [
     '## Speed check',
     '',
-    `h2load sent \`GET ${ROUTE_PATH}\` to uWebSockets.js on its own, to uhttp before this PR, and to uhttp after this PR, in ${rounds.length} rounds of ${seconds} s each over ${CONNECTIONS} connections. Each figure is the average of two identical copies of a server, and machine noise is the largest gap between two copies in a round.`,
+    `h2load sent \`GET ${ROUTE_PATH}\` to uWebSockets.js, to uhttp before this PR, and to uhttp after this PR, in ${rounds.length} rounds of ${seconds} s each over ${CONNECTIONS} connections. Each figure is the average of two identical copies of a server, and machine noise is the largest gap between two copies in a round.`,
     '',
     '### Does this PR make uhttp slower?',
     '',
@@ -231,7 +232,7 @@ function report(rounds: readonly Round[], summary: Summary): string {
     '',
     mainVerdict(summary, rounds.length),
     '',
-    '### How much slower is uhttp than uWebSockets.js on its own?',
+    '### How much slower is uhttp than uWebSockets.js?',
     '',
     `The job fails when uhttp after this PR is more than ${limit} slower in the median round.`,
     '',

@@ -2,7 +2,7 @@
   "name": "uhttp-benchmarks",
   "private": true,
   "version": "0.0.0",
-  "description": "The suite that measures uhttp, uWebSockets.js on its own, and other Node.js frameworks for BENCHMARKS.md.",
+  "description": "The suite that measures uhttp, uWebSockets.js, and other Node.js frameworks for BENCHMARKS.md.",
   "license": "MIT",
   "type": "module",
   "scripts": {

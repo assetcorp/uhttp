@@ -1,6 +1,6 @@
 # Benchmarks
 
-On this page, you can compare the number of requests a second that uhttp serves with the rates of uWebSockets.js on its own and of three Node.js frameworks: Hono on its Node.js adapter, Fastify, and Express. A maintainer starts the suite in [`benchmarks/suite/`](benchmarks/suite/) when somebody asks for new figures. From the newest run under [`benchmarks/results/runs/`](benchmarks/results/runs/), the generator in [`benchmarks/writeup/`](benchmarks/writeup/) then writes every number, table, and chart on this page.
+On this page, you can compare the number of requests a second that uhttp serves with the rates of uWebSockets.js and of three Node.js frameworks: Hono on its Node.js adapter, Fastify, and Express. A maintainer starts the suite in [`benchmarks/suite/`](benchmarks/suite/) when somebody asks for new figures. From the newest run under [`benchmarks/results/runs/`](benchmarks/results/runs/), the generator in [`benchmarks/writeup/`](benchmarks/writeup/) then writes every number, table, and chart on this page.
 
 <!-- BENCH:run START -->
 <!-- BENCH:run END -->
@@ -14,7 +14,7 @@ The length of each bar is the highest rate that a server reached at any of the c
 
 ## Requests a second at 100 connections
 
-In their [benchmark repository](https://github.com/fastify/benchmarks), the maintainers of Fastify measure each framework at 100 connections with 10 pipelined requests on each connection, so the suite reports the same load in these tables. A server with a figure above 100% in the third column served more requests than uWebSockets.js on its own at the same load.
+In their [benchmark repository](https://github.com/fastify/benchmarks), the maintainers of Fastify measure each framework at 100 connections with 10 pipelined requests on each connection, so the suite reports the same load in these tables. A server with a figure above 100% in the third column served more requests than uWebSockets.js at the same load.
 
 <!-- BENCH:tables START -->
 <!-- BENCH:tables END -->
@@ -49,7 +49,7 @@ Before it measures a server, the suite sends one request to each route. It then 
 
 Each server handles its requests on one thread, in a process of its own that the suite starts afresh for every route and every set of headers.
 
-- uWebSockets.js on its own writes each reply in its route handler, where it passes every fixed header name and value as an `ArrayBuffer` that it builds once at start-up, as uhttp does. On the upload route, it copies each chunk of the body before uWebSockets.js frees it, and it joins the chunks into one buffer, as uhttp does, so that every server holds the whole body before it replies.
+- uWebSockets.js writes each reply in its route handler, where it passes every fixed header name and value as an `ArrayBuffer` that it builds once at start-up, as uhttp does. On the upload route, it copies each chunk of the body before uWebSockets.js frees it, and it joins the chunks into one buffer, as uhttp does, so that every server holds the whole body before it replies.
 - uhttp builds its routes with `createApp()`, serves them with `serve()`, and reads the upload with `c.req.body.bytes()`.
 - Hono serves its routes through `@hono/node-server` and reads the upload with `c.req.arrayBuffer()`.
 - Fastify gives the JSON route a response schema, as the benchmark repository of Fastify does, and reads the upload with a content-type parser that collects the body into a buffer.
@@ -72,14 +72,14 @@ In the second measurement of each route, every server sends these ten headers on
 | `X-Permitted-Cross-Domain-Policies` | `none` |
 | `X-XSS-Protection` | `0` |
 
-These ten headers make up the `web` preset of the `secureHeaders()` middleware of uhttp. uhttp sends them through `secureHeaders()`, Hono through `secureHeaders()` from `hono/secure-headers`, Fastify through `@fastify/helmet`, and Express through `helmet`, while uWebSockets.js on its own writes them in each route handler. uhttp sends `Strict-Transport-Security` only over TLS, so the suite switches that header off in Hono, `@fastify/helmet`, and `helmet`. It also switches off `Content-Security-Policy` in `@fastify/helmet` and `helmet`, because neither uhttp nor Hono sends that header by default.
+These ten headers make up the `web` preset of the `secureHeaders()` middleware of uhttp. uhttp sends them through `secureHeaders()`, Hono through `secureHeaders()` from `hono/secure-headers`, Fastify through `@fastify/helmet`, and Express through `helmet`, while the uWebSockets.js server writes them in each route handler. uhttp sends `Strict-Transport-Security` only over TLS, so the suite switches that header off in Hono, `@fastify/helmet`, and `helmet`. It also switches off `Content-Security-Policy` in `@fastify/helmet` and `helmet`, because neither uhttp nor Hono sends that header by default.
 
 ### Load
 
 <!-- BENCH:settings START -->
 <!-- BENCH:settings END -->
 
-The maintainers of Fastify send their load with autocannon, a load generator that is written in JavaScript. This suite sends the same number of connections and pipelined requests with h2load from [nghttp2](https://github.com/nghttp2/nghttp2), because a load generator that is slower than the fastest server can measure that server only at its own speed. In the measurement under [Check a change](CONTRIBUTING.md#check-a-change), autocannon sent about 320,000 requests a second to uWebSockets.js on its own, while h2load sent about 390,000.
+The maintainers of Fastify send their load with autocannon, a load generator that is written in JavaScript. This suite sends the same number of connections and pipelined requests with h2load from [nghttp2](https://github.com/nghttp2/nghttp2), because a load generator that is slower than the fastest server can measure that server only at its own speed. In the measurement under [Check a change](CONTRIBUTING.md#check-a-change), autocannon sent about 320,000 requests a second to uWebSockets.js, while h2load sent about 390,000.
 
 ### The machine
 

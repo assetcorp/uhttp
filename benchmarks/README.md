@@ -1,6 +1,6 @@
 # Benchmark suite
 
-The suite in `suite/` measures uhttp, uWebSockets.js on its own, Hono, Fastify, and Express under the same load. From the newest run under `results/runs/`, the generator in `writeup/` writes [`BENCHMARKS.md`](../BENCHMARKS.md), which also describes the method.
+The suite in `suite/` measures uhttp, uWebSockets.js, Hono, Fastify, and Express under the same load. From the newest run under `results/runs/`, the generator in `writeup/` writes [`BENCHMARKS.md`](../BENCHMARKS.md), which also describes the method.
 
 ## Before you start the suite
 

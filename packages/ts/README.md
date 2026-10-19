@@ -8,7 +8,7 @@
 [![types](https://img.shields.io/badge/types-TypeScript-blue)](https://www.npmjs.com/package/@delali/uhttp)
 [![license](https://img.shields.io/npm/l/@delali/uhttp)](https://github.com/assetcorp/uhttp/blob/main/LICENSE)
 
-uhttp is an HTTP and WebSocket server for Node.js on uWebSockets.js. With it, you can add routes and WebSocket routes, put middleware such as a login check in front of them, parse JSON bodies and file uploads, and build replies with helpers. Before any asynchronous step, the package copies only the parts of the raw request that the code of a route uses, so that uhttp can serve requests nearly as fast as uWebSockets.js on its own. To keep it that way, the speed check on every pull request fails when uhttp serves requests more than 5% more slowly than uWebSockets.js on its own.
+uhttp is an HTTP and WebSocket server for Node.js on uWebSockets.js. With it, you can add routes and WebSocket routes, put middleware such as a login check in front of them, parse JSON bodies and file uploads, and build replies with helpers. Before any asynchronous step, the package copies only the parts of the raw request that the code of a route uses, so that uhttp can serve requests nearly as fast as uWebSockets.js. To keep it that way, the speed check on every pull request fails when uhttp serves requests more than 5% more slowly than uWebSockets.js.
 
 <!-- BENCH:headline START -->
 <!-- BENCH:headline END -->
@@ -121,7 +121,7 @@ console.log(await response.json())
 | [Compression](https://github.com/assetcorp/uhttp/blob/main/docs/middleware/compression.md) | Brotli, zstd, and gzip responses, and the routes that should stay uncompressed |
 | [Static files](https://github.com/assetcorp/uhttp/blob/main/docs/middleware/static.md) | Serving a folder with caching, byte ranges, and canonical paths |
 
-You can compare the requests a second of uhttp with those of uWebSockets.js on its own and of other Node.js frameworks in [BENCHMARKS.md](https://github.com/assetcorp/uhttp/blob/main/BENCHMARKS.md). To set up the repository and propose a change, follow [CONTRIBUTING.md](https://github.com/assetcorp/uhttp/blob/main/CONTRIBUTING.md).
+You can compare the requests a second of uhttp with those of uWebSockets.js and of other Node.js frameworks in [BENCHMARKS.md](https://github.com/assetcorp/uhttp/blob/main/BENCHMARKS.md). To set up the repository and propose a change, follow [CONTRIBUTING.md](https://github.com/assetcorp/uhttp/blob/main/CONTRIBUTING.md).
 
 ## Examples
 

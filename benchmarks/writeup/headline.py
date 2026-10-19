@@ -31,8 +31,8 @@ def _against_reference(subject: float, reference: float | None) -> str | None:
         return None
     gap = subject / reference - 1
     if abs(gap) < SAME_SPEED_LIMIT:
-        return "the same rate as uWebSockets.js on its own"
-    return f"{percent(abs(gap))} {'faster' if gap > 0 else 'slower'} than uWebSockets.js on its own"
+        return "the same rate as uWebSockets.js"
+    return f"{percent(abs(gap))} {'faster' if gap > 0 else 'slower'} than uWebSockets.js"
 
 
 def _others(results: dict, variant: str, connections: int) -> list[float]:

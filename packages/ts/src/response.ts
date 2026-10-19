@@ -155,7 +155,7 @@ function defaultHeaderOf(parts: ResponseParts, lowerName: string): PreparedHeade
  * header that the reply, your code, or a later block sets.
  *
  * @param parts - The package passes the state of the request.
- * @returns The function returns the block, or `undefined` when the package writes each header on its own.
+ * @returns The function returns the block, or `undefined` when the package writes the headers one at a time.
  * @internal
  */
 export function foldableDefaults(parts: ResponseParts): DefaultHeaders | undefined {

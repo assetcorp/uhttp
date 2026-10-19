@@ -56,7 +56,7 @@ PROVIDER=hetzner BENCH_PROFILE=smoke BENCH_SERVERS=uhttp,uws BENCH_ROUTES=plain 
 
 ## One step at a time
 
-`all` calls `up`, `sync`, `setup`, `run`, and `fetch` in that order, and you can call each of them on its own while you work, as in `PROVIDER=hetzner ./run-cloud.sh sync`:
+`all` calls `up`, `sync`, `setup`, `run`, and `fetch` in that order, and while you work, you can call any one of them, as in `PROVIDER=hetzner ./run-cloud.sh sync`:
 
 | Command | What it does |
 | --- | --- |
@@ -109,7 +109,7 @@ On the VM, `sync` unpacks the new tree beside the old one and moves every run di
 
 ## What `fetch` copies
 
-`fetch` copies the run directories that the suite created on the VM into the directory of the profile that `BENCH_PROFILE` names, so set the same profile when you call `fetch` on its own. In the published profile, it skips every run directory that git tracks on the VM, because somebody has already committed those runs to the repository. It never replaces a run directory that exists in your repository, and it skips any directory whose name differs from the UTC time that the suite gives each run, such as `20261019T004707Z`. It also skips a directory that lacks `results.json` or `machine.json`. The toolkit copies each run into a hidden directory first and moves it into place once the copy is complete, so the generator never finds a half-written run after an interrupted copy.
+`fetch` copies the run directories that the suite created on the VM into the directory of the profile that `BENCH_PROFILE` names, so set the same profile when you call `fetch` without `all`. In the published profile, it skips every run directory that git tracks on the VM, because somebody has already committed those runs to the repository. It never replaces a run directory that exists in your repository, and it skips any directory whose name differs from the UTC time that the suite gives each run, such as `20261019T004707Z`. It also skips a directory that lacks `results.json` or `machine.json`. The toolkit copies each run into a hidden directory first and moves it into place once the copy is complete, so the generator never finds a half-written run after an interrupted copy.
 
 When the suite records a failed measurement, `fetch` still copies the run and tells you about the failure, so that you can read it in `results.json`. Delete that directory before you regenerate the page, because the generator reads the newest run.
 
