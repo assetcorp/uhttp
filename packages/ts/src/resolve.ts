@@ -1,10 +1,11 @@
-import { type CompiledApp, type CopyPlan, copyPlanOf, handlerOf, type RouteLimits } from './compile.js'
+import type { ChainLayer } from './chain.js'
+import { type CompiledApp, type CopyPlan, copyPlanOf, layerOf, type RouteLimits } from './compile.js'
 import { OPTIONS_STATUS } from './constants.js'
 import type { Context } from './context.js'
 import { UhttpError } from './errors.js'
 import { createReply, errorReply } from './reply.js'
 import { prefixMatches, splitPath } from './router/index.js'
-import type { Handler, MiddlewareHandler } from './types.js'
+import type { Handler } from './types.js'
 
 const NOT_FOUND_MESSAGE = 'The app has no route for this path.'
 const INVALID_PARAMETER_MESSAGE = 'A path parameter contains a percent sequence that fails to decode.'
@@ -18,7 +19,7 @@ const NO_PARAMETERS: readonly string[] = []
  */
 export interface RequestChain {
   /** The package calls this middleware in order: app, group, then route. */
-  readonly layers: readonly MiddlewareHandler[]
+  readonly layers: readonly ChainLayer[]
   /** The package calls this handler at the end of the chain. */
   readonly handler: Handler
   /** The package copies the request for the chain by this plan. */
@@ -87,7 +88,7 @@ function fallbackChain(app: CompiledApp, method: string, segments: readonly stri
   const wrapping = { layers: app.appLayers, copyPlan: appCopyPlanFor(app, method) }
   if (guards.length > 0) {
     const middleware = [...app.appMiddleware, ...guards.flatMap(guard => guard.middleware)]
-    wrapping.layers = middleware.map(handlerOf)
+    wrapping.layers = middleware.map(layerOf)
     wrapping.copyPlan = copyPlanOf(middleware, [], method)
   }
   return {

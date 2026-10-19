@@ -1,7 +1,16 @@
+import type { ChainLayer } from './chain.js'
 import { ALLOW_METHOD_ORDER, BODY_METHODS, LIST_HEADER_NAMES } from './constants.js'
+import type { Context } from './context.js'
 import { Matcher, prefixCoverage, prefixMatches, type Segment, splitPath } from './router/index.js'
 import type { AppRuntime } from './runtime.js'
-import type { Handler, Middleware, MiddlewareHandler, RouteOptions } from './types.js'
+import type {
+  BeforeHandler,
+  Handler,
+  Middleware,
+  MiddlewareDefinition,
+  MiddlewareHandler,
+  RouteOptions,
+} from './types.js'
 import { upgradeRequired } from './websocket/handshake.js'
 import type { CheckedWebSocketRoute } from './websocket/route.js'
 
@@ -118,7 +127,7 @@ export interface CompiledRoute {
   /** You wrote these parameter names in the route path, in this order. */
   readonly parameterNames: readonly string[]
   /** The package calls this middleware in order: app, group, then route. */
-  readonly layers: readonly MiddlewareHandler[]
+  readonly layers: readonly ChainLayer[]
   /** The package calls this handler at the end of the chain. */
   readonly handler: Handler
   /** The package copies the request for the route by this plan. */
@@ -177,7 +186,7 @@ export interface CompiledApp {
   /** You added this middleware to the app itself. */
   readonly appMiddleware: readonly Middleware[]
   /** The package calls the middleware of the app through these functions. */
-  readonly appLayers: readonly MiddlewareHandler[]
+  readonly appLayers: readonly ChainLayer[]
   /** The package copies a request by this plan when the request matches no route, so the package calls only the middleware of the app. */
   readonly appCopyPlan: CopyPlan
   /** The package copies an OPTIONS request by this plan when the request matches no route, so the package calls only the middleware of the app. */
@@ -188,21 +197,35 @@ export interface CompiledApp {
   readonly guards: readonly CompiledGuard[]
 }
 
-/**
- * Returns the function form of a middleware.
- *
- * @param middleware - You pass a middleware function or a middleware definition.
- * @returns The function returns a function that calls the middleware.
- * @internal
- */
-export function handlerOf(middleware: Middleware): MiddlewareHandler {
-  if (typeof middleware === 'function') return middleware
-  return (context, next) => middleware.handle(context, next)
+function beforeOf(definition: MiddlewareDefinition): BeforeHandler | undefined {
+  if (definition.before === undefined) return undefined
+  return context => definition.before?.(context)
 }
 
-function guarded(segments: readonly Segment[], middleware: Middleware): MiddlewareHandler {
-  const handle = handlerOf(middleware)
-  return (context, next) => (prefixMatches(segments, splitPath(context.req.path)) ? handle(context, next) : next())
+function handleOf(definition: MiddlewareDefinition): MiddlewareHandler | undefined {
+  if (definition.handle === undefined) return undefined
+  return (context, next) => definition.handle?.(context, next)
+}
+
+/**
+ * Returns the form in which the package calls a middleware in a chain.
+ *
+ * @param middleware - You pass a middleware function or a middleware definition.
+ * @returns The function returns the layer, whose functions call the middleware.
+ * @internal
+ */
+export function layerOf(middleware: Middleware): ChainLayer {
+  if (typeof middleware === 'function') return { before: undefined, handle: middleware }
+  return { before: beforeOf(middleware), handle: handleOf(middleware) }
+}
+
+function guarded(segments: readonly Segment[], middleware: Middleware): ChainLayer {
+  const { before, handle } = layerOf(middleware)
+  const covers = (context: Context): boolean => prefixMatches(segments, splitPath(context.req.path))
+  return {
+    before: before === undefined ? undefined : context => (covers(context) ? before(context) : undefined),
+    handle: handle === undefined ? undefined : (context, next) => (covers(context) ? handle(context, next) : next()),
+  }
 }
 
 /**
@@ -262,18 +285,18 @@ function compileRoute(
   guards: readonly CompiledGuard[],
   runtime: AppRuntime,
 ): CompiledRoute {
-  const layers: MiddlewareHandler[] = appMiddleware.map(handlerOf)
+  const layers: ChainLayer[] = appMiddleware.map(layerOf)
   const declared: Middleware[] = [...appMiddleware]
   for (const guard of guards) {
     const coverage = prefixCoverage(guard.segments, record.segments)
     if (coverage === 'never') continue
     declared.push(...guard.middleware)
     for (const middleware of guard.middleware) {
-      layers.push(coverage === 'always' ? handlerOf(middleware) : guarded(guard.segments, middleware))
+      layers.push(coverage === 'always' ? layerOf(middleware) : guarded(guard.segments, middleware))
     }
   }
   declared.push(...record.middleware)
-  layers.push(...record.middleware.map(handlerOf))
+  layers.push(...record.middleware.map(layerOf))
   const parameterNames = record.segments.flatMap(segment => (segment.kind === 'parameter' ? [segment.name] : []))
   return {
     method: record.method,
@@ -345,7 +368,7 @@ export function compileApp(runtime: AppRuntime, contents: RegistryContents): Com
     matcher,
     methods,
     appMiddleware: [...contents.middleware],
-    appLayers: contents.middleware.map(handlerOf),
+    appLayers: contents.middleware.map(layerOf),
     appCopyPlan: copyPlanOf(contents.middleware, [], 'GET'),
     appOptionsCopyPlan: copyPlanOf(contents.middleware, [], 'OPTIONS'),
     appLimits: { readsBody: false, maxBodyBytes: runtime.maxBodyBytes, timeoutMs: runtime.timeoutMs },

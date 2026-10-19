@@ -35,8 +35,26 @@ export type MiddlewareHandler = (
 ) => Reply | void | Promise<Reply | undefined> | Promise<void>
 
 /**
+ * You get the {@link Context} of one request in a `before` function, which the package calls
+ * before the handler and every inner middleware. Return nothing to pass the request on, or a
+ * {@link Reply} to end the request with that reply. When the function returns a promise, or any
+ * other value with a `then` function, the package waits for it and then does the same with the
+ * value that it resolves to.
+ *
+ * @param context - The package passes the context of the request to the function.
+ * @returns The function returns a reply to end the request, or nothing to pass it on.
+ */
+export type BeforeHandler = (context: Context) => Reply | void | Promise<Reply | undefined> | Promise<void>
+
+/**
  * You write a middleware in this form when it uses request headers or the client address, so that
- * the package copies them before the first `await`.
+ * the package copies them before the first `await`. You also write it in this form when the
+ * middleware has work to do only before the handler. Give the object a `before` function, a
+ * `handle` function, or both. When a `before` function returns no promise, the package has nothing
+ * to wait on, so it can send the reply of a synchronous handler inside the call from
+ * uWebSockets.js. The package always waits on a request that a `handle` function wraps, because
+ * `next` returns a promise. When the object has both, the package calls `handle` after `before`
+ * passes the request on.
  */
 export interface MiddlewareDefinition {
   /** The package copies these request headers for every route that this middleware wraps. */
@@ -49,8 +67,10 @@ export interface MiddlewareDefinition {
   readonly optionsHeaders?: readonly string[]
   /** When this is `true`, the package copies the client address for every route that this middleware wraps. */
   readonly clientAddress?: boolean
-  /** The package calls this function for each request that passes through the middleware. */
-  readonly handle: MiddlewareHandler
+  /** The package calls this function for each request that reaches the middleware, before any inner middleware and the handler. */
+  readonly before?: BeforeHandler
+  /** The package calls this function for each request that passes through the middleware, after `before` when the object has both. */
+  readonly handle?: MiddlewareHandler
 }
 
 /**

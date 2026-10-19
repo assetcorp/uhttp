@@ -12,6 +12,6 @@ This repository uses the name of each of the five triage roles that the skills d
 
 All five labels exist on `assetcorp/uhttp`, where the maintainer renamed GitHub's default `question` label to `needs-info` because it means the same thing.
 
-When a skill names a role, as in 'apply the AFK-ready triage label', use the label string from this table.
+When the instructions of a skill mention a role, as in 'apply the AFK-ready triage label', use the label string from this table.
 
 Edit the right-hand column where the tracker's vocabulary changes.

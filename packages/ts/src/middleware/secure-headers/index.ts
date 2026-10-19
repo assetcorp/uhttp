@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { type Context, exchangeOf } from '../../context.js'
 import { settableHeaderName } from '../../headers.js'
-import { hasResponseHeader } from '../../response.js'
+import { defaultHeadersOf } from '../../response.js'
 import type { MiddlewareDefinition } from '../../types.js'
 import { protocolOf } from '../client.js'
 import { type FixedHeader, fixedHeader, fixedName, invalidOption, optionsObject } from '../options.js'
@@ -26,8 +26,8 @@ export interface SecureHeadersOptions {
    */
   readonly preset?: 'web' | 'api'
   /**
-   * You change a header of the preset by naming it with a new value, switch it off with `false`,
-   * and add a header that is missing from the preset by naming it with a value. The package
+   * You change a header of the preset when you set it to a new value here, switch it off with
+   * `false`, and add a header that is missing from the preset when you set it to a value. The package
    * matches the names without regard to case.
    */
   readonly headers?: Readonly<Record<string, string | false>>
@@ -121,9 +121,17 @@ export function nonceOf(context: Context): string | undefined {
  * With either preset, the middleware also sends
  * `Strict-Transport-Security: max-age=15552000; includeSubDomains`, but only on a TLS connection
  * or when a proxy that `trustedProxies()` trusts reports `https`, because a browser ignores the
- * header over plain HTTP. The middleware leaves every header that your handler or an inner
- * middleware set unchanged. It checks and encodes every fixed header once, when you call this
- * function.
+ * header over plain HTTP. Add `trustedProxies()` before this middleware, so that the middleware
+ * reads the protocol that your proxy reports.
+ *
+ * The middleware sends each header with every reply of the request, including an error reply and
+ * the 503 of a handler that passes its time limit, unless the reply, your code, or an inner
+ * `secureHeaders()` sets a header of the same name. It checks and encodes every fixed header once,
+ * when you call this function. Because it does its work in a `before` function that returns no
+ * promise, the package never has to wait on a request for this middleware. On a 200 with a text or
+ * a JSON body, the package writes the fixed headers of the outermost `secureHeaders()` in the same
+ * call into uWebSockets.js as the status line, unless another header of the same name replaces one
+ * of them.
  *
  * @param options - You can choose the preset, change any header, and ask for a policy with a nonce.
  * @returns The function returns the middleware.
@@ -134,24 +142,16 @@ export function nonceOf(context: Context): string | undefined {
 export function secureHeaders(options?: SecureHeadersOptions): MiddlewareDefinition {
   const { fixed, strictTransport, policy } = checkedOptions(optionsObject(options, 'secureHeaders()'))
   const policyName = fixedName(CONTENT_SECURITY_POLICY)
+  const overPlainHttp = fixed.length === 0 ? undefined : defaultHeadersOf(fixed, true)
+  const overHttps = strictTransport === undefined ? overPlainHttp : defaultHeadersOf([...fixed, strictTransport], true)
   return {
-    async handle(context, next) {
-      const policyValue = policy === undefined ? undefined : policyFor(context, policy)
-      await next()
+    before(context) {
       const exchange = exchangeOf(context)
-      for (const header of fixed) {
-        if (!hasResponseHeader(exchange, header.name)) exchange.setFixed(header, false)
-      }
-      if (policyValue !== undefined && !hasResponseHeader(exchange, CONTENT_SECURITY_POLICY)) {
-        exchange.setPrepared(policyName, policyValue, false)
-      }
-      if (
-        strictTransport !== undefined &&
-        !hasResponseHeader(exchange, STRICT_TRANSPORT_SECURITY) &&
-        protocolOf(context) === 'https'
-      ) {
-        exchange.setFixed(strictTransport, false)
-      }
+      const block = overHttps !== overPlainHttp && protocolOf(context) === 'https' ? overHttps : overPlainHttp
+      if (block !== undefined) exchange.addDefaultHeaders(block)
+      if (policy === undefined) return
+      const header = { name: policyName.name, value: policyFor(context, policy), encoded: policyName.encoded }
+      exchange.addDefaultHeaders(defaultHeadersOf([header], false))
     },
   }
 }

@@ -24,11 +24,11 @@ console.log(
 )
 
 const bare = await throughput('uWebSockets.js', 'servers/bare.ts')
-console.log(`uWebSockets.js on its own served ${formatRate(bare)}.`)
+console.log(`uWebSockets.js served ${formatRate(bare)}.`)
 const uhttp = await throughput('uhttp', 'servers/uhttp.ts')
 console.log(`uhttp served ${formatRate(uhttp)}.`)
 
-const comparison = `uhttp is ${formatGap(uhttp / bare - 1)} than uWebSockets.js on its own`
+const comparison = `uhttp is ${formatGap(uhttp / bare - 1)} than uWebSockets.js`
 const limit = formatShare(MAX_SLOWDOWN_FROM_BARE_RATIO)
 if (uhttp < bare * (1 - MAX_SLOWDOWN_FROM_BARE_RATIO)) {
   console.error(`${comparison}, which is more than the ${limit} limit, so the speed check fails.`)

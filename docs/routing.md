@@ -82,6 +82,23 @@ app.get('/reports/:id', auditLog, c => c.json({ id: c.req.param('id') }))
 
 The package builds the chain of each route at startup, in the order app, group, then route. It applies every app middleware to every route, whether you called `use` before or after you added the route. When a middleware returns a reply after `await next()`, the package sends that reply in place of the handler's reply. At any point after `next()` returns, `c.reply` is the current reply.
 
+## Work before the handler without `next`
+
+A middleware that has work to do only before the handler, such as a login check, can take the form of an object with a `before` function. The package calls `before` with the context alone. When `before` returns nothing, the package passes the request on, and when it returns a reply, the package ends the request with that reply:
+
+```ts
+const requireLogin: Middleware = {
+  headers: ['authorization'],
+  before: c => {
+    if (c.req.header('authorization') === undefined) return c.json({ error: 'Sign in first.' }, 401)
+  },
+}
+```
+
+Because `next()` always returns a promise, the package has to wait on every request that a middleware function wraps, so before it waits, it copies more of the request and attaches an abort handler. When `before` returns no promise, the package has nothing to wait on, which means that it can send the reply of a synchronous handler inside the same call from uWebSockets.js. When `before` has to wait for something, such as a session lookup, it can return a promise, in which case the package waits only on the requests for which `before` returns one. An object can have both a `before` and a `handle` function, in which case the package calls `handle` once `before` passes the request on.
+
+Among the optional middleware of the package, `compression()` and a `cors()` with a list or a function of origins work on the reply after the handler, so the package waits on every request that either of them wraps. `serveStatic()` returns a promise for each GET or HEAD request for a file under its prefix, while `csrf()` and `rateLimit()` return one only when a function or a store that you pass to them returns a promise.
+
 ## Pass values from middleware to the handler
 
 `c.set(key, value)` stores a value for the rest of the request, and `c.get(key)` returns that value, or `undefined` when your code has stored nothing under the key. A middleware can therefore look up a value once, such as the tenant of the request, so that every later middleware and the handler can get it with `c.get()`:
@@ -136,17 +153,7 @@ app.get('/me', { headers: ['authorization'] }, c => {
 app.get('/where', { clientAddress: true }, c => c.text(c.req.clientAddress))
 ```
 
-A middleware declares the headers that it uses in the same way, as an object with a `handle` function. The package then copies those headers for every route that the middleware applies to:
-
-```ts
-const requireLogin: Middleware = {
-  headers: ['authorization'],
-  handle: async (c, next) => {
-    if (c.req.header('authorization') === undefined) return c.json({ error: 'Sign in first.' }, 401)
-    await next()
-  },
-}
-```
+A middleware declares the headers that it uses in the same way, with `headers` on an object that has a `before` function, a `handle` function, or both, as `requireLogin` does in [Work before the handler without `next`](#work-before-the-handler-without-next). The package then copies those headers for every route that the middleware applies to.
 
 Declare a header in `optionsHeaders` when a middleware uses that header on OPTIONS requests alone, as a CORS middleware does with `access-control-request-method` on a preflight request. The package then copies that header only for an OPTIONS request, so it adds no work for that header to a request with any other method.
 

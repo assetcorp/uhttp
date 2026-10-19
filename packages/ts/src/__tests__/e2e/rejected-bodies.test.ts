@@ -134,7 +134,7 @@ describe('request bodies that the package rejects', () => {
     expect(await connection.waitForClose()).toBe('closed')
   })
 
-  it('answers 415 when a second Content-Encoding line names a compression after identity, and closes the connection without a reset', async () => {
+  it('answers 415 when a second Content-Encoding line has a compression after identity, and closes the connection without a reset', async () => {
     const handled: string[] = []
     const server = await start(bodyApp(handled))
 

@@ -3,7 +3,7 @@ import type { Context } from '../../context.js'
 import { UhttpError } from '../../errors.js'
 import type { MiddlewareDefinition } from '../../types.js'
 import { hostOf, protocolOf } from '../client.js'
-import { optionsObject } from '../options.js'
+import { isThenable, optionsObject } from '../options.js'
 import { type AllowedOrigins, allowedOrigins, allowsOrigin, type OriginCheck } from '../origins.js'
 import {
   ALLOWED_FETCH_SITES,
@@ -47,7 +47,7 @@ function sendableByForm(contentType: string | undefined): boolean {
   return media === undefined || FORM_CONTENT_TYPES.includes(media.type)
 }
 
-async function allowedRequest(context: Context, named: AllowedOrigins | undefined): Promise<boolean> {
+function allowedRequest(context: Context, named: AllowedOrigins | undefined): boolean | Promise<boolean> {
   const site = context.req.header(FETCH_SITE_HEADER)
   if (site !== undefined && ALLOWED_FETCH_SITES.includes(site)) return true
   const origin = context.req.header(ORIGIN_HEADER)
@@ -80,18 +80,23 @@ export function csrf(options?: CsrfOptions): MiddlewareDefinition {
   const named = value === undefined ? undefined : allowedOrigins(value, 'the origin option of csrf()', false, false)
   return {
     headers: [FETCH_SITE_HEADER, ORIGIN_HEADER, CONTENT_TYPE_HEADER, HOST_HEADER],
-    async handle(context, next) {
-      if (
-        !SAFE_METHODS.includes(context.req.method) &&
-        sendableByForm(context.req.header(CONTENT_TYPE_HEADER)) &&
-        !(await allowedRequest(context, named))
-      ) {
-        throw new UhttpError(
-          'CSRF_REJECTED',
-          'The package rejected this request, because the app allows neither the value of its Sec-Fetch-Site header nor the value of its Origin header.',
-        )
+    before(context): undefined | Promise<void> {
+      if (SAFE_METHODS.includes(context.req.method) || !sendableByForm(context.req.header(CONTENT_TYPE_HEADER))) return
+      const allowed: unknown = allowedRequest(context, named)
+      if (isThenable(allowed)) {
+        return Promise.resolve(allowed).then(verdict => {
+          if (!verdict) throw rejection()
+        })
       }
-      return next()
+      if (!allowed) throw rejection()
+      return undefined
     },
   }
+}
+
+function rejection(): UhttpError {
+  return new UhttpError(
+    'CSRF_REJECTED',
+    'The package rejected this request, because the app allows neither the value of its Sec-Fetch-Site header nor the value of its Origin header.',
+  )
 }

@@ -202,8 +202,8 @@ function checkedAddress(options: ServeOptions, threads: number): ListenAddress {
 }
 
 /**
- * Returns the options of {@link serve} after the function checks each option on its own and
- * together with the others.
+ * Returns the options of {@link serve} after the function checks the value of each option and
+ * the options that depend on one another.
  *
  * @param options - The package passes the options that you gave to {@link serve}.
  * @returns The function returns the options with every default filled in.
