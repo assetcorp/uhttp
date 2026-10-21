@@ -3,7 +3,7 @@
 On this page, you can compare the number of requests a second that uhttp serves with the rates of uWebSockets.js and of three Node.js frameworks: Hono on its Node.js adapter, Fastify, and Express. A maintainer starts the suite in [`benchmarks/suite/`](benchmarks/suite/) when somebody asks for new figures. From the newest run under [`benchmarks/results/runs/`](benchmarks/results/runs/), the generator in [`benchmarks/writeup/`](benchmarks/writeup/) then writes every number, table, and chart on this page.
 
 <!-- BENCH:run START -->
-The suite recorded every figure on this page on 2026-10-19, in run [`20261019T212015Z`](benchmarks/results/runs/20261019T212015Z/comparison.md). You can find the hardware and the software of that run under [The machine](#the-machine).
+The suite recorded every figure on this page on 2026-10-21, in run [`20261021T195410Z`](benchmarks/results/runs/20261021T195410Z/comparison.md). You can find the hardware and the software of that run under [The machine](#the-machine).
 <!-- BENCH:run END -->
 
 ## Peak throughput
@@ -11,11 +11,17 @@ The suite recorded every figure on this page on 2026-10-19, in run [`20261019T21
 The length of each bar is the highest rate that a server reached at any of the connection counts that the suite measured. In the first chart, each server sends only the headers that it sends by default. In the second chart, every server sends the same ten security headers, which you can find under [Security headers](#security-headers).
 
 <!-- BENCH:peak START -->
+### Without pipelining
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/peak-plain-pipelining-1.svg" alt="Peak requests a second of each server without security headers, with one request at a time on each connection" width="820">
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/peak-secure-pipelining-1.svg" alt="Peak requests a second of each server with security headers, with one request at a time on each connection" width="820">
+
 ### With 10 pipelined requests on each connection
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/peak-plain-pipelining-10.svg" alt="Peak requests a second of each server without security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/peak-plain-pipelining-10.svg" alt="Peak requests a second of each server without security headers, with 10 pipelined requests on each connection" width="820">
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/peak-secure-pipelining-10.svg" alt="Peak requests a second of each server with security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/peak-secure-pipelining-10.svg" alt="Peak requests a second of each server with security headers, with 10 pipelined requests on each connection" width="820">
 <!-- BENCH:peak END -->
 
 ## Requests a second at 100 connections
@@ -25,67 +31,129 @@ These tables show every server's figures at 100 connections under two loads. Wit
 <!-- BENCH:tables START -->
 In each table, the servers appear in the order of their requests a second at 100 connections. In the last column, you can read each server's highest rate across every connection count, with the connections at which the server reached that rate.
 
+### Without pipelining
+
+#### Plain text route without security headers
+
+| Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| uWebSockets.js | 161,565 | 100.0% | 0.60 | 1.09 | 1.00 | 162,731 at 250 |
+| uhttp | 153,147 | 94.8% | 0.64 | 0.82 | 1.00 | 156,280 at 50 |
+| Fastify | 67,272 | 41.6% | 1.53 | 1.88 | 1.00 | 67,272 at 100 |
+| Hono | 66,724 | 41.3% | 1.50 | 1.80 | 1.00 | 69,207 at 50 |
+| Express | 42,819 | 26.5% | 2.28 | 2.82 | 1.00 | 42,911 at 10 |
+
+#### JSON route without security headers
+
+| Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| uWebSockets.js | 155,869 | 100.0% | 0.66 | 0.81 | 1.00 | 155,869 at 100 |
+| uhttp | 147,312 | 94.5% | 0.67 | 0.82 | 1.00 | 147,312 at 100 |
+| Fastify | 71,502 | 45.9% | 1.41 | 1.67 | 1.00 | 71,502 at 100 |
+| Hono | 66,340 | 42.6% | 1.49 | 1.73 | 1.00 | 69,023 at 50 |
+| Express | 47,695 | 30.6% | 2.13 | 2.40 | 1.00 | 49,861 at 50 |
+
+#### 16 KiB upload route without security headers
+
+| Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| uWebSockets.js | 73,969 | 100.0% | 1.32 | 1.90 | 1.00 | 73,969 at 100 |
+| uhttp | 56,739 | 76.7% | 1.75 | 2.31 | 1.00 | 61,039 at 50 |
+| Fastify | 33,036 | 44.7% | 2.37 | 12.3 | 1.00 | 33,036 at 100 |
+| Hono | 27,892 | 37.7% | 2.83 | 12.7 | 1.00 | 27,892 at 100 |
+| Express | 25,181 | 34.0% | 3.33 | 12.2 | 1.00 | 25,736 at 50 |
+
+#### Plain text route with security headers
+
+| Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| uWebSockets.js | 158,285 | 100.0% | 0.67 | 0.83 | 1.00 | 158,285 at 100 |
+| uhttp | 150,679 | 95.2% | 0.66 | 0.80 | 1.00 | 150,679 at 100 |
+| Fastify | 45,090 | 28.5% | 2.17 | 2.68 | 1.00 | 45,090 at 100 |
+| Hono | 40,530 | 25.6% | 2.51 | 2.94 | 1.00 | 40,530 at 100 |
+| Express | 36,922 | 23.3% | 2.66 | 3.23 | 1.00 | 43,489 at 50 |
+
+#### JSON route with security headers
+
+| Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| uWebSockets.js | 140,341 | 100.0% | 0.68 | 1.28 | 1.00 | 153,887 at 500 |
+| uhttp | 135,583 | 96.6% | 0.73 | 0.94 | 1.00 | 135,583 at 100 |
+| Fastify | 44,144 | 31.5% | 2.27 | 3.81 | 1.00 | 44,144 at 100 |
+| Hono | 36,141 | 25.8% | 2.74 | 3.27 | 1.00 | 37,168 at 50 |
+| Express | 36,051 | 25.7% | 2.81 | 3.21 | 1.00 | 39,389 at 50 |
+
+#### 16 KiB upload route with security headers
+
+| Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| uWebSockets.js | 74,598 | 100.0% | 1.28 | 1.84 | 1.00 | 74,598 at 100 |
+| uhttp | 57,630 | 77.3% | 1.71 | 2.19 | 1.00 | 58,817 at 50 |
+| Fastify | 25,384 | 34.0% | 3.09 | 14.5 | 1.00 | 27,096 at 50 |
+| Hono | 24,938 | 33.4% | 3.84 | 12.7 | 1.00 | 25,354 at 50 |
+| Express | 20,454 | 27.4% | 4.20 | 13.7 | 1.00 | 21,433 at 10 |
+
 ### With 10 pipelined requests on each connection
 
 #### Plain text route without security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| uWebSockets.js | 664,229 | 100.0% | 1.50 | 1.78 | 1.00 | 664,229 at 100 |
-| uhttp | 521,912 | 78.6% | 2.05 | 2.39 | 1.00 | 521,912 at 100 |
-| Fastify | 98,220 | 14.8% | 10.0 | 11.8 | 1.00 | 107,534 at 50 |
-| Hono | 95,413 | 14.4% | 10.5 | 11.2 | 1.00 | 105,035 at 50 |
-| Express | 64,810 | 9.8% | 15.8 | 18.0 | 1.00 | 68,699 at 50 |
+| uWebSockets.js | 571,333 | 100.0% | 1.54 | 2.06 | 1.00 | 608,476 at 50 |
+| uhttp | 494,071 | 86.5% | 1.87 | 2.36 | 1.00 | 555,562 at 250 |
+| Fastify | 107,185 | 18.8% | 9.26 | 11.0 | 1.00 | 109,929 at 50 |
+| Hono | 101,558 | 17.8% | 10.5 | 11.2 | 1.00 | 103,390 at 50 |
+| Express | 67,774 | 11.9% | 14.4 | 17.8 | 1.00 | 68,461 at 500 |
 
 #### JSON route without security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| uWebSockets.js | 565,257 | 100.0% | 1.76 | 2.22 | 1.00 | 565,257 at 100 |
-| uhttp | 447,439 | 79.2% | 2.36 | 2.75 | 1.00 | 455,163 at 10 |
-| Fastify | 98,504 | 17.4% | 10.3 | 12.0 | 1.00 | 110,141 at 50 |
-| Hono | 97,351 | 17.2% | 10.8 | 12.6 | 1.00 | 101,384 at 50 |
-| Express | 61,697 | 10.9% | 16.4 | 17.2 | 1.00 | 65,794 at 50 |
+| uWebSockets.js | 520,008 | 100.0% | 1.99 | 2.10 | 1.00 | 520,008 at 100 |
+| uhttp | 425,490 | 81.8% | 2.26 | 2.67 | 1.00 | 470,448 at 250 |
+| Hono | 100,713 | 19.4% | 9.77 | 12.8 | 1.00 | 103,258 at 50 |
+| Fastify | 93,676 | 18.0% | 10.7 | 12.2 | 1.00 | 107,581 at 50 |
+| Express | 60,667 | 11.7% | 16.6 | 18.4 | 1.00 | 66,255 at 50 |
 
 #### 16 KiB upload route without security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| uWebSockets.js | 81,629 | 100.0% | 1.20 | 1.74 | 1.00 | 81,629 at 100 |
-| uhttp | 50,889 | 62.3% | 1.96 | 2.56 | 1.00 | 52,171 at 50 |
-| Fastify | 32,588 | 39.9% | 2.34 | 11.8 | 1.00 | 34,012 at 10 |
-| Hono | 27,044 | 33.1% | 3.03 | 12.5 | 1.00 | 28,171 at 50 |
-| Express | 23,693 | 29.0% | 3.85 | 11.8 | 1.00 | 25,192 at 250 |
+| uWebSockets.js | 77,603 | 100.0% | 1.24 | 1.70 | 1.00 | 78,258 at 250 |
+| uhttp | 63,816 | 82.2% | 1.53 | 1.95 | 1.00 | 63,816 at 100 |
+| Fastify | 29,435 | 37.9% | 2.75 | 11.9 | 1.00 | 31,436 at 50 |
+| Hono | 28,044 | 36.1% | 2.97 | 11.5 | 1.00 | 29,035 at 10 |
+| Express | 24,529 | 31.6% | 3.40 | 11.7 | 1.00 | 24,529 at 100 |
 
 #### Plain text route with security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| uWebSockets.js | 572,430 | 100.0% | 1.81 | 3.34 | 1.00 | 605,234 at 50 |
-| uhttp | 464,383 | 81.1% | 2.30 | 2.49 | 1.00 | 464,383 at 100 |
-| Fastify | 66,504 | 11.6% | 15.4 | 17.3 | 1.00 | 69,202 at 250 |
-| Hono | 56,132 | 9.8% | 17.5 | 20.1 | 1.00 | 57,336 at 50 |
-| Express | 47,334 | 8.3% | 21.0 | 23.1 | 1.00 | 51,475 at 50 |
+| uWebSockets.js | 600,874 | 100.0% | 1.61 | 3.20 | 1.00 | 600,874 at 100 |
+| uhttp | 464,851 | 77.4% | 2.12 | 2.59 | 1.00 | 530,052 at 50 |
+| Fastify | 66,360 | 11.0% | 15.5 | 17.5 | 1.00 | 69,493 at 50 |
+| Hono | 51,928 | 8.6% | 19.3 | 21.9 | 1.00 | 55,836 at 50 |
+| Express | 49,346 | 8.2% | 21.2 | 22.1 | 1.00 | 51,794 at 50 |
 
 #### JSON route with security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| uWebSockets.js | 557,129 | 100.0% | 1.82 | 2.10 | 1.00 | 557,129 at 100 |
-| uhttp | 404,878 | 72.7% | 2.39 | 3.10 | 1.00 | 404,878 at 100 |
-| Fastify | 65,593 | 11.8% | 15.8 | 16.5 | 1.00 | 70,046 at 50 |
-| Hono | 52,313 | 9.4% | 19.4 | 20.2 | 1.00 | 54,598 at 50 |
-| Express | 50,208 | 9.0% | 19.7 | 23.0 | 1.00 | 51,778 at 50 |
+| uWebSockets.js | 498,530 | 100.0% | 1.99 | 2.37 | 1.00 | 498,530 at 100 |
+| uhttp | 423,899 | 85.0% | 2.28 | 2.73 | 1.00 | 423,899 at 100 |
+| Fastify | 67,569 | 13.6% | 15.4 | 17.0 | 1.00 | 69,653 at 250 |
+| Express | 50,957 | 10.2% | 19.5 | 21.7 | 1.00 | 50,957 at 100 |
+| Hono | 49,338 | 9.9% | 19.8 | 24.2 | 1.00 | 55,965 at 50 |
 
 #### 16 KiB upload route with security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| uWebSockets.js | 79,914 | 100.0% | 1.23 | 1.65 | 1.00 | 80,683 at 250 |
-| uhttp | 56,189 | 70.3% | 1.76 | 2.18 | 1.00 | 57,357 at 50 |
-| Fastify | 24,207 | 30.3% | 3.25 | 14.2 | 1.00 | 26,521 at 50 |
-| Hono | 23,759 | 29.7% | 4.35 | 5.19 | 1.00 | 28,533 at 50 |
-| Express | 21,846 | 27.3% | 4.02 | 13.0 | 1.00 | 21,846 at 100 |
+| uWebSockets.js | 79,651 | 100.0% | 1.21 | 1.72 | 1.00 | 79,651 at 100 |
+| uhttp | 62,962 | 79.0% | 1.54 | 2.01 | 1.00 | 65,932 at 50 |
+| Hono | 20,605 | 25.9% | 3.92 | 14.9 | 1.00 | 26,697 at 10 |
+| Express | 20,505 | 25.7% | 4.13 | 13.8 | 1.00 | 21,181 at 10 |
+| Fastify | 18,465 | 23.2% | 3.76 | 24.8 | 1.00 | 21,511 at 500 |
 <!-- BENCH:tables END -->
 
 ## Across connection counts
@@ -93,25 +161,45 @@ In each table, the servers appear in the order of their requests a second at 100
 Each chart has three panels, for the requests a second, the p99 latency, and the CPU cores that the server process kept busy, at every connection count that the suite measured. Every server handles its requests on one thread, so a server that keeps that thread busy has a value close to 1 in the bottom panel.
 
 <!-- BENCH:sweep START -->
+### Without pipelining
+
+#### Plain text route
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-plain-plain-pipelining-1.svg" alt="Requests a second, p99 latency, and CPU use on the Plain text route without security headers, with one request at a time on each connection" width="820">
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-plain-secure-pipelining-1.svg" alt="Requests a second, p99 latency, and CPU use on the Plain text route with security headers, with one request at a time on each connection" width="820">
+
+#### JSON route
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-json-plain-pipelining-1.svg" alt="Requests a second, p99 latency, and CPU use on the JSON route without security headers, with one request at a time on each connection" width="820">
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-json-secure-pipelining-1.svg" alt="Requests a second, p99 latency, and CPU use on the JSON route with security headers, with one request at a time on each connection" width="820">
+
+#### 16 KiB upload route
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-upload-plain-pipelining-1.svg" alt="Requests a second, p99 latency, and CPU use on the 16 KiB upload route without security headers, with one request at a time on each connection" width="820">
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-upload-secure-pipelining-1.svg" alt="Requests a second, p99 latency, and CPU use on the 16 KiB upload route with security headers, with one request at a time on each connection" width="820">
+
 ### With 10 pipelined requests on each connection
 
 #### Plain text route
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/sweep-plain-plain-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the Plain text route without security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-plain-plain-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the Plain text route without security headers, with 10 pipelined requests on each connection" width="820">
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/sweep-plain-secure-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the Plain text route with security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-plain-secure-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the Plain text route with security headers, with 10 pipelined requests on each connection" width="820">
 
 #### JSON route
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/sweep-json-plain-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the JSON route without security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-json-plain-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the JSON route without security headers, with 10 pipelined requests on each connection" width="820">
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/sweep-json-secure-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the JSON route with security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-json-secure-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the JSON route with security headers, with 10 pipelined requests on each connection" width="820">
 
 #### 16 KiB upload route
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/sweep-upload-plain-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the 16 KiB upload route without security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-upload-plain-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the 16 KiB upload route without security headers, with 10 pipelined requests on each connection" width="820">
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/sweep-upload-secure-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the 16 KiB upload route with security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/sweep-upload-secure-pipelining-10.svg" alt="Requests a second, p99 latency, and CPU use on the 16 KiB upload route with security headers, with 10 pipelined requests on each connection" width="820">
 <!-- BENCH:sweep END -->
 
 ## Latency at each server's peak
@@ -119,11 +207,17 @@ Each chart has three panels, for the requests a second, the p99 latency, and the
 h2load measures the time from the first byte of a request to the last byte of its response. With pipelining, that time includes the wait behind the earlier requests on the same connection. Each server reached its peak at its own connection count, which you can read beside its line, so compare the lines of two servers only where their counts match.
 
 <!-- BENCH:latency START -->
+### Without pipelining
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/latency-plain-pipelining-1.svg" alt="Latency percentiles at each server's peak without security headers, with one request at a time on each connection" width="820">
+
+<img src="benchmarks/results/runs/20261021T195410Z/charts/latency-secure-pipelining-1.svg" alt="Latency percentiles at each server's peak with security headers, with one request at a time on each connection" width="820">
+
 ### With 10 pipelined requests on each connection
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/latency-plain-pipelining-10.svg" alt="Latency percentiles at each server's peak without security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/latency-plain-pipelining-10.svg" alt="Latency percentiles at each server's peak without security headers, with 10 pipelined requests on each connection" width="820">
 
-<img src="benchmarks/results/runs/20261019T212015Z/charts/latency-secure-pipelining-10.svg" alt="Latency percentiles at each server's peak with security headers, with 10 pipelined requests on each connection" width="820">
+<img src="benchmarks/results/runs/20261021T195410Z/charts/latency-secure-pipelining-10.svg" alt="Latency percentiles at each server's peak with security headers, with 10 pipelined requests on each connection" width="820">
 <!-- BENCH:latency END -->
 
 ## Method
@@ -170,7 +264,7 @@ These ten headers make up the `web` preset of the `secureHeaders()` middleware o
 ### Load
 
 <!-- BENCH:settings START -->
-h2load sent each request over HTTP/1.1 from 4 threads, with 10 pipelined requests on each connection. For each load, server, route, and header setting, the suite started a new server process and checked its replies to all three routes. It then warmed the server up for 40 seconds at 100 connections under the same load, and measured it for 40 seconds at each of 10, 50, 100, 250, and 500 connections. h2load sent a 16 KiB body with every request to the upload route. The suite counted the CPU time of each server process during each measurement and divided it by the time that the measurement took, so a server that kept one core busy for the whole measurement had a value of 1.
+h2load sent each request over HTTP/1.1 from 4 threads. The suite measured every server under each of these loads in turn: one request at a time on each connection and 10 pipelined requests on each connection. For each load, server, route, and header setting, the suite started a new server process and checked its replies to all three routes. It then warmed the server up for 40 seconds at 100 connections under the same load, and measured it for 40 seconds at each of 10, 50, 100, 250, and 500 connections. h2load sent a 16 KiB body with every request to the upload route. The suite counted the CPU time of each server process during each measurement and divided it by the time that the measurement took, so a server that kept one core busy for the whole measurement had a value of 1.
 <!-- BENCH:settings END -->
 
 The maintainers of Fastify send their load with autocannon, a load generator that is written in JavaScript. This suite sends the same number of connections and pipelined requests with h2load from [nghttp2](https://github.com/nghttp2/nghttp2), because a load generator that is slower than the fastest server can measure that server only at its own speed. In the measurement under [Check a change](CONTRIBUTING.md#check-a-change), autocannon sent about 320,000 requests a second to uWebSockets.js, while h2load sent about 390,000.
@@ -182,10 +276,10 @@ The maintainers of Fastify send their load with autocannon, a load generator tha
 - The CPU was the Intel(R) Xeon(R) Platinum 8481C CPU @ 2.70GHz, with 8 logical cores.
 - The machine had 31.3 GiB of memory.
 - The operating system was Ubuntu 24.04.5 LTS, with kernel 7.0.0-1014-gcp on x64.
-- The suite used Node.js 24.22.0 and h2load 1.70.0 from nghttp2.
+- The suite used Node.js 24.22.1 and h2load 1.70.0 from nghttp2.
 - The suite pinned each server to CPU 1 and h2load to CPUs 2-5 with `taskset`.
-- The suite measured `uWebSockets.js` 20.71.0, `@delali/uhttp` 0.1.0 with `uWebSockets.js` 20.71.0, `hono` 4.13.13 with `@hono/node-server` 2.1.5, `fastify` 5.12.7 with `@fastify/helmet` 13.2.0, and `express` 5.3.0 with `helmet` 8.3.0.
-- The suite built uhttp from commit `a2d4d757bf4c`.
+- The suite measured `uWebSockets.js` 20.71.0, `@delali/uhttp` 0.1.1 with `uWebSockets.js` 20.71.0, `hono` 4.13.13 with `@hono/node-server` 2.1.5, `fastify` 5.12.7 with `@fastify/helmet` 13.2.0, and `express` 5.3.0 with `helmet` 8.3.0.
+- The suite built uhttp from commit `6ae4740a995b`.
 <!-- BENCH:machine END -->
 
 ### Reproduce a run

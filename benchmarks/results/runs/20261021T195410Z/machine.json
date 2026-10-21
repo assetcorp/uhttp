@@ -1,0 +1,21 @@
+{
+  "label": "GCP c3-standard-8, us-central1-a",
+  "cpu": {
+    "model": "Intel(R) Xeon(R) Platinum 8481C CPU @ 2.70GHz",
+    "logical_cores": 8
+  },
+  "memory_bytes": 33645920256,
+  "os": {
+    "name": "Ubuntu 24.04.5 LTS",
+    "kernel": "7.0.0-1014-gcp",
+    "arch": "x64"
+  },
+  "tools": {
+    "node": "24.22.1",
+    "h2load": "1.70.0"
+  },
+  "pinning": {
+    "server_cpu": 1,
+    "load_cpus": "2-5"
+  }
+}
