@@ -1,7 +1,7 @@
 import type { HttpResponse } from 'uWebSockets.js'
 import { logServerError } from '../chain.js'
 import type { Context } from '../context.js'
-import type { Exchange } from '../exchange.js'
+import { closesBeforeBodyEnds, type Exchange } from '../exchange/index.js'
 import { type ResponseStream, type StreamProducer, streamShortfallError, streamWriteError } from '../reply.js'
 import { closeConnection } from './close.js'
 import { holdForBody } from './hold.js'
@@ -220,7 +220,7 @@ export class NativeStream implements ResponseStream {
   }
 
   #holdsEnd(): boolean {
-    return !this.#readingStopped && this.#exchange.closesBeforeBodyEnds()
+    return !this.#readingStopped && closesBeforeBodyEnds(this.#exchange)
   }
 
   #stopReadingOnceDrained(): void {

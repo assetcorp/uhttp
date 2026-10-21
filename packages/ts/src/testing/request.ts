@@ -9,7 +9,7 @@ import {
 import { type Context, createContext } from '../context.js'
 import { startDeadline } from '../deadline.js'
 import { UhttpError } from '../errors.js'
-import { Exchange } from '../exchange.js'
+import { Exchange, lingersAfterReply, serverCloses } from '../exchange/index.js'
 import { transferCodingError } from '../framing.js'
 import { lineSeparatorOf } from '../headers.js'
 import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.js'
@@ -75,14 +75,14 @@ function toResponse(exchange: Exchange, context: Context, reply: Reply): Respons
   const { status, stream } = reply
   const head = context.req.method === 'HEAD'
   if (stream !== undefined && !head && statusHasBody(status)) {
-    if (exchange.serverCloses()) headers.set('connection', 'close')
+    if (serverCloses(exchange)) headers.set('connection', 'close')
     if (stream.length !== undefined) headers.set('content-length', String(stream.length))
     return new Response(testStreamBody(exchange, context, stream.produce, stream.length), { status, headers })
   }
   exchange.settleBody()
   const lengthless = !statusHasBody(status) || (stream !== undefined && stream.length === undefined)
-  const lingers = exchange.lingersAfterReply(lengthless)
-  if (lingers || (exchange.serverCloses() && !exchange.clientCloses)) headers.set('connection', 'close')
+  const lingers = lingersAfterReply(exchange, lengthless)
+  if (lingers || (serverCloses(exchange) && !exchange.clientCloses)) headers.set('connection', 'close')
   exchange.end()
   if (!statusHasBody(status)) return new Response(null, { status, headers })
   if (stream !== undefined) {
@@ -133,7 +133,7 @@ function copyTestRequest(
 
 function keepsUnread(exchange: Exchange, reply: Reply): boolean {
   if (reply.stream !== undefined) return true
-  return exchange.lingersAfterReply(!statusHasBody(reply.status))
+  return lingersAfterReply(exchange, !statusHasBody(reply.status))
 }
 
 async function untilReply(

@@ -1,6 +1,6 @@
 import type { Context } from './context.js'
 import { isClientError, UhttpError } from './errors.js'
-import type { Exchange } from './exchange.js'
+import type { Exchange } from './exchange/index.js'
 import { isThenable } from './middleware/options.js'
 import { errorReply, Reply } from './reply.js'
 import type { BeforeHandler, Handler, Logger, MiddlewareHandler, Next } from './types.js'
@@ -253,6 +253,47 @@ export function runChain(
   handler: Handler,
 ): undefined | Promise<void> {
   const result = dispatch(context, exchange, layers, handler, 0)
+  if (result === undefined) return ensureReply(context, exchange)
+  return ensureReplyLater(context, exchange, result)
+}
+
+/**
+ * Takes what the handler of a route without middleware returned, as {@link runChain} does for a
+ * chain without layers: it makes a reply the current reply, waits for a promise, and turns
+ * anything else into an error reply.
+ *
+ * @param context - The package passes the context of the request.
+ * @param exchange - The package passes the state of the request, which stores the reply.
+ * @param result - The package passes the value that the handler returned.
+ * @returns The function returns `undefined` when the request has its reply. Otherwise, it returns
+ * a promise that resolves once the handler finishes, and that promise never rejects.
+ * @internal
+ */
+export function settleResult(context: Context, exchange: Exchange, result: unknown): undefined | Promise<void> {
+  if (result instanceof Reply) {
+    exchange.assign(result)
+    return undefined
+  }
+  if (!(result instanceof Promise)) return settled(context, exchange, fail(context, exchange, missingReply()))
+  return ensureReplyLater(context, exchange, settleHandler(context, exchange, result))
+}
+
+/**
+ * Turns an error that the handler of a route without middleware threw into a reply, as
+ * {@link runChain} does for a chain without layers.
+ *
+ * @param context - The package passes the context of the request.
+ * @param exchange - The package passes the state of the request, which stores the reply.
+ * @param error - The package passes the error that the handler threw.
+ * @returns The function returns `undefined` when the request has its reply. Otherwise, it returns
+ * a promise that resolves once the error handler of the app finishes, and that promise never rejects.
+ * @internal
+ */
+export function settleError(context: Context, exchange: Exchange, error: unknown): undefined | Promise<void> {
+  return settled(context, exchange, fail(context, exchange, error))
+}
+
+function settled(context: Context, exchange: Exchange, result: undefined | Promise<void>): undefined | Promise<void> {
   if (result === undefined) return ensureReply(context, exchange)
   return ensureReplyLater(context, exchange, result)
 }

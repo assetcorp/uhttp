@@ -2,6 +2,7 @@ import { realpathSync, type Stats, statSync } from 'node:fs'
 import { extname, resolve } from 'node:path'
 import { type Context, exchangeOf } from '../../context.js'
 import { UhttpError } from '../../errors.js'
+import { setPrepared } from '../../exchange/index.js'
 import { createReply, type Reply } from '../../reply.js'
 import type { PreparedName } from '../../response.js'
 import { canonicalSegment, splitPath } from '../../router/pattern.js'
@@ -21,6 +22,7 @@ import {
   STATIC_FALLBACK_CONTENT_TYPE,
   WHOLE_FILE_STATUS,
 } from './constants.js'
+
 import { locate, regularFile } from './locate.js'
 import { canonicalName, requestedPath } from './path.js'
 import { fileProducer } from './send.js'
@@ -136,7 +138,7 @@ function fileReply(context: Context, path: string, stats: Stats, plan: StaticPla
       ? byteRange(context.req.header(RANGE_HEADER), stats.size)
       : ({ kind: 'whole' } as const)
   if (range.kind === 'unsatisfiable') {
-    exchangeOf(context).setPrepared(plan.contentRangeName, `bytes */${stats.size}`, false)
+    setPrepared(exchangeOf(context), plan.contentRangeName, `bytes */${stats.size}`, false)
     throw new UhttpError(
       'RANGE_NOT_SATISFIABLE',
       `The file has ${stats.size} bytes, so the range starts at or past its end.`,

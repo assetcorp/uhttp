@@ -17,7 +17,16 @@ from chart_style import (
     server_colour,
     style_axes,
 )
-from data import VARIANT_TITLES, connection_levels, route_title, rows, server_ids, server_name
+from data import (
+    VARIANT_TITLES,
+    connection_levels,
+    load_caption,
+    pipelining_of,
+    route_title,
+    rows,
+    server_ids,
+    server_name,
+)
 from matplotlib.ticker import FuncFormatter
 from render import is_number
 
@@ -89,11 +98,11 @@ def sweep_figure(destination: Path, results: dict, run_id: str, route: str, vari
     connections_axis(cores, levels)
     cores.set_xlabel("Connections")
     cores.legend(loc="upper center", bbox_to_anchor=LEGEND_ANCHOR_BELOW_AXES, ncols=LEGEND_COLUMNS, fontsize=BASE_FONT_POINTS - 1)
-    pipelined = (results.get("settings") or {}).get("pipelined_requests")
+    pipelining = pipelining_of(results)
     caption(
         figure,
         f"{route_title(results, route)} route {VARIANT_TITLES[variant]}, across connections",
-        f"{pipelined} pipelined requests per connection · run {run_id}",
+        f"{load_caption(pipelining)} · run {run_id}",
     )
     figure.subplots_adjust(hspace=PANEL_GAP_FRACTION)
-    return save(figure, destination / sweep_chart(route, variant))
+    return save(figure, destination / sweep_chart(route, variant, pipelining))

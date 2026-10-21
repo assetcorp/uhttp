@@ -1,5 +1,5 @@
 import { type Context, exchangeOf } from '../../context.js'
-import type { Exchange } from '../../exchange.js'
+import { type Exchange, setFixed, setPrepared } from '../../exchange/index.js'
 import { isToken } from '../../headers.js'
 import { createReply, type Reply } from '../../reply.js'
 import type { PreparedName } from '../../response.js'
@@ -181,19 +181,19 @@ export function cors(options: CorsOptions): MiddlewareDefinition {
       const origin = context.req.header(ORIGIN_HEADER)
       if (origin === undefined || !(await allowsOrigin(plan.allowed, origin, context))) {
         await next()
-        exchange.setFixed(plan.varyOrigin, true)
+        setFixed(exchange, plan.varyOrigin, true)
         return undefined
       }
-      exchange.setPrepared(plan.allowOriginName, origin, false)
-      if (plan.credentials !== undefined) exchange.setFixed(plan.credentials, false)
+      setPrepared(exchange, plan.allowOriginName, origin, false)
+      if (plan.credentials !== undefined) setFixed(exchange, plan.credentials, false)
       if (isPreflight(context, origin)) {
-        exchange.setFixed(plan.varyOrigin, true)
+        setFixed(exchange, plan.varyOrigin, true)
         answerPreflight(exchange, plan, context.req.header(REQUEST_HEADERS_HEADER))
         return createReply(PREFLIGHT_STATUS, undefined, null)
       }
-      if (plan.expose !== undefined) exchange.setFixed(plan.expose, false)
+      if (plan.expose !== undefined) setFixed(exchange, plan.expose, false)
       await next()
-      exchange.setFixed(plan.varyOrigin, true)
+      setFixed(exchange, plan.varyOrigin, true)
       return undefined
     },
   }
@@ -210,25 +210,25 @@ function answerWithStaticOrigin(context: Context, plan: CorsPlan, staticOrigin: 
   const preflight = isPreflight(context, origin)
   if (preflight && plan.allowed.kind === 'single' && origin !== plan.allowed.origin) return undefined
   const exchange = exchangeOf(context)
-  exchange.setFixed(staticOrigin, false)
-  if (plan.credentials !== undefined) exchange.setFixed(plan.credentials, false)
+  setFixed(exchange, staticOrigin, false)
+  if (plan.credentials !== undefined) setFixed(exchange, plan.credentials, false)
   if (preflight) {
     answerPreflight(exchange, plan, context.req.header(REQUEST_HEADERS_HEADER))
     return createReply(PREFLIGHT_STATUS, undefined, null)
   }
-  if (plan.expose !== undefined) exchange.setFixed(plan.expose, false)
+  if (plan.expose !== undefined) setFixed(exchange, plan.expose, false)
   return undefined
 }
 
 function answerPreflight(exchange: Exchange, plan: CorsPlan, requested: string | undefined): void {
-  exchange.setFixed(plan.methods, false)
-  exchange.setFixed(plan.maxAge, false)
+  setFixed(exchange, plan.methods, false)
+  setFixed(exchange, plan.maxAge, false)
   if (plan.allowHeaders !== undefined) {
-    exchange.setFixed(plan.allowHeaders, false)
+    setFixed(exchange, plan.allowHeaders, false)
     return
   }
   const echoed = echoedRequestHeaders(requested)
   if (echoed === undefined) return
-  exchange.setPrepared(plan.allowHeadersName, echoed, false)
-  exchange.setFixed(plan.varyRequestHeaders, true)
+  setPrepared(exchange, plan.allowHeadersName, echoed, false)
+  setFixed(exchange, plan.varyRequestHeaders, true)
 }

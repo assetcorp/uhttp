@@ -1,6 +1,6 @@
 import { logServerError } from '../chain.js'
 import type { Context } from '../context.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import { type ResponseStream, type StreamProducer, streamShortfallError, streamWriteError } from '../reply.js'
 
 const encoder = new TextEncoder()

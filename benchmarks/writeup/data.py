@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from render import is_number, kibibytes
+from render import integer, is_number, kibibytes
 
 ROUTES = ("plain", "json", "upload")
 VARIANTS = ("plain", "secure")
@@ -76,3 +76,38 @@ def variants_present(results: dict) -> list[str]:
 def routes_present(results: dict) -> list[str]:
     seen = {item.get("route") for item in results.get("measurements") or []}
     return [route for route in ROUTES if route in seen]
+
+
+def pipelining_levels(results: dict) -> list[int]:
+    seen = {item.get("pipelined_requests") for item in results.get("measurements") or []}
+    return sorted(level for level in seen if isinstance(level, int))
+
+
+def pipelining_view(results: dict, level: int) -> dict:
+    settings = results.get("settings") or {}
+    return {
+        **results,
+        "settings": {**settings, "pipelined_requests": level},
+        "measurements": [item for item in results.get("measurements") or [] if item.get("pipelined_requests") == level],
+        "failures": [item for item in results.get("failures") or [] if item.get("pipelined_requests") == level],
+    }
+
+
+def pipelining_of(results: dict) -> int | None:
+    value = (results.get("settings") or {}).get("pipelined_requests")
+    return value if isinstance(value, int) else None
+
+
+def load_phrase(level: object) -> str:
+    if level == 1:
+        return "one request at a time on each connection"
+    return f"{integer(level)} pipelined requests on each connection"
+
+
+def load_caption(level: object) -> str:
+    phrase = load_phrase(level)
+    return phrase[:1].upper() + phrase[1:]
+
+
+def load_title(level: object) -> str:
+    return "Without pipelining" if level == 1 else f"With {integer(level)} pipelined requests on each connection"

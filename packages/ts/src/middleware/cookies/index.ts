@@ -1,6 +1,7 @@
 import type { KeyObject } from 'node:crypto'
 import { type Context, exchangeOf } from '../../context.js'
 import { UhttpError } from '../../errors.js'
+import { setPrepared } from '../../exchange/index.js'
 import type { PreparedName } from '../../response.js'
 import type { MiddlewareDefinition } from '../../types.js'
 import { fixedName, optionsObject } from '../options.js'
@@ -69,7 +70,7 @@ function keysOf(context: Context): readonly KeyObject[] {
 
 function appendLine(context: Context, line: string): void {
   setCookieName ??= fixedName(SET_COOKIE_HEADER)
-  exchangeOf(context).setPrepared(setCookieName, line, true)
+  setPrepared(exchangeOf(context), setCookieName, line, true)
 }
 
 /**

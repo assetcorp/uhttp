@@ -1,6 +1,6 @@
 import { type BodyReader, type BodySource, declaredLength, type OpenedBody, openBody } from '../body/index.js'
 import { declaresNoBody } from '../body/reader.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import type { RequestChain } from '../resolve.js'
 import { firstValue, type TestBody, valuesOf } from './parse.js'
 

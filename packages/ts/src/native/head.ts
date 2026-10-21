@@ -1,6 +1,6 @@
 import type { HttpResponse } from 'uWebSockets.js'
 import { STATUS_TEXT } from '../constants.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import { headerBytes } from '../headers.js'
 import { JSON_CONTENT_TYPE, type Reply, TEXT_CONTENT_TYPE } from '../reply.js'
 import {
@@ -39,7 +39,15 @@ function contentTypeValue(contentType: string): string | ArrayBuffer {
   return contentType
 }
 
-function okHeadOf(contentType: string | undefined): ArrayBuffer | undefined {
+/**
+ * Returns the status line of a 200 together with its content type, as bytes that the package built
+ * once, for a text or a JSON content type.
+ *
+ * @param contentType - The package passes the content type of the reply.
+ * @returns The function returns `undefined` for any other content type.
+ * @internal
+ */
+export function okHeadOf(contentType: string | undefined): ArrayBuffer | undefined {
   if (contentType === TEXT_CONTENT_TYPE) return OK_TEXT_HEAD
   if (contentType === JSON_CONTENT_TYPE) return OK_JSON_HEAD
   return undefined

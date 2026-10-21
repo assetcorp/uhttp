@@ -15,13 +15,15 @@ The suite recorded this run at 2026-10-19T21:20:15.113Z.
 
 ## Load
 
-h2load sent each request over HTTP/1.1 from 4 threads, with 10 pipelined requests on each connection. For each server, route, and header setting, the suite started a new server process and checked its replies to all three routes. It then warmed the server up for 40 seconds at 100 connections, and measured it for 40 seconds at each of 10, 50, 100, 250, and 500 connections. h2load sent a 16 KiB body with every request to the upload route. The suite counted the CPU time of each server process during each measurement and divided it by the time that the measurement took, so a server that kept one core busy for the whole measurement had a value of 1.
+h2load sent each request over HTTP/1.1 from 4 threads, with 10 pipelined requests on each connection. For each load, server, route, and header setting, the suite started a new server process and checked its replies to all three routes. It then warmed the server up for 40 seconds at 100 connections under the same load, and measured it for 40 seconds at each of 10, 50, 100, 250, and 500 connections. h2load sent a 16 KiB body with every request to the upload route. The suite counted the CPU time of each server process during each measurement and divided it by the time that the measurement took, so a server that kept one core busy for the whole measurement had a value of 1.
 
 ## Results
 
 In each table, the servers appear in the order of their requests a second at 100 connections. In the last column, you can read each server's highest rate across every connection count, with the connections at which the server reached that rate.
 
-### Plain text route without security headers
+### With 10 pipelined requests on each connection
+
+#### Plain text route without security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -31,7 +33,7 @@ In each table, the servers appear in the order of their requests a second at 100
 | Hono | 95,413 | 14.4% | 10.5 | 11.2 | 1.00 | 105,035 at 50 |
 | Express | 64,810 | 9.8% | 15.8 | 18.0 | 1.00 | 68,699 at 50 |
 
-### JSON route without security headers
+#### JSON route without security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -41,7 +43,7 @@ In each table, the servers appear in the order of their requests a second at 100
 | Hono | 97,351 | 17.2% | 10.8 | 12.6 | 1.00 | 101,384 at 50 |
 | Express | 61,697 | 10.9% | 16.4 | 17.2 | 1.00 | 65,794 at 50 |
 
-### 16 KiB upload route without security headers
+#### 16 KiB upload route without security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -51,7 +53,7 @@ In each table, the servers appear in the order of their requests a second at 100
 | Hono | 27,044 | 33.1% | 3.03 | 12.5 | 1.00 | 28,171 at 50 |
 | Express | 23,693 | 29.0% | 3.85 | 11.8 | 1.00 | 25,192 at 250 |
 
-### Plain text route with security headers
+#### Plain text route with security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -61,7 +63,7 @@ In each table, the servers appear in the order of their requests a second at 100
 | Hono | 56,132 | 9.8% | 17.5 | 20.1 | 1.00 | 57,336 at 50 |
 | Express | 47,334 | 8.3% | 21.0 | 23.1 | 1.00 | 51,475 at 50 |
 
-### JSON route with security headers
+#### JSON route with security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -71,7 +73,7 @@ In each table, the servers appear in the order of their requests a second at 100
 | Hono | 52,313 | 9.4% | 19.4 | 20.2 | 1.00 | 54,598 at 50 |
 | Express | 50,208 | 9.0% | 19.7 | 23.0 | 1.00 | 51,778 at 50 |
 
-### 16 KiB upload route with security headers
+#### 16 KiB upload route with security headers
 
 | Server | Requests a second | Share of the uWebSockets.js rate | p50 (ms) | p99 (ms) | Server CPU cores | Peak requests a second |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

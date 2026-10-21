@@ -1,106 +1,24 @@
 import type { HttpRequest, HttpResponse } from 'uWebSockets.js'
-import type { BodyReader } from '../body/reader.js'
-import { logServerError, runChain } from '../chain.js'
-import type { CompiledApp, CompiledRoute, CopyPlan } from '../compile.js'
-import { LIST_HEADER_NAMES } from '../constants.js'
+import { runChain } from '../chain.js'
+import type { CompiledApp, CompiledRoute } from '../compile.js'
 import { type Context, createContext } from '../context.js'
-import { startDeadline } from '../deadline.js'
-import { UhttpError } from '../errors.js'
-import { Exchange } from '../exchange.js'
-import { lineSeparatorOf } from '../headers.js'
-import { errorReply, type Reply } from '../reply.js'
-import { CopiedRequest } from '../request.js'
+import { Exchange } from '../exchange/index.js'
+import type { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type RequestChain, resolveChain } from '../resolve.js'
-import { attachBody, followBody } from './body.js'
-import { closeConnection, remoteAddressOf, watchAbort } from './close.js'
+import { attachBody } from './body.js'
+import { watchAbort } from './close.js'
+import { answerWhileClosing } from './closing.js'
+import { copyRequest } from './copy.js'
+import { directHandler } from './direct.js'
 import { CLOSING, type Drain } from './drain.js'
-import { type RequestFraming, readFraming } from './framing.js'
-import { refusedRequest } from './refuse.js'
-import { writeCrash, writeFramingRejection, writeReply, writeWholeReply } from './write.js'
+import { crash, finish, finishLater } from './finish.js'
+import { admittedFraming } from './framing.js'
 
 type NativeHandler = (res: HttpResponse, req: HttpRequest) => void
 
-const SERVER_CLOSING_MESSAGE = 'The server is closing, so send the request again on a new connection.'
-const NO_VALUES: readonly (string | undefined)[] = []
 const NO_PARAMETERS: readonly string[] = []
 const MISSED_ROUTE_MESSAGE =
   'The package served a route that the JavaScript matcher matched after uWebSockets.js matched no route for this request.'
-
-function copyAllHeaders(req: HttpRequest): Map<string, string> {
-  const all = new Map<string, string>()
-  req.forEach((name, value) => {
-    if (value === '') return
-    const earlier = all.get(name)
-    if (earlier === undefined) all.set(name, value)
-    else if (LIST_HEADER_NAMES.includes(name)) all.set(name, `${earlier}${lineSeparatorOf(name)}${value}`)
-  })
-  return all
-}
-
-function copyDeclaredHeaders(req: HttpRequest, plan: CopyPlan): (string | undefined)[] {
-  const { headerNames, listHeaders } = plan
-  const values: (string | undefined)[] = new Array(headerNames.length)
-  for (let index = 0; index < headerNames.length; index++) {
-    if (listHeaders[index] === true) continue
-    const value = req.getHeader(headerNames[index] ?? '')
-    values[index] = value === '' ? undefined : value
-  }
-  if (!plan.hasListHeader) return values
-  req.forEach((name, value) => {
-    if (value === '') return
-    const index = headerNames.indexOf(name)
-    if (index === -1 || listHeaders[index] !== true) return
-    const earlier = values[index]
-    values[index] = earlier === undefined ? value : `${earlier}${lineSeparatorOf(name)}${value}`
-  })
-  return values
-}
-
-/**
- * Copies the parts of a request that its chain declared, inside the synchronous handler of
- * uWebSockets.js.
- *
- * @param res - The package passes the response of uWebSockets.js, from which it reads the client address.
- * @param req - The package passes the request of uWebSockets.js.
- * @param exchange - The package passes the state of the request.
- * @param method - The client sent this method.
- * @param path - The package passes the raw path without its query string.
- * @param decoded - The package passes the chain of the request with its decoded parameter values.
- * @param framing - The package passes the framing headers that it read from the request.
- * @param reader - The package passes the body reader, or `undefined` on a route without one.
- * @returns The function returns the copy of the request.
- * @internal
- */
-export function copyRequest(
-  res: HttpResponse,
-  req: HttpRequest,
-  exchange: Exchange,
-  method: string,
-  path: string,
-  decoded: DecodedChain,
-  framing: RequestFraming,
-  reader: BodyReader | undefined,
-): CopiedRequest {
-  const { chain, parameters } = decoded
-  const plan = chain.copyPlan
-  const all = plan.allHeaders ? copyAllHeaders(req) : undefined
-  const values = plan.allHeaders || plan.headerNames.length === 0 ? NO_VALUES : copyDeclaredHeaders(req, plan)
-  const address = plan.clientAddress ? remoteAddressOf(res) : undefined
-  return new CopiedRequest(
-    exchange,
-    method,
-    path,
-    chain,
-    req,
-    parameters,
-    framing.contentLength,
-    plan.headerNames,
-    values,
-    all,
-    address,
-    reader,
-  )
-}
 
 function respondAndRelease(
   res: HttpResponse,
@@ -113,96 +31,11 @@ function respondAndRelease(
   return ended
 }
 
-/**
- * Returns the framing facts of a request that the package serves. The function returns `undefined`
- * when the package has refused the connection, when uWebSockets.js answers the request with its own
- * 400, or when the package rejects the transfer coding of the request. In each of those cases, the
- * function answers the request or leaves it alone before it returns.
- *
- * @param res - The package passes the response of uWebSockets.js.
- * @param req - The package passes the request of uWebSockets.js.
- * @param exchange - The package passes the state of the request.
- * @returns The function returns the framing facts, or `undefined` when the package calls no
- * middleware for the request.
- * @internal
- */
-export function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: Exchange): RequestFraming | undefined {
-  if (refusedRequest(res, exchange)) return undefined
-  const framing = readFraming(req)
-  if (framing.parserRejects) return undefined
-  if (framing.rejection !== undefined) {
-    writeFramingRejection(res, exchange, framing, framing.rejection, req.getCaseSensitiveMethod() === 'HEAD')
-    return undefined
-  }
-  exchange.clientCloses = framing.clientCloses
-  return framing
-}
-
 function respond(res: HttpResponse, exchange: Exchange, context: Context, chain: RequestChain): boolean {
   const pending = runChain(context, exchange, chain.layers, chain.handler)
   if (pending === undefined) return finish(res, exchange, context)
   finishLater(res, exchange, context, chain.limits.timeoutMs, pending)
   return false
-}
-
-function finishLater(
-  res: HttpResponse,
-  exchange: Exchange,
-  context: Context,
-  timeoutMs: number,
-  pending: Promise<void>,
-): void {
-  const stop =
-    timeoutMs > 0 ? startDeadline(exchange, context, timeoutMs, () => finishCorked(res, exchange, context)) : undefined
-  pending.then(() => {
-    if (exchange.timedOut) return
-    stop?.()
-    finishCorked(res, exchange, context)
-  })
-}
-
-function finish(res: HttpResponse, exchange: Exchange, context: Context): boolean {
-  const reply = exchange.reply
-  if (exchange.closed) return true
-  if (reply === undefined) return false
-  try {
-    return writeReply(res, exchange, context, reply)
-  } catch (error) {
-    return abandon(res, exchange, error, context)
-  }
-}
-
-function finishCorked(res: HttpResponse, exchange: Exchange, context: Context): void {
-  const reply = exchange.reply
-  if (exchange.closed || reply === undefined) return
-  try {
-    res.cork(() => writeReply(res, exchange, context, reply))
-  } catch (error) {
-    abandon(res, exchange, error, context)
-  }
-}
-
-/**
- * Logs an error that the package caught before it called any middleware, and answers with the
- * default 500.
- *
- * @param res - The package passes the response of uWebSockets.js.
- * @param exchange - The package passes the state of the request.
- * @param error - The package passes the error that it caught.
- * @param method - The client sent this method.
- * @param path - The package passes the path of the request.
- * @returns The function returns `true` when the response has ended or the connection has closed.
- * @internal
- */
-export function crash(res: HttpResponse, exchange: Exchange, error: unknown, method: string, path: string): boolean {
-  logServerError(exchange.runtime.logger, error, method, path)
-  return writeCrash(res, exchange, method === 'HEAD')
-}
-
-function abandon(res: HttpResponse, exchange: Exchange, error: unknown, context: Context): boolean {
-  logServerError(exchange.runtime.logger, error, context.req.method, context.req.path)
-  closeConnection(res, exchange)
-  return true
 }
 
 function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
@@ -249,6 +82,9 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
     limits: route.limits,
   }
   const withoutParameters: DecodedChain = { chain: base, parameters: NO_PARAMETERS }
+  if (route.layers.length === 0 && !route.limits.readsBody && count === 0) {
+    return directHandler(app, route, method, drain, withoutParameters)
+  }
   const answer = (res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean => {
     let path = route.path
     let request: CopiedRequest
@@ -321,40 +157,4 @@ export function fallbackHandler(app: CompiledApp, drain: Drain): NativeHandler {
       drain.mode === CLOSING ? answerWhileClosing(res, req, exchange) : answerFallback(app, res, req, exchange)
     if (!ended) watchAbort(res, exchange)
   }
-}
-
-/**
- * Sends a 503 with the code `SERVER_CLOSING` in response to a request that the client sends while
- * the server closes. The package closes the connection after that reply. The function makes the
- * same framing checks as a route handler, but it calls no middleware for such a request. It records the end of a body that the client declares, so that the package
- * can write the reply in the way that {@link writeReply} writes it while the client is still
- * sending the body.
- *
- * @param res - The package passes the response of uWebSockets.js, inside the synchronous handler.
- * @param req - The package passes the request of uWebSockets.js.
- * @param exchange - The package passes the state of the request.
- * @returns The function returns `true` when the response ends or the connection closes.
- * @internal
- */
-export function answerWhileClosing(res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean {
-  let method = ''
-  try {
-    method = req.getCaseSensitiveMethod()
-    const framing = admittedFraming(res, req, exchange)
-    if (framing === undefined) return false
-    if (framing.declaresBody) followBody(res, exchange, framing)
-  } catch (error) {
-    return crash(res, exchange, error, method, '')
-  }
-  return writeWholeReply(res, exchange, serverClosingReply(), method === 'HEAD')
-}
-
-/**
- * Returns the 503 with the code `SERVER_CLOSING` that a client receives while the server closes.
- *
- * @returns The function returns a new reply on every call.
- * @internal
- */
-export function serverClosingReply(): Reply {
-  return errorReply(new UhttpError('SERVER_CLOSING', SERVER_CLOSING_MESSAGE))
 }

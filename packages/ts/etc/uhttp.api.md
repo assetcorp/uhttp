@@ -33,7 +33,7 @@ export class Context {
     json(value: unknown, status?: number, headers?: HeaderRecord): Reply;
     redirect(location: string, status?: number, headers?: HeaderRecord): Reply;
     get reply(): Reply | undefined;
-    readonly req: RequestInfo;
+    get req(): RequestInfo;
     set(key: string, value: unknown): void;
     sse(produce: EventStreamProducer, options?: EventStreamOptions): Reply;
     stream(produce: StreamProducer, options?: StreamOptions): Reply;

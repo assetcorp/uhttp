@@ -7,7 +7,7 @@ cd "$HOME"
 for assignment in "$@"; do
   case "$assignment" in
     BENCH_PROFILE=* | BENCH_MACHINE_LABEL=* | BENCH_SERVERS=* | BENCH_ROUTES=* | BENCH_HEADERS=* | BENCH_CONNECTIONS=* \
-      | BENCH_DURATION=* | BENCH_WARM_UP=* | BENCH_THREADS=*) ;;
+      | BENCH_PIPELINING=* | BENCH_DURATION=* | BENCH_WARM_UP=* | BENCH_THREADS=*) ;;
     *)
       printf 'remote-launch: refusing the argument %q\n' "$assignment" >&2
       exit 2

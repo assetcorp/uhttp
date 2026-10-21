@@ -6,7 +6,6 @@ import { uploadBody } from './check.ts'
 import {
   HEADLINE_CONNECTIONS,
   MACHINE_FILE,
-  PIPELINED_REQUESTS,
   PROFILE_ENV,
   RESULTS_FILE,
   RESULTS_SCHEMA_VERSION,
@@ -65,12 +64,15 @@ const failures: FailedMeasurement[] = []
 
 console.log(`The suite writes run ${id} to ${runDirectory}.`)
 try {
-  for (const route of options.routes) {
-    for (const variant of options.variants) {
-      for (const server of servers) {
-        const outcome = await measureTarget(context, { server: server.id, serverName: server.name, variant, route })
-        measurements.push(...outcome.measurements)
-        failures.push(...outcome.failures)
+  for (const pipelinedRequests of options.pipeliningLevels) {
+    for (const route of options.routes) {
+      for (const variant of options.variants) {
+        for (const server of servers) {
+          const target = { server: server.id, serverName: server.name, variant, route, pipelinedRequests }
+          const outcome = await measureTarget(context, target)
+          measurements.push(...outcome.measurements)
+          failures.push(...outcome.failures)
+        }
       }
     }
   }
@@ -86,7 +88,7 @@ const results: Results = {
   settings: {
     connection_levels: options.connectionLevels,
     headline_connections: HEADLINE_CONNECTIONS,
-    pipelined_requests: PIPELINED_REQUESTS,
+    pipelining_levels: options.pipeliningLevels,
     warm_up_seconds: options.warmUpDurationMs / 1_000,
     measure_seconds: options.measureDurationMs / 1_000,
     load_threads: options.loadThreads,

@@ -31,7 +31,7 @@ Start the published profile on the default GCP machine from this directory:
 ./run-cloud.sh all
 ```
 
-After you confirm that the provider can bill you, the toolkit creates the VM and sends your working tree to it, including the changes that you have not committed. It then installs Node 24, pnpm, uv, and the workspace on the VM. It also builds h2load 1.70.0 from the nghttp2 release, because Ubuntu 24.04 packages h2load 1.59.0, which is older than the 1.69.0 that the suite needs. The suite builds uhttp and measures every server, while the toolkit streams its log to your terminal. With the default settings, the suite applies load to 30 server processes for 240 seconds each, which comes to 2 hours of load. When the suite finishes, the toolkit copies the new run directory into `benchmarks/results/runs/`.
+After you confirm that the provider can bill you, the toolkit creates the VM and sends your working tree to it, including the changes that you have not committed. It then installs Node 24, pnpm, uv, and the workspace on the VM. It also builds h2load 1.70.0 from the nghttp2 release, because Ubuntu 24.04 packages h2load 1.59.0, which is older than the 1.69.0 that the suite needs. The suite builds uhttp and measures every server, while the toolkit streams its log to your terminal. With the default settings, the suite applies load to 60 server processes for 240 seconds each, which comes to 4 hours of load. When the suite finishes, the toolkit copies the new run directory into `benchmarks/results/runs/`.
 
 The toolkit leaves the VM up afterwards, so that you can look around on it, and it prints the command that deletes it. Add `--teardown` to delete the VM when `all` exits, and `--yes` to skip the billing confirmation:
 
@@ -89,7 +89,7 @@ Every default comes from an environment variable:
 | `BENCH_PROFILE` | `published` | `published` for `benchmarks/results/runs/`, or `smoke` for `benchmarks/results/.smoke/runs/`, which git ignores |
 | `BENCH_MACHINE_LABEL` | the provider, the machine type, and the location, as in `GCP c3-standard-8, us-central1-a` | The name of the machine that the suite records in `machine.json` and that `BENCHMARKS.md` prints, in up to 120 letters, digits, spaces, and the characters `, . / ( ) _ -` |
 | `BENCH_SERVERS`, `BENCH_ROUTES`, `BENCH_HEADERS` | every one | The servers, routes, and sets of headers to measure, in the smoke profile alone |
-| `BENCH_CONNECTIONS`, `BENCH_DURATION`, `BENCH_WARM_UP`, `BENCH_THREADS` | the defaults of the profile | The connection counts, the seconds of load at each count, the seconds of warm-up, and the threads of h2load |
+| `BENCH_CONNECTIONS`, `BENCH_PIPELINING`, `BENCH_DURATION`, `BENCH_WARM_UP`, `BENCH_THREADS` | the defaults of the profile | The connection counts, the number of requests in flight on each connection, the seconds of load at each count, the seconds of warm-up, and the threads of h2load |
 
 The toolkit passes each `BENCH_` variable in the last two rows of the table to the suite as the option of the same name, such as `BENCH_SERVERS` as `--servers` and `BENCH_WARM_UP` as `--warm-up`, and [`benchmarks/README.md`](../README.md) describes every option. The toolkit accepts letters, digits, and commas alone in those variables. It also refuses `BENCH_SERVERS`, `BENCH_ROUTES`, and `BENCH_HEADERS` in the published profile before it creates anything, because the suite measures every server, route, and set of headers in that profile.
 
@@ -99,7 +99,7 @@ Each driver also reads its own variables: `GCP_PROJECT`, `GCP_ZONE`, `MIN_CPU_PL
 
 The provider bills for a VM that somebody forgets, so on GCP and AWS the toolkit gives every new VM a deadline of `VM_MAX_HOURS` hours, 8 by default. GCP deletes the VM at that time, because the toolkit creates it with a termination time and the `DELETE` action. On AWS, a user data script schedules a shutdown at the first boot of the instance, and the toolkit creates the instance so that a shutdown terminates it. A restart of the instance cancels that shutdown, so check the instance with `status` after a restart.
 
-Before `run` starts the suite on GCP, the toolkit reads the deadline from a label on the VM. It refuses to start when fewer than 3 hours remain for the published profile, or fewer than 1 hour for the smoke profile. The toolkit sets no deadline on Hetzner and DigitalOcean, so delete those VMs with `down` yourself.
+Before `run` starts the suite on GCP, the toolkit reads the deadline from a label on the VM. It refuses to start when fewer than 6 hours remain for the published profile, or fewer than 1 hour for the smoke profile. The toolkit sets no deadline on Hetzner and DigitalOcean, so delete those VMs with `down` yourself.
 
 ## What `sync` sends
 
