@@ -8,7 +8,7 @@ export const DEFAULT_CONNECTION_LEVELS = [10, 50, 100, 250, 500] as const
 
 export const HEADLINE_CONNECTIONS = 100
 
-export const PIPELINED_REQUESTS = 10
+export const DEFAULT_PIPELINED_REQUESTS = [1, 10] as const
 
 export const DEFAULT_MEASURE_DURATION_MS = 40_000
 
@@ -95,4 +95,4 @@ export const RESULTS_FILE = 'results.json'
 
 export const MACHINE_FILE = 'machine.json'
 
-export const RESULTS_SCHEMA_VERSION = 1
+export const RESULTS_SCHEMA_VERSION = 2

@@ -1,7 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from chart_paths import figure, latency_chart, peak_chart, published, sweep_chart
-from data import VARIANT_TITLES, created_date, route_title, routes_present, variants_present
+from data import (
+    VARIANT_TITLES,
+    created_date,
+    load_phrase,
+    load_title,
+    pipelining_levels,
+    pipelining_view,
+    route_title,
+    routes_present,
+    variants_present,
+)
 from run_details import machine_bullets, settings_sentences
 from sources import COMPARISON_FILE, RUNS_DIRECTORY, Run
 from tables import table_sections
@@ -15,35 +27,58 @@ def run_block(run: Run) -> str:
     )
 
 
+def _by_load(run: Run, section: Callable[[dict, int], str]) -> str:
+    parts = []
+    for level in pipelining_levels(run.results):
+        parts.append(f"### {load_title(level)}\n\n{section(pipelining_view(run.results, level), level)}")
+    return "\n\n".join(parts)
+
+
 def peak_block(run: Run) -> str:
-    figures = [
-        figure(published(run.run_id, peak_chart(variant)), f"Peak requests a second of each server {VARIANT_TITLES[variant]}")
-        for variant in variants_present(run.results)
-    ]
-    return "\n\n".join(figures)
+    def section(results: dict, level: int) -> str:
+        figures = [
+            figure(
+                published(run.run_id, peak_chart(variant, level)),
+                f"Peak requests a second of each server {VARIANT_TITLES[variant]}, with {load_phrase(level)}",
+            )
+            for variant in variants_present(results)
+        ]
+        return "\n\n".join(figures)
+
+    return _by_load(run, section)
 
 
 def sweep_block(run: Run) -> str:
-    sections = []
-    for route in routes_present(run.results):
-        title = route_title(run.results, route)
-        figures = [
-            figure(
-                published(run.run_id, sweep_chart(route, variant)),
-                f"Requests a second, p99 latency, and CPU use on the {title} route {VARIANT_TITLES[variant]}",
-            )
-            for variant in variants_present(run.results)
-        ]
-        sections.append("\n\n".join([f"### {title} route", *figures]))
-    return "\n\n".join(sections)
+    def section(results: dict, level: int) -> str:
+        parts = []
+        for route in routes_present(results):
+            title = route_title(results, route)
+            figures = [
+                figure(
+                    published(run.run_id, sweep_chart(route, variant, level)),
+                    f"Requests a second, p99 latency, and CPU use on the {title} route {VARIANT_TITLES[variant]}, "
+                    f"with {load_phrase(level)}",
+                )
+                for variant in variants_present(results)
+            ]
+            parts.append("\n\n".join([f"#### {title} route", *figures]))
+        return "\n\n".join(parts)
+
+    return _by_load(run, section)
 
 
 def latency_block(run: Run) -> str:
-    figures = [
-        figure(published(run.run_id, latency_chart(variant)), f"Latency percentiles at each server's peak {VARIANT_TITLES[variant]}")
-        for variant in variants_present(run.results)
-    ]
-    return "\n\n".join(figures)
+    def section(results: dict, level: int) -> str:
+        figures = [
+            figure(
+                published(run.run_id, latency_chart(variant, level)),
+                f"Latency percentiles at each server's peak {VARIANT_TITLES[variant]}, with {load_phrase(level)}",
+            )
+            for variant in variants_present(results)
+        ]
+        return "\n\n".join(figures)
+
+    return _by_load(run, section)
 
 
 def page_blocks(run: Run) -> dict[str, str]:

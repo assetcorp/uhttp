@@ -49,6 +49,7 @@ add_suite_option BENCH_SERVERS servers
 add_suite_option BENCH_ROUTES routes
 add_suite_option BENCH_HEADERS headers
 add_suite_option BENCH_CONNECTIONS connections
+add_suite_option BENCH_PIPELINING pipelining
 add_suite_option BENCH_DURATION duration
 add_suite_option BENCH_WARM_UP warm-up
 add_suite_option BENCH_THREADS threads

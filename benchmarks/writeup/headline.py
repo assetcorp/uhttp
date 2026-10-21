@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from data import REFERENCE_SERVER, SUBJECT_SERVER, at_connections, created_date, headline_connections, rate, server_ids
+from data import (
+    REFERENCE_SERVER,
+    SUBJECT_SERVER,
+    at_connections,
+    created_date,
+    headline_connections,
+    load_phrase,
+    pipelining_levels,
+    pipelining_view,
+    rate,
+    server_ids,
+)
 from render import integer, percent
 from sources import Run
 
@@ -46,7 +57,7 @@ def _others(results: dict, variant: str, connections: int) -> list[float]:
     return values
 
 
-def _plain_sentence(results: dict, connections: int) -> str | None:
+def _plain_sentence(results: dict, connections: int, level: int, first: bool) -> str | None:
     subject = rate(at_connections(results, "plain", "plain", SUBJECT_SERVER, connections))
     if subject is None:
         return None
@@ -58,21 +69,31 @@ def _plain_sentence(results: dict, connections: int) -> str | None:
             f"{subject / max(others):.1f} times the rate of the fastest of the other {_count(len(others))} "
             "frameworks on the benchmark page"
         )
-    sentence = (
-        f"In the newest recorded run, the suite measured uhttp at {integer(subject)} requests a second on a "
-        f"plain-text route at {integer(connections)} connections"
-    )
+    if first:
+        sentence = (
+            f"In the newest recorded run, the suite measured uhttp at {integer(subject)} requests a second on a "
+            f"plain-text route at {integer(connections)} connections with {load_phrase(level)}"
+        )
+    else:
+        sentence = f"With {load_phrase(level)}, the suite measured uhttp at {integer(subject)} requests a second"
     return f"{sentence}, which was {' and '.join(clauses)}." if clauses else f"{sentence}."
 
 
-def _secure_sentence(results: dict, connections: int) -> str | None:
-    subject = rate(at_connections(results, "plain", "secure", SUBJECT_SERVER, connections))
-    if subject is None:
+def _secure_sentence(views: list[tuple[int, dict]], connections: int) -> str | None:
+    clauses = []
+    for level, results in views:
+        subject = rate(at_connections(results, "plain", "secure", SUBJECT_SERVER, connections))
+        if subject is None:
+            continue
+        reference = rate(at_connections(results, "plain", "secure", REFERENCE_SERVER, connections))
+        against = _against_reference(subject, reference)
+        clause = f"at {integer(subject)} requests a second"
+        if len(views) > 1:
+            clause = f"{clause} with {load_phrase(level)}"
+        clauses.append(f"{clause}, {against}" if against else clause)
+    if not clauses:
         return None
-    reference = rate(at_connections(results, "plain", "secure", REFERENCE_SERVER, connections))
-    against = _against_reference(subject, reference)
-    sentence = f"With the same security headers on every server, the suite measured uhttp at {integer(subject)} requests a second"
-    return f"{sentence}, {against}." if against else f"{sentence}."
+    return f"With the same security headers on every server, the suite measured uhttp {', and '.join(clauses)}."
 
 
 def headline_block(run: Run, benchmarks_link: str) -> str:
@@ -81,9 +102,15 @@ def headline_block(run: Run, benchmarks_link: str) -> str:
     date = created_date(results)
     model = (run.machine.get("cpu") or {}).get("model") or "an unrecorded CPU"
     system = (run.machine.get("os") or {}).get("name") or "an unrecorded operating system"
+    views = [(level, pipelining_view(results, level)) for level in pipelining_levels(results)]
+    measured = []
+    if connections is not None:
+        measured = [
+            _plain_sentence(view, connections, level, index == 0) for index, (level, view) in enumerate(views)
+        ]
+        measured.append(_secure_sentence(views, connections))
     sentences = [
-        _plain_sentence(results, connections) if connections is not None else None,
-        _secure_sentence(results, connections) if connections is not None else None,
+        *measured,
         f"The suite recorded these figures on {date} in run `{run.run_id}`, on the {model} under {system}.",
         f"You'll find every route, every connection count, and the method in [`BENCHMARKS.md`]({benchmarks_link}).",
     ]

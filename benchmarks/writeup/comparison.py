@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from data import load_phrase
 from run_details import machine_bullets, settings_sentences
 from sources import COMPARISON_FILE, Run
 from tables import table_sections
@@ -18,8 +19,8 @@ def _failures(run: Run) -> str:
         connections = failure.get("connections")
         where = f"at {connections} connections" if isinstance(connections, int) else "before any measurement"
         lines.append(
-            f"- {failure.get('server')} on the {failure.get('route')} route with {failure.get('headers')} headers "
-            f"failed {where}: {failure.get('error')}"
+            f"- {failure.get('server')} on the {failure.get('route')} route with {failure.get('headers')} headers and "
+            f"{load_phrase(failure.get('pipelined_requests'))} failed {where}: {failure.get('error')}"
         )
     return "\n".join(lines)
 

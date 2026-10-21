@@ -5,6 +5,7 @@ import {
   DEFAULT_CONNECTION_LEVELS,
   DEFAULT_LOAD_THREADS,
   DEFAULT_MEASURE_DURATION_MS,
+  DEFAULT_PIPELINED_REQUESTS,
   DEFAULT_SMOKE_CONNECTION_LEVELS,
   DEFAULT_SMOKE_MEASURE_DURATION_MS,
   DEFAULT_SMOKE_WARM_UP_DURATION_MS,
@@ -45,6 +46,7 @@ export interface SuiteOptions {
   readonly routes: readonly RouteId[]
   readonly variants: readonly HeaderVariant[]
   readonly connectionLevels: readonly number[]
+  readonly pipeliningLevels: readonly number[]
   readonly measureDurationMs: number
   readonly warmUpDurationMs: number
   readonly loadThreads: number
@@ -67,10 +69,10 @@ function positiveInteger(value: string, flag: string): number {
   return parsed
 }
 
-function connectionLevels(value: string | undefined, fallback: readonly number[]): readonly number[] {
+function levels(value: string | undefined, fallback: readonly number[], flag: string): readonly number[] {
   if (value === undefined) return fallback
-  const levels = value.split(',').map(item => positiveInteger(item.trim(), 'connections'))
-  return [...new Set(levels)].sort((left, right) => left - right)
+  const chosen = value.split(',').map(item => positiveInteger(item.trim(), flag))
+  return [...new Set(chosen)].sort((left, right) => left - right)
 }
 
 function seconds(value: string | undefined, fallbackMs: number, flag: string): number {
@@ -95,6 +97,7 @@ export function suiteOptions(argv: readonly string[], profileName: string | unde
       routes: { type: 'string' },
       headers: { type: 'string' },
       connections: { type: 'string' },
+      pipelining: { type: 'string' },
       duration: { type: 'string' },
       'warm-up': { type: 'string' },
       threads: { type: 'string' },
@@ -118,7 +121,8 @@ export function suiteOptions(argv: readonly string[], profileName: string | unde
     servers,
     routes,
     variants,
-    connectionLevels: connectionLevels(values.connections, defaults.connectionLevels),
+    connectionLevels: levels(values.connections, defaults.connectionLevels, 'connections'),
+    pipeliningLevels: levels(values.pipelining, DEFAULT_PIPELINED_REQUESTS, 'pipelining'),
     measureDurationMs: seconds(values.duration, defaults.measureDurationMs, 'duration'),
     warmUpDurationMs: seconds(values['warm-up'], defaults.warmUpDurationMs, 'warm-up'),
     loadThreads: values.threads === undefined ? DEFAULT_LOAD_THREADS : positiveInteger(values.threads, 'threads'),

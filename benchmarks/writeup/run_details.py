@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from data import load_phrase
 from render import and_join, gibibytes, integer, is_number, kibibytes
 from sources import Run
 
@@ -60,12 +61,17 @@ def settings_sentences(run: Run) -> str:
     settings = run.results.get("settings") or {}
     levels = [integer(level) for level in settings.get("connection_levels") or []]
     upload = kibibytes(settings.get("upload_body_bytes"))
+    threads = f"h2load sent each request over HTTP/1.1 from {integer(settings.get('load_threads'))} threads"
+    loads = [load_phrase(level) for level in settings.get("pipelining_levels") or []]
+    if len(loads) == 1:
+        load = f"{threads}, with {loads[0]}."
+    else:
+        load = f"{threads}. The suite measured every server under each of these loads in turn: {and_join(loads)}."
     return (
-        f"h2load sent each request over HTTP/1.1 from {integer(settings.get('load_threads'))} threads, with "
-        f"{integer(settings.get('pipelined_requests'))} pipelined requests on each connection. For each server, route, and "
-        "header setting, the suite started a new server process and checked its replies to all three routes. It then "
+        f"{load} For each load, server, route, and header setting, the suite started a new server process and checked "
+        "its replies to all three routes. It then "
         f"warmed the server up for {_seconds(settings.get('warm_up_seconds'))} at "
-        f"{integer(settings.get('headline_connections'))} connections, and measured it for "
+        f"{integer(settings.get('headline_connections'))} connections under the same load, and measured it for "
         f"{_seconds(settings.get('measure_seconds'))} at each of {and_join(levels)} connections. h2load sent a {upload} "
         "body with every request to the upload route. The suite counted the CPU time of each server process during each "
         "measurement and divided it by the time that the measurement took, so a server that kept one core busy for the whole measurement had a value of 1."

@@ -8,19 +8,20 @@ from chart_style import apply_style
 from chart_sweep import sweep_figure
 from chart_tail import latency_figure
 from comparison import write_comparison
-from data import routes_present, variants_present
+from data import pipelining_levels, pipelining_view, routes_present, variants_present
 from sources import Run, latest_run, load_run
 
 
 def render_run(run: Run, destination: Path) -> list[Path]:
     apply_style()
-    results = run.results
     drawn: list[Path | None] = [write_comparison(run, destination)]
-    for variant in variants_present(results):
-        drawn.append(peak_figure(destination, results, run.run_id, variant))
-        for route in routes_present(results):
-            drawn.append(sweep_figure(destination, results, run.run_id, route, variant))
-        drawn.append(latency_figure(destination, results, run.run_id, variant))
+    for level in pipelining_levels(run.results):
+        results = pipelining_view(run.results, level)
+        for variant in variants_present(results):
+            drawn.append(peak_figure(destination, results, run.run_id, variant))
+            for route in routes_present(results):
+                drawn.append(sweep_figure(destination, results, run.run_id, route, variant))
+            drawn.append(latency_figure(destination, results, run.run_id, variant))
     return [path for path in drawn if path is not None]
 
 
