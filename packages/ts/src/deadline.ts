@@ -1,7 +1,7 @@
 import { replyForError } from './chain.js'
 import type { Context } from './context.js'
 import { UhttpError } from './errors.js'
-import type { Exchange } from './exchange.js'
+import type { Exchange } from './exchange/index.js'
 import { Reply } from './reply.js'
 
 const TIMEOUT_LOG_MESSAGE = 'The handler passed the time limit of its route.'

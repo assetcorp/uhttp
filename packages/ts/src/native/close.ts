@@ -1,6 +1,6 @@
 import type { HttpResponse } from 'uWebSockets.js'
 import { LINGERING_CLOSE_MS } from '../constants.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 
 /**
  * Closes the connection of a request whose response has not ended, and records the close as a

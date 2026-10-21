@@ -8,7 +8,7 @@ import {
   WEBSOCKET_ACCEPT_SUFFIX,
   WEBSOCKET_KEY_LENGTH,
 } from '../constants.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import { type DecodedChain, decodeChain } from '../resolve.js'
 import { forEachResponseHeader } from '../response.js'
 import { splitPath } from '../router/index.js'

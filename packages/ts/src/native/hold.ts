@@ -1,5 +1,5 @@
 import type { HttpResponse } from 'uWebSockets.js'
-import type { Exchange } from '../exchange.js'
+import { closesBeforeBodyEnds, type Exchange } from '../exchange/index.js'
 import { lingerThen } from './close.js'
 
 /**
@@ -18,7 +18,7 @@ import { lingerThen } from './close.js'
  * @internal
  */
 export function holdForBody(res: HttpResponse, exchange: Exchange, resume: () => void, giveUp: () => void): boolean {
-  if (!exchange.closesBeforeBodyEnds()) return false
+  if (!closesBeforeBodyEnds(exchange)) return false
   const stop = lingerThen(exchange, () => {
     if (!exchange.closed) giveUp()
   })

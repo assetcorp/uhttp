@@ -1,12 +1,22 @@
 import { DEFAULT_REDIRECT_STATUS, REDIRECT_STATUSES } from './constants.js'
 import { UhttpError } from './errors.js'
-import type { Exchange } from './exchange.js'
+import { type Exchange, setHeader } from './exchange/index.js'
 import { checkedHeaderValue, type HeaderRecord, headerLinesOf } from './headers.js'
-import { createReply, JSON_CONTENT_TYPE, type Reply, type StreamProducer, TEXT_CONTENT_TYPE } from './reply.js'
-import type { RequestInfo } from './request.js'
+import {
+  buildReply,
+  createReply,
+  JSON_CONTENT_TYPE,
+  type Reply,
+  type StreamProducer,
+  TEXT_CONTENT_TYPE,
+} from './reply.js'
+import type { LiveRequest, ReleasableRequest, RequestCopy, RequestInfo } from './request.js'
 import { type EventStreamOptions, type EventStreamProducer, eventStreamReply } from './sse.js'
 
 const BYTES_CONTENT_TYPE = 'application/octet-stream'
+const TEXT_TYPE = TEXT_CONTENT_TYPE
+const JSON_TYPE = JSON_CONTENT_TYPE
+const buildPlainReply = buildReply
 
 /**
  * You pass these options to {@link Context.stream} to set the status, the headers, the content
@@ -35,7 +45,33 @@ export interface HeaderOptions {
   readonly append?: boolean
 }
 
-let construct: (request: RequestInfo, exchange: Exchange) => Context
+let construct: (request: ReleasableRequest, exchange: Exchange) => Context
+
+/**
+ * Returns the context of one request whose copy the package makes only when your code first reads
+ * `c.req`. Until the package releases the live request, that copy reads from it. The class of the
+ * context sets this function when the module loads.
+ *
+ * @param copy - The package passes the function that copies the request, which it built once for the route.
+ * @param exchange - The package passes the state of the request.
+ * @param live - The package passes the live request of uWebSockets.js.
+ * @returns The function returns the context that the handler receives.
+ * @internal
+ */
+export let createLazyContext: (copy: RequestCopy, exchange: Exchange, live: LiveRequest) => Context
+
+/**
+ * Releases the live request behind a context, which uWebSockets.js frees once its handler returns.
+ * When the response stays open, the function first copies the request if your code has not read
+ * `c.req` yet, and then copies the parts that your code has not read, so that your code can read
+ * them after an `await`. The class of the context sets this function when the module loads.
+ *
+ * @param context - The package passes the context of the request.
+ * @param keepUnread - The package passes `true` when the response stays open after the handler of
+ * uWebSockets.js returns.
+ * @internal
+ */
+export let releaseRequest: (context: Context, keepUnread: boolean) => void
 let readValues: (context: Context) => Record<string, unknown>
 let readExchange: (context: Context) => Exchange
 
@@ -44,13 +80,18 @@ let readExchange: (context: Context) => Exchange
  * the helpers that build a reply.
  */
 export class Context {
-  /** The package copies these parts of the request before the first `await`. */
-  readonly req: RequestInfo
+  #request: ReleasableRequest | RequestCopy
   readonly #exchange: Exchange
   #values: Map<string, unknown> | undefined
+  #live: LiveRequest | undefined
 
   static {
-    construct = (request, exchange) => new Context(request, exchange)
+    construct = (request, exchange) => new Context(request, exchange, undefined)
+    createLazyContext = (copy, exchange, live) => new Context(copy, exchange, live)
+    releaseRequest = (context, keepUnread) => {
+      if (keepUnread || typeof context.#request !== 'function') context.#releaseCopy(keepUnread)
+      context.#live = undefined
+    }
     readValues = context => {
       const values: Record<string, unknown> = Object.create(null)
       for (const [key, value] of context.#values ?? []) values[key] = value
@@ -59,9 +100,28 @@ export class Context {
     readExchange = context => context.#exchange
   }
 
-  private constructor(request: RequestInfo, exchange: Exchange) {
-    this.req = request
+  private constructor(request: ReleasableRequest | RequestCopy, exchange: Exchange, live: LiveRequest | undefined) {
+    this.#request = request
     this.#exchange = exchange
+    this.#live = live
+  }
+
+  /** The package copies these parts of the request before the first `await`. */
+  get req(): RequestInfo {
+    const request = this.#request
+    return typeof request === 'function' ? this.#copy(request) : request
+  }
+
+  #releaseCopy(keepUnread: boolean): void {
+    const request = this.#request
+    if (typeof request !== 'function') request.release(keepUnread)
+    else this.#copy(request).release(true)
+  }
+
+  #copy(copy: RequestCopy): ReleasableRequest {
+    const request = copy(this.#exchange, this.#live)
+    this.#request = request
+    return request
   }
 
   /**
@@ -111,7 +171,7 @@ export class Context {
    * check.
    */
   header(name: string, value: string, options?: HeaderOptions): void {
-    this.#exchange.setHeader(name, value, options?.append === true)
+    setHeader(this.#exchange, name, value, options?.append === true)
   }
 
   /**
@@ -126,6 +186,7 @@ export class Context {
    * with the code `INVALID_HEADER` when a header fails its check.
    */
   text(body: string, status = 200, headers?: HeaderRecord): Reply {
+    if (headers === undefined) return buildPlainReply(status, TEXT_TYPE, body, undefined, undefined)
     return createReply(status, TEXT_CONTENT_TYPE, body, headerLinesOf(headers))
   }
 
@@ -142,7 +203,9 @@ export class Context {
    * with the code `INVALID_HEADER` when a header fails its check.
    */
   json(value: unknown, status = 200, headers?: HeaderRecord): Reply {
-    return createReply(status, JSON_CONTENT_TYPE, JSON.stringify(value) ?? 'null', headerLinesOf(headers))
+    const body = JSON.stringify(value) ?? 'null'
+    if (headers === undefined) return buildPlainReply(status, JSON_TYPE, body, undefined, undefined)
+    return createReply(status, JSON_CONTENT_TYPE, body, headerLinesOf(headers))
   }
 
   /**
@@ -234,7 +297,7 @@ export class Context {
  * @returns The function returns the context that the chain receives.
  * @internal
  */
-export function createContext(request: RequestInfo, exchange: Exchange): Context {
+export function createContext(request: ReleasableRequest, exchange: Exchange): Context {
   return construct(request, exchange)
 }
 
