@@ -2,7 +2,8 @@ import { COOKIE_HEADER_SEPARATOR, FRAMING_HEADER_NAMES, LIST_HEADER_SEPARATOR } 
 import { UhttpError } from './errors.js'
 
 const TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
-const DECIMAL_DIGITS = /^\d+$/
+const DIGIT_ZERO_CODE = 0x30
+const DIGIT_NINE_CODE = 0x39
 const SPACE_CODE = 0x20
 const TAB_CODE = 0x09
 const DELETE_CODE = 0x7f
@@ -45,7 +46,12 @@ export function isToken(text: string): boolean {
  * @internal
  */
 export function isDecimalDigits(text: string): boolean {
-  return DECIMAL_DIGITS.test(text)
+  if (text.length === 0) return false
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index)
+    if (code < DIGIT_ZERO_CODE || code > DIGIT_NINE_CODE) return false
+  }
+  return true
 }
 
 /**

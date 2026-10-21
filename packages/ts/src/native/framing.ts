@@ -67,21 +67,22 @@ export function readFraming(req: HttpRequest): RequestFraming {
 function readBodyFraming(req: HttpRequest, contentLength: string, transferEncoding: string): RequestFraming {
   const lengths: string[] = []
   const encodings: string[] = []
-  const codings: string[] = []
+  let contentEncoding: string | undefined
   req.forEach((name, value) => {
     if (name === 'content-length') lengths.push(value)
     else if (name === 'transfer-encoding') encodings.push(value)
-    else if (name === 'content-encoding' && value !== '') codings.push(value)
+    else if (name === 'content-encoding' && value !== '') {
+      contentEncoding = contentEncoding === undefined ? value : `${contentEncoding}, ${value}`
+    }
   })
   const parserRejects = parserRejectsFraming(lengths, encodings)
-  const lines = {
-    contentLength: contentLength === '' ? undefined : contentLength,
-    transferEncoding: transferEncoding === '' ? undefined : transferEncoding,
-    contentEncoding: codings.length === 0 ? undefined : codings.join(', '),
-  }
+  const length = contentLength === '' ? undefined : contentLength
+  const encoding = transferEncoding === '' ? undefined : transferEncoding
   return {
-    ...lines,
-    declaresBody: !declaresNoBody(lines),
+    contentLength: length,
+    transferEncoding: encoding,
+    contentEncoding,
+    declaresBody: !declaresNoBody({ contentLength: length, transferEncoding: encoding }),
     clientCloses: req.getHeader(CONNECTION).length === CONNECTION_CLOSE_VALUE_LENGTH,
     parserRejects,
     rejection: parserRejects ? undefined : transferCodingError(encodings),

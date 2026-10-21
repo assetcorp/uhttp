@@ -7,15 +7,25 @@ import type { RequestFraming } from './framing.js'
 
 const EMPTY = new Uint8Array(0)
 
-function sourceOf(res: HttpResponse, exchange: Exchange): BodySource {
-  return {
-    pause: () => {
-      if (!exchange.closed) res.pause()
-    },
-    resume: () => {
-      if (!exchange.closed) res.resume()
-    },
-    close: () => closeConnection(res, exchange),
+class NativeSource implements BodySource {
+  readonly #res: HttpResponse
+  readonly #exchange: Exchange
+
+  constructor(res: HttpResponse, exchange: Exchange) {
+    this.#res = res
+    this.#exchange = exchange
+  }
+
+  pause(): void {
+    if (!this.#exchange.closed) this.#res.pause()
+  }
+
+  resume(): void {
+    if (!this.#exchange.closed) this.#res.resume()
+  }
+
+  close(): void {
+    closeConnection(this.#res, this.#exchange)
   }
 }
 
@@ -59,10 +69,13 @@ export function attachBody(
 }
 
 function attachReader(res: HttpResponse, exchange: Exchange, chain: RequestChain, framing: RequestFraming): OpenedBody {
-  const opened = openBody(exchange, chain, framing, sourceOf(res, exchange))
+  const opened = openBody(exchange, chain, framing, new NativeSource(res, exchange))
   const { reader } = opened
   if (opened.flowing && reader !== undefined) {
-    listenForBody(res, exchange, framing, (chunk, isLast) => {
+    const { arrival } = exchange
+    arrival.expect(declaredLength(framing))
+    res.onData((chunk, isLast) => {
+      arrival.received(chunk.byteLength)
       reader.push(reader.accepting && chunk.byteLength > 0 ? new Uint8Array(chunk.slice(0)) : EMPTY, isLast)
     })
   } else if (framing.declaresBody) {

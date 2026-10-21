@@ -1,3 +1,4 @@
+import type { UhttpError } from './errors.js'
 import type { ErrorHandler, Handler, Logger } from './types.js'
 import type { PubSubAdapter } from './websocket/types.js'
 
@@ -40,4 +41,16 @@ export interface BodyState {
    * of the route.
    */
   keepFlowing(): void
+  /**
+   * Fails every read from now on with an error. The package calls this method when the client
+   * disconnects or the handler passes its time limit.
+   *
+   * @param error - The package passes the error that every read rejects with.
+   */
+  fail(error: UhttpError): void
+  /**
+   * Stops the reader once the client goes or the response ends, and fails it when its body has
+   * not ended.
+   */
+  close(): void
 }
