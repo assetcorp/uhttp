@@ -182,7 +182,10 @@ export function putHeader(lines: HeaderLines, name: string, value: string, appen
  * @internal
  */
 export function headerLinesOf(record: HeaderRecord | undefined): HeaderLines | undefined {
-  if (record === undefined) return undefined
+  return record === undefined ? undefined : linesOf(record)
+}
+
+function linesOf(record: HeaderRecord): HeaderLines | undefined {
   let lines: HeaderLines | undefined
   for (const name in record) {
     const value = record[name]

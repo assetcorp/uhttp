@@ -1,4 +1,4 @@
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import { type RequestChain, rejectedChain } from '../resolve.js'
 import { type BodyFraming, BodyReader, type BodySource, declaresNoBody, earlyRejection } from './reader.js'
 

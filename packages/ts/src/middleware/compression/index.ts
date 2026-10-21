@@ -1,5 +1,5 @@
 import { type Context, exchangeOf } from '../../context.js'
-import type { Exchange } from '../../exchange.js'
+import { type Exchange, setFixed, setPrepared } from '../../exchange/index.js'
 import { createReply, type Reply } from '../../reply.js'
 import { hasResponseHeader, type PreparedName, responseContentType, responseHeaderLines } from '../../response.js'
 import type { MiddlewareDefinition } from '../../types.js'
@@ -76,7 +76,7 @@ async function compressedReply(
 
 function weakenTag(exchange: Exchange, tagName: PreparedName): void {
   const tag = responseHeaderLines(exchange, ETAG_HEADER)?.at(-1)
-  if (tag !== undefined && !tag.startsWith('W/')) exchange.setPrepared(tagName, `W/${tag}`, false)
+  if (tag !== undefined && !tag.startsWith('W/')) setPrepared(exchange, tagName, `W/${tag}`, false)
 }
 
 /**
@@ -143,7 +143,7 @@ export function compression(options?: CompressionOptions): MiddlewareDefinition 
       ) {
         return
       }
-      exchange.setFixed(vary, true)
+      setFixed(exchange, vary, true)
       if (context.req.method === 'HEAD') return
       const encoding = negotiatedEncoding(context.req.header(ACCEPT_ENCODING_HEADER), encodings)
       const contentEncoding = encoding === undefined ? undefined : contentEncodings.get(encoding)
@@ -151,7 +151,7 @@ export function compression(options?: CompressionOptions): MiddlewareDefinition 
       const replacement = await compressedReply(reply, encoding, threshold)
       if (replacement === undefined) return
       exchange.substitute(replacement)
-      exchange.setFixed(contentEncoding, false)
+      setFixed(exchange, contentEncoding, false)
       weakenTag(exchange, tagName)
     },
   }

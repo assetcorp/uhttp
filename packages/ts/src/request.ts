@@ -1,7 +1,7 @@
 import type { BodyReader } from './body/reader.js'
 import { ReaderBody, type RequestBody } from './body/request-body.js'
 import { UhttpError } from './errors.js'
-import type { Exchange } from './exchange.js'
+import type { Exchange } from './exchange/index.js'
 import { headerBytes, isDecimalDigits } from './headers.js'
 
 const CONTENT_TYPE_NAME = headerBytes('content-type')
@@ -134,6 +134,35 @@ export interface LiveRequest {
 }
 
 /**
+ * The package releases a copy of a request through this interface, which {@link CopiedRequest}
+ * implements.
+ *
+ * @internal
+ */
+export interface ReleasableRequest extends RequestInfo {
+  /**
+   * Stops reading from the live request, after copying the parts that your code has not read yet
+   * when the response stays open.
+   *
+   * @param keepUnread - The package passes `true` when the response stays open after the handler of
+   * uWebSockets.js returns.
+   */
+  release(keepUnread: boolean): void
+}
+
+/**
+ * The package copies a request on a route without middleware and without declared headers only
+ * when your code first reads `c.req`, through a function of this type that it builds once for the
+ * route.
+ *
+ * @param exchange - The package passes the state of the request.
+ * @param live - The package passes the live request, or `undefined` once it has released it.
+ * @returns The function returns the copy of the request.
+ * @internal
+ */
+export type RequestCopy = (exchange: Exchange, live: LiveRequest | undefined) => ReleasableRequest
+
+/**
  * The package passes the route that matched a request to its copy in this form, which the chain of
  * the request implements.
  *
@@ -153,9 +182,9 @@ export interface MatchedRoute {
  *
  * @internal
  */
-export class CopiedRequest implements RequestInfo {
-  readonly method: string
-  readonly path: string
+export class CopiedRequest implements ReleasableRequest {
+  declare readonly method: string
+  declare readonly path: string
   #live: LiveRequest | undefined
   #query = ''
   #queryRead = false
@@ -179,7 +208,7 @@ export class CopiedRequest implements RequestInfo {
    * @param method - The client sent this method.
    * @param path - The package passes the raw path without its query string.
    * @param matched - The package passes the path and the parameter names of the route that matched.
-   * @param live - The package passes the live request, from which the object reads the query string and the content type.
+   * @param live - The package passes the live request, from which the object reads the query string and the content type, or `undefined` once the package has released it.
    * @param parameterValues - The package passes the decoded parameter values in the same order as the names.
    * @param contentLength - The client sent this raw `content-length` header, and it is `undefined` when the request has none.
    * @param headerNames - The route and its middleware declared these header names, which the package lowercased.
@@ -193,7 +222,7 @@ export class CopiedRequest implements RequestInfo {
     method: string,
     path: string,
     matched: MatchedRoute,
-    live: LiveRequest,
+    live: LiveRequest | undefined,
     parameterValues: readonly string[],
     contentLength: string | undefined,
     headerNames: readonly string[],

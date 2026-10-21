@@ -1,5 +1,5 @@
 import type { HttpResponse } from 'uWebSockets.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import { type Reply, statusHasBody } from '../reply.js'
 import { closeAfterLingering, watchAbort } from './close.js'
 import { forEachHeaderLine, statusLine } from './head.js'

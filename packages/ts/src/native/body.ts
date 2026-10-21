@@ -1,6 +1,6 @@
 import type { HttpResponse } from 'uWebSockets.js'
 import { type BodySource, declaredLength, type OpenedBody, openBody } from '../body/index.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import type { RequestChain } from '../resolve.js'
 import { closeConnection } from './close.js'
 import type { RequestFraming } from './framing.js'

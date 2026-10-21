@@ -6,7 +6,7 @@ import {
   MULTIPART_BOUNDARY_CHARACTERS,
 } from '../constants.js'
 import { UhttpError } from '../errors.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import { checkedLimit } from '../limits.js'
 import { type DestinationHandle, openDestination, type UploadDestination } from './destination.js'
 import { MultipartParser, type PartEvent } from './parser.js'

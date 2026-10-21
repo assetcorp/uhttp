@@ -100,7 +100,21 @@ export interface ReplyStream {
   readonly length: number | undefined
 }
 
-let construct: (
+/**
+ * Returns a new reply. The class of the reply sets this function when the module loads, because
+ * only the class can call its constructor.
+ *
+ * @param status - The HTTP status must be a whole number from 200 to 599.
+ * @param contentType - The package sends this content type.
+ * @param body - The package sends this body.
+ * @param headers - The package sends these checked header lines.
+ * @param stream - A streamed reply has a producer in place of a body.
+ * @returns The function returns the reply.
+ * @throws {@link UhttpError} with the code `INVALID_STATUS` when the status is a fraction, below
+ * 200, or above 599.
+ * @internal
+ */
+export let buildReply: (
   status: number,
   contentType: string | undefined,
   body: string | Uint8Array | null,
@@ -109,6 +123,16 @@ let construct: (
 ) => Reply
 
 let constructSwitch: () => Reply
+
+const MIN_STATUS = MIN_REPLY_STATUS
+const MAX_STATUS = MAX_REPLY_STATUS
+
+function invalidStatus(status: number): UhttpError {
+  return new UhttpError(
+    'INVALID_STATUS',
+    `The status of a reply must be a whole number from ${MIN_REPLY_STATUS} to ${MAX_REPLY_STATUS}, and the code passed ${status}.`,
+  )
+}
 
 /**
  * You get a `Reply` from a helper on the {@link Context}, such as {@link Context.json}, and your
@@ -119,19 +143,20 @@ export class Reply {
    * The HTTP status is a whole number from 200 to 599, apart from the 101 that the package sets
    * when it accepts the upgrade of a WebSocket route.
    */
-  readonly status: number
+  declare readonly status: number
   /** The package sends this value as the `content-type` header, and it sends none when this is `undefined`. */
-  readonly contentType: string | undefined
+  declare readonly contentType: string | undefined
   /** The package sends this body, except in reply to a HEAD request and with a 204, a 205, or a 304. */
-  readonly body: string | Uint8Array | null
+  declare readonly body: string | Uint8Array | null
   /** The package sends these header lines with the reply, keyed by lowercase name. */
-  readonly headers: ReadonlyMap<string, readonly string[]> | undefined
+  declare readonly headers: ReadonlyMap<string, readonly string[]> | undefined
   /** A streamed reply has a producer in place of a body. */
-  readonly stream: ReplyStream | undefined
+  declare readonly stream: ReplyStream | undefined
 
   static {
-    construct = (status, contentType, body, headers, stream) => new Reply(status, contentType, body, headers, stream)
-    constructSwitch = () => new Reply(SWITCHING_PROTOCOLS_STATUS, undefined, null, undefined, undefined, true)
+    buildReply = (status, contentType, body, headers, stream) =>
+      new this(status, contentType, body, headers, stream, false)
+    constructSwitch = () => new this(SWITCHING_PROTOCOLS_STATUS, undefined, null, undefined, undefined, true)
   }
 
   private constructor(
@@ -140,15 +165,10 @@ export class Reply {
     body: string | Uint8Array | null,
     headers: HeaderLines | undefined,
     stream: ReplyStream | undefined,
-    switching = false,
+    switching: boolean,
   ) {
-    const valid = Number.isInteger(status) && status >= MIN_REPLY_STATUS && status <= MAX_REPLY_STATUS
-    if (!valid && !switching) {
-      throw new UhttpError(
-        'INVALID_STATUS',
-        `The status of a reply must be a whole number from ${MIN_REPLY_STATUS} to ${MAX_REPLY_STATUS}, and the code passed ${status}.`,
-      )
-    }
+    const valid = Number.isInteger(status) && status >= MIN_STATUS && status <= MAX_STATUS
+    if (!valid && !switching) throw invalidStatus(status)
     this.status = status
     this.contentType = contentType
     this.body = body
@@ -177,10 +197,21 @@ export function createReply(
   headers?: HeaderLines,
   stream?: ReplyStream,
 ): Reply {
-  const typeLines = headers?.get('content-type')
-  if (headers === undefined || typeLines === undefined) return construct(status, contentType, body, headers, stream)
+  if (headers === undefined) return buildReply(status, contentType, body, undefined, stream)
+  return replyWithLines(status, contentType, body, headers, stream)
+}
+
+function replyWithLines(
+  status: number,
+  contentType: string | undefined,
+  body: string | Uint8Array | null,
+  headers: HeaderLines,
+  stream: ReplyStream | undefined,
+): Reply {
+  const typeLines = headers.get('content-type')
+  if (typeLines === undefined) return buildReply(status, contentType, body, headers, stream)
   headers.delete('content-type')
-  return construct(status, typeLines.at(-1), body, headers.size === 0 ? undefined : headers, stream)
+  return buildReply(status, typeLines.at(-1), body, headers.size === 0 ? undefined : headers, stream)
 }
 
 /**
@@ -231,5 +262,5 @@ export function bodyByteLength(body: string | Uint8Array | null): number {
  */
 export function errorReply({ status, code, message, issues }: UhttpError): Reply {
   const error = issues === undefined ? { code, message } : { code, message, issues }
-  return construct(status, JSON_CONTENT_TYPE, JSON.stringify({ error }), undefined, undefined)
+  return buildReply(status, JSON_CONTENT_TYPE, JSON.stringify({ error }), undefined, undefined)
 }

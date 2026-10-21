@@ -2,15 +2,17 @@ import type { HttpResponse } from 'uWebSockets.js'
 import { defaultErrorReply } from '../chain.js'
 import type { Context } from '../context.js'
 import type { UhttpError } from '../errors.js'
-import type { Exchange } from '../exchange.js'
+import { closesConnection, type Exchange, lingersAfterReply, serverCloses } from '../exchange/index.js'
 import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.js'
 import { followBody } from './body.js'
 import { closeConnection, watchAbort } from './close.js'
 import type { RequestFraming } from './framing.js'
-import { writeHead } from './head.js'
+import { okHeadOf, writeHead } from './head.js'
 import { writeLingeringReply } from './linger.js'
 import { refuseLaterRequests } from './refuse.js'
 import { NativeStream } from './stream.js'
+
+const OK_STATUS = 200
 
 /**
  * Writes the current reply of a request to uWebSockets.js. For a reply with a body, the function
@@ -31,26 +33,61 @@ import { NativeStream } from './stream.js'
  */
 export function writeReply(res: HttpResponse, exchange: Exchange, context: Context, reply: Reply): boolean {
   if (exchange.closed) return true
-  const stream = reply.stream
   const head = context.req.method === 'HEAD'
+  if (!head && writeReplyAlone(res, exchange, reply)) return true
+  const stream = reply.stream
   if (stream !== undefined && !head && statusHasBody(reply.status)) {
     watchAbort(res, exchange)
     exchange.body?.keepFlowing()
     writeHead(res, exchange, reply)
-    if (exchange.serverCloses()) res.writeHeader('connection', 'close')
+    if (serverCloses(exchange)) res.writeHeader('connection', 'close')
     new NativeStream(res, exchange, context, stream.length).start(stream.produce)
     return false
   }
   return endReply(res, exchange, reply, head)
 }
 
+/**
+ * Returns the head that uWebSockets.js writes in one call for a plain 200, which has no stream, no
+ * header of its own, and a text or a JSON content type.
+ *
+ * @param reply - The package passes the reply to write.
+ * @returns The function returns the head of the reply, or `undefined` when the reply is not plain.
+ * @internal
+ */
+export function plainHeadOf(reply: Reply): ArrayBuffer | undefined {
+  if (reply.status !== OK_STATUS || reply.stream !== undefined || reply.headers !== undefined) return undefined
+  return okHeadOf(reply.contentType)
+}
+
+/**
+ * Writes a plain 200 with a text or a JSON body, whose head the package built once as bytes, with
+ * one call into uWebSockets.js for the head and one for the body. The function writes nothing when
+ * the reply has another status, a stream, or headers of its own, when your code or a middleware set
+ * a header, when a body is on its way, or when the connection closes after the response.
+ *
+ * @param res - The package passes the response of uWebSockets.js, which the caller has corked.
+ * @param exchange - The package passes the state of the request, which is still open.
+ * @param reply - The package passes the reply to write, to a request other than HEAD.
+ * @returns The function returns `true` when it ended the response, and `false` when it wrote nothing.
+ * @internal
+ */
+export function writeReplyAlone(res: HttpResponse, exchange: Exchange, reply: Reply): boolean {
+  const okHead = plainHeadOf(reply)
+  if (okHead === undefined || !exchange.writesReplyAlone()) return false
+  res.writeStatus(okHead)
+  res.end(reply.body ?? '')
+  exchange.end()
+  return true
+}
+
 function endReply(res: HttpResponse, exchange: Exchange, reply: Reply, head: boolean): boolean {
   exchange.settleBody()
-  const close = exchange.closesConnection()
+  const close = closesConnection(exchange)
   const { stream } = reply
   const streamLength = stream?.length
   const lengthless = !statusHasBody(reply.status) || (stream !== undefined && streamLength === undefined)
-  if (exchange.lingersAfterReply(lengthless)) {
+  if (lingersAfterReply(exchange, lengthless)) {
     writeLingeringReply(res, exchange, reply, head)
     return false
   }

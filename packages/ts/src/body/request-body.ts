@@ -1,5 +1,5 @@
 import { UhttpError } from '../errors.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import type { MultipartOptions, MultipartResult } from '../multipart/index.js'
 import { type FormFields, parseForm } from './form.js'
 import { parseJson } from './json.js'
