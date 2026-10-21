@@ -82,7 +82,7 @@ export function routeHandler(app: CompiledApp, route: CompiledRoute, method: str
     limits: route.limits,
   }
   const withoutParameters: DecodedChain = { chain: base, parameters: NO_PARAMETERS }
-  if (route.layers.length === 0 && !route.limits.readsBody && count === 0) {
+  if (!route.limits.readsBody && count === 0) {
     return directHandler(app, route, method, drain, withoutParameters)
   }
   const answer = (res: HttpResponse, req: HttpRequest, exchange: Exchange): boolean => {

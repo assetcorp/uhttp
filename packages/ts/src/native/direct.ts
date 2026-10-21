@@ -1,5 +1,5 @@
 import type { HttpRequest, HttpResponse } from 'uWebSockets.js'
-import { settleError, settleResult } from '../chain.js'
+import { runChain, settleError, settleResult } from '../chain.js'
 import type { CompiledApp, CompiledRoute } from '../compile.js'
 import { type Context, createContext, createLazyContext, releaseRequest } from '../context.js'
 import { Exchange } from '../exchange/index.js'
@@ -55,7 +55,29 @@ function crashed(res: HttpResponse, exchange: Exchange, error: unknown, method: 
   if (!crash(res, exchange, error, method, path)) watchAbort(res, exchange)
 }
 
+function writePlainly(
+  res: HttpResponse,
+  exchange: Exchange,
+  context: Context,
+  okHead: ArrayBuffer,
+  reply: Reply,
+): void {
+  try {
+    res.writeStatus(okHead)
+    res.end(reply.body ?? '')
+  } catch (error) {
+    abandon(res, exchange, error, context)
+    releaseRequest(context, false)
+    return
+  }
+  exchange.end()
+  releaseRequest(context, false)
+}
+
 function answer(res: HttpResponse, exchange: Exchange, context: Context, route: CompiledRoute, head: boolean): boolean {
+  if (route.layers.length > 0) {
+    return answerLater(res, exchange, context, route, runChain(context, exchange, route.layers, route.handler))
+  }
   let result: unknown
   try {
     result = route.handler(context)
@@ -96,13 +118,13 @@ function copiesLazily(route: CompiledRoute): boolean {
 }
 
 /**
- * Returns the uWebSockets.js handler of a route without middleware, without path parameters, and
- * without a body reader. The handler makes the same framing checks as the handler of any other route,
- * and sends the request straight to the handler of the route. When the route declares no header and no
- * client address, and the request declares no body, the package copies the request only when your
- * code first reads `c.req`, and a plain 200 with a text or a JSON body goes out with one call into
- * uWebSockets.js for its head. V8 compiles that path into one function, so the package keeps every
- * step of it inside the handler.
+ * Returns the uWebSockets.js handler of a route without path parameters and without a body reader.
+ * The handler makes the same framing checks as the handler of any other route, and sends the
+ * request straight to the handler of the route, or through its middleware when it has any. When the
+ * route and its middleware declare no header and no client address, and the request declares no
+ * body, the package copies the request only when your code first reads `c.req`, and a plain 200
+ * with a text or a JSON body goes out with one call into uWebSockets.js for its head. V8 compiles
+ * that path into one function, so the package keeps every step of it inside the handler.
  *
  * @param app - The package passes the compiled app.
  * @param route - The package passes the compiled route.
@@ -157,6 +179,28 @@ export function directHandler(
     if (!ended) watchAbort(res, exchange)
   }
   if (!lazy) return (res, req) => checked(res, req, undefined)
+  if (route.layers.length > 0) {
+    const layers = route.layers
+    return (res, req) => {
+      if (drain.mode === CLOSING || refusesAnyConnection()) return checked(res, req, undefined)
+      let framing: RequestFraming
+      try {
+        framing = readFraming(req)
+      } catch (error) {
+        return crashed(res, new Exchange(app.runtime, drain), error, method, route.path)
+      }
+      if (framing !== NO_BODY) return checked(res, req, framing)
+      const exchange = new Exchange(app.runtime, drain)
+      const context = createLazyContext(copy, exchange, req)
+      const pending = runChain(context, exchange, layers, route.handler)
+      const reply = exchange.reply
+      const okHead = pending !== undefined || head || reply === undefined ? undefined : plainHeadOf(exchange, reply)
+      if (okHead === undefined || reply === undefined || exchange.closed || !exchange.writesReplyAlone()) {
+        return settle(res, exchange, context, route, pending)
+      }
+      writePlainly(res, exchange, context, okHead, reply)
+    }
+  }
   return (res, req) => {
     if (drain.mode === CLOSING || refusesAnyConnection()) return checked(res, req, undefined)
     let framing: RequestFraming
@@ -177,7 +221,7 @@ export function directHandler(
     if (!(result instanceof Reply))
       return settle(res, exchange, context, route, settleResult(context, exchange, result))
     exchange.assign(result)
-    const okHead = head ? undefined : plainHeadOf(result)
+    const okHead = head ? undefined : plainHeadOf(exchange, result)
     if (okHead === undefined || exchange.closed || !exchange.writesReplyAlone()) {
       return settle(res, exchange, context, route, undefined)
     }

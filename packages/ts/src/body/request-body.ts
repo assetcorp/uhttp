@@ -119,16 +119,6 @@ async function* chunksOf(reader: BodyReader): AsyncGenerator<Uint8Array> {
   }
 }
 
-async function collect(reader: BodyReader): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = []
-  let total = 0
-  for await (const chunk of chunksOf(reader)) {
-    chunks.push(chunk)
-    total += chunk.byteLength
-  }
-  return chunks.length === 1 && chunks[0] !== undefined ? chunks[0] : Buffer.concat(chunks, total)
-}
-
 /**
  * The package creates this body for each request on the first read of `c.req.body`.
  *
@@ -162,12 +152,18 @@ export class ReaderBody implements RequestBody {
     return chunksOf(reader)
   }
 
-  async bytes(): Promise<Uint8Array> {
-    const reader = this.#claimed()
-    if (this.#bytes === undefined) {
-      if (this.#streamed) throw new UhttpError('BODY_ALREADY_READ', 'Your code has already streamed this body.')
-      this.#bytes = collect(reader)
+  bytes(): Promise<Uint8Array> {
+    if (this.#bytes !== undefined) return this.#bytes
+    let reader: BodyReader
+    try {
+      reader = this.#claimed()
+    } catch (error) {
+      return Promise.reject(error)
     }
+    if (this.#streamed) {
+      return Promise.reject(new UhttpError('BODY_ALREADY_READ', 'Your code has already streamed this body.'))
+    }
+    this.#bytes = reader.collect()
     return this.#bytes
   }
 
