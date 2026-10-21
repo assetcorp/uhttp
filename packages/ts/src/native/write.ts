@@ -7,7 +7,7 @@ import { bodyByteLength, errorReply, type Reply, statusHasBody } from '../reply.
 import { followBody } from './body.js'
 import { closeConnection, watchAbort } from './close.js'
 import type { RequestFraming } from './framing.js'
-import { okHeadOf, writeHead } from './head.js'
+import { foldedPlainHeadOf, okHeadOf, writeHead } from './head.js'
 import { writeLingeringReply } from './linger.js'
 import { refuseLaterRequests } from './refuse.js'
 import { NativeStream } from './stream.js'
@@ -49,15 +49,20 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
 
 /**
  * Returns the head that uWebSockets.js writes in one call for a plain 200, which has no stream, no
- * header of its own, and a text or a JSON content type.
+ * header of its own, and a text or a JSON content type. When a middleware added one block of
+ * default headers that it built at startup, such as the block of `secureHeaders()`, the head holds
+ * that block too.
  *
+ * @param exchange - The package passes the state of the request, which holds the default headers.
  * @param reply - The package passes the reply to write.
  * @returns The function returns the head of the reply, or `undefined` when the reply is not plain.
  * @internal
  */
-export function plainHeadOf(reply: Reply): ArrayBuffer | undefined {
+export function plainHeadOf(exchange: Exchange, reply: Reply): ArrayBuffer | undefined {
   if (reply.status !== OK_STATUS || reply.stream !== undefined || reply.headers !== undefined) return undefined
-  return okHeadOf(reply.contentType)
+  const blocks = exchange.defaultHeaders
+  if (blocks === undefined) return okHeadOf(reply.contentType)
+  return foldedPlainHeadOf(blocks, reply.contentType)
 }
 
 /**
@@ -73,7 +78,7 @@ export function plainHeadOf(reply: Reply): ArrayBuffer | undefined {
  * @internal
  */
 export function writeReplyAlone(res: HttpResponse, exchange: Exchange, reply: Reply): boolean {
-  const okHead = plainHeadOf(reply)
+  const okHead = plainHeadOf(exchange, reply)
   if (okHead === undefined || !exchange.writesReplyAlone()) return false
   res.writeStatus(okHead)
   res.end(reply.body ?? '')

@@ -1,12 +1,21 @@
+import { createHash, randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createApp } from '../../index.js'
+import { createApp, UhttpError } from '../../index.js'
 import { bodyApp, KIB, MIB } from '../helpers/apps.js'
-import { chunkedRequest, openConnection, requestHead, requestWithBody, send } from '../helpers/http-client.js'
+import {
+  chunkedRequest,
+  chunkFrame,
+  openConnection,
+  requestHead,
+  requestWithBody,
+  send,
+} from '../helpers/http-client.js'
 import {
   expectClosedAfterReply,
   expectHello,
   piecesOf,
   SMUGGLED_REQUEST,
+  tooLarge,
   withEveryConnectionChoice,
 } from '../helpers/replies.js'
 import { pause, start } from '../helpers/server.js'
@@ -38,6 +47,82 @@ describe('request bodies over the network', () => {
     expect(response.headers.get('content-type')).toEqual(['application/json'])
     expect(response.body.equals(payload)).toBe(true)
     await expectHello(connection)
+  })
+
+  it('reads a 512 KiB body that arrives in pieces while the handler waits on bytes(), and keeps the connection open', async () => {
+    const server = await start(
+      createApp()
+        .post('/digest', async c => {
+          const bytes = await c.req.body.bytes()
+          return c.json({ length: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') })
+        })
+        .get('/hello', c => c.text('Hello')),
+    )
+    const payload = randomBytes(512 * KIB)
+    const connection = await openConnection(server.port)
+
+    void connection.write(requestHead('POST', '/digest', [`Content-Length: ${payload.byteLength}`]))
+    for (const piece of piecesOf(payload, 16)) {
+      await connection.write(piece)
+      await pause(5)
+    }
+    const response = await connection.response()
+
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body.toString())).toEqual({
+      length: payload.byteLength,
+      sha256: createHash('sha256').update(payload).digest('hex'),
+    })
+    await expectHello(connection)
+  })
+
+  it('fails bytes() with REQUEST_ABORTED when the client goes in the middle of the body, and serves the next client', async () => {
+    const failure = Promise.withResolvers<unknown>()
+    const server = await start(
+      createApp()
+        .post('/upload', async c => {
+          try {
+            await c.req.body.bytes()
+          } catch (error) {
+            failure.resolve(error instanceof UhttpError ? error.code : error)
+            throw error
+          }
+          return c.text('read')
+        })
+        .get('/hello', c => c.text('Hello')),
+    )
+    const leaving = await openConnection(server.port)
+
+    await leaving.write(requestHead('POST', '/upload', [`Content-Length: ${256 * KIB}`]))
+    await leaving.write(Buffer.alloc(64 * KIB, 97))
+    await pause(20)
+    leaving.destroy()
+
+    expect(await failure.promise).toBe('REQUEST_ABORTED')
+    await expectHello(await openConnection(server.port))
+  })
+
+  it('answers 413 to a chunked body that passes the limit while the handler waits on bytes(), and closes the connection', async () => {
+    const handled: string[] = []
+    const server = await start(
+      createApp({ maxBodyBytes: 100 }).post('/upload', async c => {
+        const bytes = await c.req.body.bytes()
+        handled.push(String(bytes.byteLength))
+        return c.text('read')
+      }),
+    )
+    const connection = await openConnection(server.port)
+
+    void connection.write(requestHead('POST', '/upload', ['Transfer-Encoding: chunked']))
+    for (let piece = 0; piece < 3; piece++) {
+      await connection.write(chunkFrame(Buffer.alloc(40, 97)))
+      await pause(10)
+    }
+    const response = await connection.response()
+
+    expect([response.status, response.body.toString()]).toEqual([413, tooLarge(100)])
+    expect(handled).toEqual([])
+    await expectClosedAfterReply(connection, response)
   })
 
   it('reads an empty body from a POST with no length and no chunked encoding', async () => {

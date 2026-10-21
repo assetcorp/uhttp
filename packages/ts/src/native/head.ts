@@ -64,6 +64,27 @@ function foldedHeadOf(block: DefaultHeaders, heads: Map<string, ArrayBuffer>, co
 }
 
 /**
+ * Returns the head of a plain 200 that also holds one block of default headers, which a
+ * middleware built once at startup. The package builds the bytes of that head once for each
+ * content type and keeps them on the block.
+ *
+ * @param blocks - The package passes the blocks of default headers of the request.
+ * @param contentType - The package passes the content type of the reply.
+ * @returns The function returns the head, or `undefined` when the request has more than one block,
+ * when the block changes for each request, or when the content type is neither text nor JSON.
+ * @internal
+ */
+export function foldedPlainHeadOf(
+  blocks: readonly DefaultHeaders[],
+  contentType: string | undefined,
+): ArrayBuffer | undefined {
+  const block = blocks[0]
+  if (blocks.length !== 1 || block?.heads === undefined) return undefined
+  if (contentType === undefined || okHeadOf(contentType) === undefined) return undefined
+  return foldedHeadOf(block, block.heads, contentType)
+}
+
+/**
  * Calls a function with the content type and then with each line of every other header of the
  * current reply.
  *

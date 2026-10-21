@@ -6,8 +6,8 @@ import type { BodyState } from '../runtime.js'
 
 const IDENTITY = 'identity'
 
-interface Waiter {
-  readonly resolve: (chunk: Uint8Array | undefined) => void
+interface Waiter<T> {
+  readonly resolve: (value: T) => void
   readonly reject: (error: unknown) => void
 }
 
@@ -113,7 +113,8 @@ export class BodyReader implements BodyState {
   #paused = false
   #flowing = false
   #error: UhttpError | undefined
-  #waiter: Waiter | undefined
+  #waiter: Waiter<Uint8Array | undefined> | undefined
+  #collector: Waiter<Uint8Array> | undefined
   #pauseTimer: ReturnType<typeof setTimeout> | undefined
 
   /**
@@ -130,8 +131,6 @@ export class BodyReader implements BodyState {
     this.#source = source
     this.#ended = empty
     exchange.body = this
-    exchange.onRelease(error => this.fail(error))
-    exchange.onClose(() => this.#closed())
   }
 
   /** This is `true` while the reader queues the chunks that the source delivers. */
@@ -153,6 +152,7 @@ export class BodyReader implements BodyState {
     if (!last) return
     this.#ended = true
     this.#wake()
+    this.#deliver()
     this.#exchange.arrival.ended()
   }
 
@@ -167,8 +167,11 @@ export class BodyReader implements BodyState {
     this.#queue.length = 0
     this.#queuedBytes = 0
     const waiter = this.#waiter
+    const collector = this.#collector
     this.#waiter = undefined
+    this.#collector = undefined
     waiter?.reject(error)
+    collector?.reject(error)
   }
 
   /**
@@ -194,12 +197,31 @@ export class BodyReader implements BodyState {
   }
 
   /**
+   * Returns the whole body once its last chunk arrives. While the reader collects the body, it
+   * never pauses the source, because it keeps every chunk until the end of the body anyway, and
+   * the body limit of the route still applies. The caller reads the body either through this
+   * method once or through {@link BodyReader.read}, never both.
+   *
+   * @returns The promise resolves to the bytes of the body. It rejects with the error of a failed
+   * reader.
+   */
+  collect(): Promise<Uint8Array> {
+    if (this.#error !== undefined) return Promise.reject(this.#error)
+    this.keepFlowing()
+    if (this.#ended) return Promise.resolve(this.#drained())
+    return new Promise((resolve, reject) => {
+      this.#collector = { resolve, reject }
+    })
+  }
+
+  /**
    * Discards the chunks that the handler hasn't read and every chunk that arrives later, and
    * resumes a paused source, so that the rest of the body keeps arriving after the response starts.
    */
   settle(): void {
     if (this.#paused) this.#resume()
     this.#discarding = true
+    if (this.#collector !== undefined) return
     this.#queue.length = 0
     this.#queuedBytes = 0
   }
@@ -240,6 +262,22 @@ export class BodyReader implements BodyState {
     waiter.resolve(chunk)
   }
 
+  #deliver(): void {
+    const collector = this.#collector
+    if (collector === undefined) return
+    this.#collector = undefined
+    collector.resolve(this.#drained())
+  }
+
+  #drained(): Uint8Array {
+    const queue = this.#queue
+    const first = queue[0]
+    const whole = queue.length === 1 && first !== undefined ? first : Buffer.concat(queue, this.#queuedBytes)
+    queue.length = 0
+    this.#queuedBytes = 0
+    return whole
+  }
+
   #pause(): void {
     if (this.#paused || this.#flowing) return
     this.#paused = true
@@ -256,7 +294,11 @@ export class BodyReader implements BodyState {
     this.#source.resume()
   }
 
-  #closed(): void {
+  /**
+   * Stops the pause timer once the client goes or the response ends, and fails a reader whose body
+   * has not ended with `REQUEST_ABORTED`.
+   */
+  close(): void {
     this.#stopTimer()
     if (!this.#ended) this.fail(new UhttpError('REQUEST_ABORTED', 'The response ended before the request body.'))
   }
