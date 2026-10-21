@@ -1,3 +1,18 @@
+## 0.1.1 (2026-10-21)
+
+### 🚀 Features
+
+- measure benchmarks with and without request pipelining ([63cead8](https://github.com/assetcorp/uhttp/commit/63cead8))
+
+### 🔥 Performance
+
+- speed up middleware routes and whole-body uploads ([6696eca](https://github.com/assetcorp/uhttp/commit/6696eca))
+- copy the request lazily on routes without middleware ([040a21d](https://github.com/assetcorp/uhttp/commit/040a21d))
+
+### ❤️ Thank You
+
+- assetcorp
+
 ## 0.1.0 (2026-10-19)
 
 ### 🚀 Features
