@@ -207,8 +207,11 @@ export class Exchange implements ResponseParts {
     if (this.closed) return
     this.mark(ABORTED | CLOSED, true)
     const events = this.ensureEvents()
+    const error = new UhttpError('REQUEST_ABORTED', 'The client disconnected before the request body ended.')
     events.fireSignal(undefined)
-    events.release(new UhttpError('REQUEST_ABORTED', 'The client disconnected before the request body ended.'))
+    this.body?.fail(error)
+    events.release(error)
+    this.body?.close()
     events.fireClose()
   }
 
@@ -235,13 +238,14 @@ export class Exchange implements ResponseParts {
     this.mark(TIMED_OUT | CLOSE_AFTER_REPLY, true)
     const events = this.ensureEvents()
     events.fireSignal(error)
+    this.body?.fail(error)
     events.release(error)
   }
 
   /**
-   * Returns `true` when only the reply shapes the response: the route has no body reader, no body
-   * is on its way, your code set no header, no middleware attached default headers, and the
-   * connection stays open after the response.
+   * Returns `true` when only the reply and the default headers of middleware shape the response:
+   * the route has no body reader, no body is on its way, your code set no header, and the
+   * connection stays open after the response. The caller checks the default headers itself.
    *
    * @returns The method returns `false` when the package writes the reply through its full path.
    */
@@ -251,7 +255,6 @@ export class Exchange implements ResponseParts {
       this.body === undefined &&
       this.arrivalState === undefined &&
       this.headerStore === undefined &&
-      this.defaultBlocks === undefined &&
       (this.drain === undefined || this.drain.mode === SERVING_MODE)
     )
   }
@@ -272,6 +275,7 @@ export class Exchange implements ResponseParts {
    * @param error - The package passes the error that the body reader and the uploads fail with.
    */
   release(error: UhttpError): void {
+    this.body?.fail(error)
     this.ensureEvents().release(error)
   }
 
@@ -291,6 +295,7 @@ export class Exchange implements ResponseParts {
     if ((flags & CLOSED) !== 0) return
     this.flagBits = flags | CLOSED
     if ((flags & (LINGERING | COUNTED)) === COUNTED) this.uncount()
+    if (this.body !== undefined) this.body.close()
     if (this.events !== undefined) this.events.fireClose()
   }
 

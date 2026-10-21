@@ -254,6 +254,7 @@ export function runChain(
 ): undefined | Promise<void> {
   const result = dispatch(context, exchange, layers, handler, 0)
   if (result === undefined) return ensureReply(context, exchange)
+  if (layers.length === 0) return result
   return ensureReplyLater(context, exchange, result)
 }
 
@@ -275,7 +276,7 @@ export function settleResult(context: Context, exchange: Exchange, result: unkno
     return undefined
   }
   if (!(result instanceof Promise)) return settled(context, exchange, fail(context, exchange, missingReply()))
-  return ensureReplyLater(context, exchange, settleHandler(context, exchange, result))
+  return settleHandler(context, exchange, result)
 }
 
 /**
