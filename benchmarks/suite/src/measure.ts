@@ -11,6 +11,7 @@ export interface MeasureTarget {
   readonly serverName: string
   readonly variant: HeaderVariant
   readonly route: RouteId
+  readonly pipelinedRequests: number
 }
 
 export interface MeasureContext {
@@ -26,7 +27,9 @@ export interface MeasureOutcome {
 
 function describe(target: MeasureTarget): string {
   const headers = target.variant === 'secure' ? 'with security headers' : 'without security headers'
-  return `${target.serverName} ${headers}, ${target.route} route`
+  const load =
+    target.pipelinedRequests === 1 ? 'without pipelining' : `with ${target.pipelinedRequests} pipelined requests`
+  return `${target.serverName} ${headers}, ${target.route} route, ${load}`
 }
 
 function errorText(error: unknown): string {
@@ -43,6 +46,7 @@ function loadRequest(
   return {
     url: `${origin}${ROUTE_PATHS[target.route]}`,
     connections,
+    pipelinedRequests: target.pipelinedRequests,
     threads: context.options.loadThreads,
     durationMs,
     uploadFile: target.route === 'upload' ? context.uploadFile : null,
@@ -66,6 +70,7 @@ async function measureLevel(
     server: target.server,
     headers: target.variant,
     route: target.route,
+    pipelined_requests: target.pipelinedRequests,
     connections,
     requests: outcome.requests,
     requests_per_second: outcome.requestsPerSecond,
@@ -116,5 +121,11 @@ export async function measureTarget(context: MeasureContext, target: MeasureTarg
 }
 
 function failureOf(target: MeasureTarget, connections: number | null): Omit<FailedMeasurement, 'error'> {
-  return { server: target.server, headers: target.variant, route: target.route, connections }
+  return {
+    server: target.server,
+    headers: target.variant,
+    route: target.route,
+    pipelined_requests: target.pipelinedRequests,
+    connections,
+  }
 }

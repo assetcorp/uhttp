@@ -5,7 +5,10 @@ from data import (
     VARIANT_TITLES,
     at_connections,
     headline_connections,
+    load_title,
     peak,
+    pipelining_levels,
+    pipelining_view,
     rate,
     route_title,
     routes_present,
@@ -58,8 +61,7 @@ def route_table(results: dict, route: str, variant: str) -> str | None:
     return table(HEADERS, ALIGNS, [_row(results, route, variant, server, connections, reference) for server in servers])
 
 
-def table_sections(results: dict, heading: str) -> str:
-    connections = integer(headline_connections(results))
+def _load_sections(results: dict, heading: str) -> list[str]:
     sections = []
     for variant in variants_present(results):
         for route in routes_present(results):
@@ -68,6 +70,15 @@ def table_sections(results: dict, heading: str) -> str:
                 continue
             title = f"{heading} {route_title(results, route)} route {VARIANT_TITLES[variant]}"
             sections.append(f"{title}\n\n{rendered}")
+    return sections
+
+
+def table_sections(results: dict, heading: str) -> str:
+    connections = integer(headline_connections(results))
+    sections = []
+    for level in pipelining_levels(results):
+        sections.append(f"{heading} {load_title(level)}")
+        sections.extend(_load_sections(pipelining_view(results, level), f"{heading}#"))
     note = (
         f"In each table, the servers appear in the order of their requests a second at {connections} connections. In the "
         "last column, you can read each server's highest rate across every connection count, with the connections at "

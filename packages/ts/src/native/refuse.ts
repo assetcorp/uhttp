@@ -1,5 +1,5 @@
 import type { HttpResponse } from 'uWebSockets.js'
-import type { Exchange } from '../exchange.js'
+import type { Exchange } from '../exchange/index.js'
 import { closeConnection, remoteAddressOf } from './close.js'
 
 const refusedConnections = new Set<string>()
@@ -39,7 +39,22 @@ export function refuseLaterRequests(res: HttpResponse, exchange: Exchange): void
  * @internal
  */
 export function refusedRequest(res: HttpResponse, exchange: Exchange): boolean {
-  if (refusedConnections.size === 0 || !refusedConnections.has(connectionKey(res))) return false
+  return refusedConnections.size !== 0 && refusedOnConnection(res, exchange)
+}
+
+/**
+ * Returns whether {@link refuseLaterRequests} has marked any connection, so that a handler can skip
+ * {@link refusedRequest} while no connection is marked.
+ *
+ * @returns The function returns `true` while at least one connection is marked.
+ * @internal
+ */
+export function refusesAnyConnection(): boolean {
+  return refusedConnections.size !== 0
+}
+
+function refusedOnConnection(res: HttpResponse, exchange: Exchange): boolean {
+  if (!refusedConnections.has(connectionKey(res))) return false
   setImmediate(() => closeConnection(res, exchange))
   return true
 }

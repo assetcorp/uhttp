@@ -184,6 +184,75 @@ describe('the query string and the content type, which the package reads when co
     await expectHello(connection)
   })
 
+  it('copies the request for a handler that first reads it after an await, on a route without middleware', async () => {
+    const app = createApp()
+      .get('/later', async c => {
+        await pause(5)
+        const { method, path, route, query, contentType, contentLength } = c.req
+        return c.json({ method, path, route, query, contentType, contentLength: contentLength ?? null })
+      })
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+
+    const { connection, response } = await send(
+      server.port,
+      requestHead('GET', '/later?page=3', ['Content-Type: text/csv']),
+    )
+
+    expect(JSON.parse(response.body.toString())).toEqual({
+      method: 'GET',
+      path: '/later',
+      route: '/later',
+      query: 'page=3',
+      contentType: 'text/csv',
+      contentLength: null,
+    })
+    await expectHello(connection)
+  })
+
+  it('gives a task that first reads the request after the reply its method, path, and route, and REQUEST_RELEASED for the rest', async () => {
+    const outcome = Promise.withResolvers<unknown[]>()
+    const codeOf = (read: () => unknown): unknown => {
+      try {
+        return read()
+      } catch (error) {
+        return (error as { code?: string }).code
+      }
+    }
+    const app = createApp()
+      .get('/audit', c => {
+        void (async () => {
+          await pause(5)
+          const { method, path, route } = c.req
+          outcome.resolve([method, path, route, codeOf(() => c.req.query), codeOf(() => c.req.contentType)])
+        })()
+        return c.text('sent')
+      })
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+
+    const { connection, response } = await send(
+      server.port,
+      requestHead('GET', '/audit?page=2', ['Content-Type: text/plain']),
+    )
+
+    expect(response.body.toString()).toBe('sent')
+    expect(await outcome.promise).toEqual(['GET', '/audit', '/audit', 'REQUEST_RELEASED', 'REQUEST_RELEASED'])
+    await expectHello(connection)
+  })
+
+  it('reads the length of a body that a client sends to a GET route without middleware, and keeps the connection open', async () => {
+    const app = createApp()
+      .get('/sized', c => c.json({ contentLength: c.req.contentLength ?? null, query: c.req.query }))
+      .get('/hello', c => c.text('Hello'))
+    const server = await start(app)
+
+    const { connection, response } = await send(server.port, requestWithBody('GET', '/sized?x=1', [], 'hello'))
+
+    expect(JSON.parse(response.body.toString())).toEqual({ contentLength: 5, query: 'x=1' })
+    await expectHello(connection)
+  })
+
   it('copies both for a stream producer that reads them after the handler returned', async () => {
     const app = createApp()
       .get('/feed', c =>

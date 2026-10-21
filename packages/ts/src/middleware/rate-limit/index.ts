@@ -1,6 +1,6 @@
 import { type Context, exchangeOf } from '../../context.js'
 import { UhttpError } from '../../errors.js'
-import type { Exchange } from '../../exchange.js'
+import { type Exchange, setFixed, setPrepared } from '../../exchange/index.js'
 import { isToken } from '../../headers.js'
 import type { PreparedName } from '../../response.js'
 import type { MiddlewareDefinition } from '../../types.js'
@@ -184,12 +184,12 @@ function checkedHit(hit: unknown): RateLimitHit {
 function setHeaders(exchange: Exchange, plan: LimitPlan, hit: RateLimitHit, resetSeconds: number): void {
   const remaining = Math.max(0, plan.limit - hit.count)
   const { policy, legacyLimit, names } = plan
-  exchange.setFixed(policy, false)
-  exchange.setPrepared(names.state, `"${RATE_LIMIT_POLICY_NAME}";r=${remaining};t=${resetSeconds}`, false)
+  setFixed(exchange, policy, false)
+  setPrepared(exchange, names.state, `"${RATE_LIMIT_POLICY_NAME}";r=${remaining};t=${resetSeconds}`, false)
   if (legacyLimit === undefined) return
-  exchange.setFixed(legacyLimit, false)
-  exchange.setPrepared(names.remaining, String(remaining), false)
-  exchange.setPrepared(names.reset, String(Math.ceil(hit.resetAt / MILLISECONDS_PER_SECOND)), false)
+  setFixed(exchange, legacyLimit, false)
+  setPrepared(exchange, names.remaining, String(remaining), false)
+  setPrepared(exchange, names.reset, String(Math.ceil(hit.resetAt / MILLISECONDS_PER_SECOND)), false)
 }
 
 /**
@@ -236,7 +236,7 @@ export function rateLimit(options: RateLimitOptions): MiddlewareDefinition {
     const exchange = exchangeOf(context)
     setHeaders(exchange, plan, hit, resetSeconds)
     if (hit.count > plan.limit) {
-      exchange.setPrepared(plan.names.retryAfter, String(resetSeconds), false)
+      setPrepared(exchange, plan.names.retryAfter, String(resetSeconds), false)
       throw new UhttpError(
         'RATE_LIMITED',
         `The client sent more requests than the limit of ${plan.limit} for one window.`,

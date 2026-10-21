@@ -2,7 +2,6 @@ import {
   LOAD_TIMEOUT_GRACE_MS,
   MAX_LOAD_OUTPUT_BYTES,
   MIN_H2LOAD_VERSION,
-  PIPELINED_REQUESTS,
   TOOL_OUTPUT_TIMEOUT_MS,
   UPLOAD_CONTENT_TYPE,
 } from './constants.ts'
@@ -12,6 +11,7 @@ import type { LatencySummary } from './types.ts'
 export interface LoadRequest {
   readonly url: string
   readonly connections: number
+  readonly pipelinedRequests: number
   readonly threads: number
   readonly durationMs: number
   readonly uploadFile: string | null
@@ -99,7 +99,7 @@ function h2loadArguments(request: LoadRequest): string[] {
     '-c',
     String(request.connections),
     '-m',
-    String(PIPELINED_REQUESTS),
+    String(request.pipelinedRequests),
     '-t',
     String(Math.min(request.threads, request.connections)),
     '-D',

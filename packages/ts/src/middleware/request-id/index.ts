@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { exchangeOf } from '../../context.js'
+import { setPrepared } from '../../exchange/index.js'
 import type { MiddlewareDefinition } from '../../types.js'
 import { viaTrustedProxy } from '../client.js'
 import { fixedName } from '../options.js'
@@ -27,7 +28,7 @@ export function requestId(): MiddlewareDefinition {
       const inbound = viaTrustedProxy(context) ? context.req.header(REQUEST_ID_HEADER) : undefined
       const id = inbound !== undefined && VALID_REQUEST_ID.test(inbound) ? inbound : randomUUID()
       setRequestId(context, id)
-      exchangeOf(context).setPrepared(idName, id, false)
+      setPrepared(exchangeOf(context), idName, id, false)
     },
   }
 }
