@@ -16,7 +16,7 @@ export interface Pinning {
 export interface LoadSettings {
   readonly connection_levels: readonly number[]
   readonly headline_connections: number
-  readonly pipelined_requests: number
+  readonly pipelining_levels: readonly number[]
   readonly warm_up_seconds: number
   readonly measure_seconds: number
   readonly load_threads: number
@@ -37,6 +37,7 @@ export interface Measurement {
   readonly server: ServerId
   readonly headers: HeaderVariant
   readonly route: RouteId
+  readonly pipelined_requests: number
   readonly connections: number
   readonly requests: number
   readonly requests_per_second: number
@@ -48,6 +49,7 @@ export interface FailedMeasurement {
   readonly server: ServerId
   readonly headers: HeaderVariant
   readonly route: RouteId
+  readonly pipelined_requests: number
   readonly connections: number | null
   readonly error: string
 }

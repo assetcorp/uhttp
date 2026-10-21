@@ -14,7 +14,17 @@ from chart_style import (
     server_colour,
     style_axes,
 )
-from data import VARIANT_TITLES, peak, rate, route_title, routes_present, server_ids, server_name
+from data import (
+    VARIANT_TITLES,
+    load_caption,
+    peak,
+    pipelining_of,
+    rate,
+    route_title,
+    routes_present,
+    server_ids,
+    server_name,
+)
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 BAR_HEIGHT = 0.62
@@ -79,12 +89,12 @@ def peak_figure(destination: Path, results: dict, run_id: str, variant: str) -> 
     for (axes,), (route, entries) in zip(grid, panels):
         _panel(axes, results, route, entries)
     grid[-1][0].set_xlabel("Peak requests a second")
-    pipelined = (results.get("settings") or {}).get("pipelined_requests")
+    pipelining = pipelining_of(results)
     caption(
         figure,
         f"Peak throughput {VARIANT_TITLES[variant]}",
-        f"{pipelined} pipelined requests per connection · run {run_id}",
+        f"{load_caption(pipelining)} · run {run_id}",
         TITLE_RESERVE_POINTS,
     )
     figure.subplots_adjust(hspace=PANEL_SPACING)
-    return save(figure, destination / peak_chart(variant))
+    return save(figure, destination / peak_chart(variant, pipelining))

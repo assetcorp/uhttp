@@ -13,7 +13,17 @@ from chart_style import (
     server_colour,
     style_axes,
 )
-from data import PERCENTILES, VARIANT_TITLES, peak, route_title, routes_present, server_ids, server_name
+from data import (
+    PERCENTILES,
+    VARIANT_TITLES,
+    load_caption,
+    peak,
+    pipelining_of,
+    route_title,
+    routes_present,
+    server_ids,
+    server_name,
+)
 from matplotlib.ticker import FuncFormatter
 from render import is_number
 
@@ -78,10 +88,12 @@ def latency_figure(destination: Path, results: dict, run_id: str, variant: str) 
         axes.set_title(route_title(results, route), fontsize=BASE_FONT_POINTS)
         axes.set_xticks(list(range(len(PERCENTILES))))
         axes.set_xticklabels([label for _, label in PERCENTILES], fontsize=BASE_FONT_POINTS - 1)
+    pipelining = pipelining_of(results)
     caption(
         figure,
         f"Latency at each server's peak {VARIANT_TITLES[variant]}",
-        f"The number beside each line gives the connections at that server's peak · run {run_id}",
+        f"{load_caption(pipelining)} · the number beside each line gives the connections at that server's peak "
+        f"· run {run_id}",
         TITLE_ROW_RESERVE_POINTS,
     )
     handles: list = []
@@ -93,4 +105,4 @@ def latency_figure(destination: Path, results: dict, run_id: str, variant: str) 
                 labels.append(label)
     figure.legend(handles, labels, loc="lower center", ncols=len(labels), fontsize=BASE_FONT_POINTS - 1)
     figure.subplots_adjust(wspace=PANEL_GAP_FRACTION, bottom=LEGEND_RESERVE)
-    return save(figure, destination / latency_chart(variant))
+    return save(figure, destination / latency_chart(variant, pipelining))

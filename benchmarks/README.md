@@ -26,7 +26,7 @@ pnpm --dir benchmarks/suite bench
 pnpm --dir benchmarks/suite bench:smoke
 ```
 
-In the published profile, the suite measures every server, every route, and both sets of headers, with 40 seconds of warm-up and 40 seconds at each of 10, 50, 100, 250, and 500 connections. When every measurement succeeds, the suite rewrites `BENCHMARKS.md` and the `BENCH:headline` region of both READMEs from the new run. The suite refuses to leave out a server, a route, or a set of headers in the published profile, because you will then find only some of the servers on the page.
+In the published profile, the suite measures every server, every route, and both sets of headers, with 40 seconds of warm-up and 40 seconds at each of 10, 50, 100, 250, and 500 connections. It measures all of them first with one request at a time on each connection, and then again with 10 pipelined requests on each connection. When every measurement succeeds, the suite rewrites `BENCHMARKS.md` and the `BENCH:headline` region of both READMEs from the new run. The suite refuses to leave out a server, a route, or a set of headers in the published profile, because you will then find only some of the servers on the page.
 
 In the smoke profile, the suite warms each server up for 1 second and measures it for 2 seconds at 10 and at 100 connections, so that you can check that the suite works on your machine. Git ignores `results/.smoke/`, and the generator reads `results/runs/` alone, so the page and the READMEs stay unchanged after a smoke run. The suite still writes `comparison.md` and the charts into each smoke run, so that you can read them. Delete the smoke runs with `rm -rf benchmarks/results/.smoke` once you no longer need them.
 
@@ -40,6 +40,7 @@ Pass each option after the name of the script, as in `pnpm --dir benchmarks/suit
 | `--routes` | A comma-separated list of the routes to measure, from `plain`, `json`, and `upload` | Every route |
 | `--headers` | A comma-separated list of the sets of headers, from `plain`, which leaves the security headers out, and `secure`, which adds them | Both sets |
 | `--connections` | A comma-separated list of the connection counts | `10,50,100,250,500`, or `10,100` in the smoke profile |
+| `--pipelining` | A comma-separated list of the numbers of requests that h2load keeps in flight on each connection, where 1 sends one request at a time and a larger number pipelines that many requests | `1,10` |
 | `--duration` | The seconds of load at each connection count | 40, or 2 in the smoke profile |
 | `--warm-up` | The seconds of load at 100 connections before the first measurement | 40, or 1 in the smoke profile |
 | `--threads` | The threads of h2load, up to the number of connections | 4 |
