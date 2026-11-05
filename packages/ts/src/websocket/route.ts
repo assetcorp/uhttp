@@ -41,7 +41,7 @@ const ANY_ORIGINS: UpgradeOrigins = { kind: 'any' }
  * @internal
  */
 export interface CheckedWebSocketRoute {
-  /** The package accepts an upgrade from the origins that this describes. */
+  /** The package checks the origin of each upgrade request against this value. */
   readonly origins: UpgradeOrigins
   /** uWebSockets.js drops the connection of a client that sends a message longer than this many bytes. */
   readonly maxPayloadLength: number
