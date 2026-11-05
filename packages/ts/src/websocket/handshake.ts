@@ -183,22 +183,24 @@ function originHandler(allowed: boolean): Handler {
 
 /**
  * Returns the handler at the end of the chain of an upgrade request, so that every middleware of
- * the route receives the reply of the handshake after `await next()`. A request without an
- * `origin` header passes the origin check, because a browser sends the header with every upgrade
- * and a client outside a browser can send any origin that it likes.
+ * the route receives the reply of the handshake after `await next()`. The package accepts a
+ * request without an `origin` header under every origin check, because a browser sends the header
+ * with every upgrade, while a client outside a browser can send any origin that its code chooses.
  *
  * @param headers - The package passes the handshake headers of the request.
- * @param origins - The package passes the origins that the route accepts.
+ * @param origins - The package passes the `origins` of the route.
  * @param declaresBody - The package passes `true` when body bytes follow the head of the request.
- * @returns The function returns {@link acceptUpgrade} for a request that passes every check. For a
- * route with an {@link OriginCheck}, it returns a handler that calls the check with the origin and
- * the context. That handler returns the 101 when the check returns `true` or a promise of `true`,
- * throws a `FORBIDDEN_ORIGIN` error for any other result, and passes on an error that the check
- * throws or rejects with. Otherwise, the function returns a handler that throws an
- * `INVALID_UPGRADE` error for a request that breaks RFC 6455, an `UPGRADE_REQUIRED` error for a
- * version other than 13, or a `FORBIDDEN_ORIGIN` error for an origin that the route refuses. For
- * an `UPGRADE_REQUIRED` error, the handler also sets the version that the package supports in
- * `sec-websocket-version`.
+ * @returns The function returns {@link acceptUpgrade} when the client follows RFC 6455 and the
+ * package accepts the origin. For a route with an {@link OriginCheck}, the function returns a
+ * handler that calls the check with the origin and the context. That handler returns the 101 when
+ * the check returns `true` or a promise of `true`. For any other result, the handler throws a
+ * `FORBIDDEN_ORIGIN` error, while it passes on unchanged an error that the check throws or rejects
+ * with. Otherwise, the function returns a handler that throws one of three errors. It throws an
+ * `INVALID_UPGRADE` error when the client sends a body, a malformed key, or upgrade headers that
+ * lack `upgrade: websocket` or `connection: upgrade`. It throws an `UPGRADE_REQUIRED` error when
+ * the client asks for a version other than 13, after it sets the version that the package supports
+ * in `sec-websocket-version`. It throws a `FORBIDDEN_ORIGIN` error when the package refuses the
+ * origin under the `origins` of the route.
  * @internal
  */
 export function handshakeHandler(headers: HandshakeHeaders, origins: UpgradeOrigins, declaresBody: boolean): Handler {

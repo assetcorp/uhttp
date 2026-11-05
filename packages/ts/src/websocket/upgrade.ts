@@ -108,10 +108,10 @@ function respond(upgrade: Upgrade, request: CopiedRequest, chain: RequestChain):
  * Returns the upgrade handler of one WebSocket route for uWebSockets.js, which calls the handler for
  * a GET request whose `sec-websocket-key` has 24 characters. Inside that synchronous call, the
  * handler applies the framing checks of an HTTP route and copies the path parameters, the declared
- * headers, and the handshake headers. It then passes the request to the middleware of the route,
- * and the last handler returns the 101 for a handshake that passes every check, including the
- * origin check of the route. Otherwise, the last handler throws a 400, a 403, a 426, or the error
- * of an origin check that throws.
+ * headers, and the handshake headers. It then passes the request to the middleware of the route.
+ * The last handler returns the 101 when the client follows RFC 6455 and the package accepts the
+ * origin under the `origins` of the route. Otherwise, the last handler throws a 400, a 403, or a
+ * 426, or it passes on unchanged the error that an origin check throws.
  * Once every middleware has returned, the package switches the connection inside a cork, with the
  * values that your middleware stored as the `data` of the socket. When a middleware has returned
  * another reply in place of the 101, the package writes that reply. The handler attaches the abort

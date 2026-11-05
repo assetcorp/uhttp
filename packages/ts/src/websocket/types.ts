@@ -109,12 +109,13 @@ export interface WebSocketRoute<Data extends object = Record<string, unknown>> {
    * package accepts an origin whose host and port match the `Host` header of the request. When you
    * pass a list, such as `['https://app.example.com']`, the package accepts only those origins.
    * When you pass an {@link OriginCheck} function, which can be async, the package accepts an
-   * origin for which the function returns `true`. These three choices refuse the `null` origin and
-   * every origin other than an `http` or an `https` origin, without calling your function. When you
-   * pass `'*'`, the package accepts every origin, `null` included. Pass `'*'` only on a route that
-   * signs each client in with a token that the client adds itself, because the browser of your
-   * user sends its cookies to a socket that a page on any site opens. Every choice accepts an
-   * upgrade without an `Origin` header.
+   * origin for which your function returns `true`. With any of these three, the package accepts
+   * only an `http` or an `https` origin, so it refuses the `null` origin and calls your function
+   * only for an `http` or an `https` origin. When you pass `'*'`, the package accepts
+   * every origin, including `null`. Pass `'*'` only when you sign each client in with a token that
+   * the client adds itself, because the browser of your user sends its cookies with a socket that
+   * a page on any site opens. The package accepts an upgrade without an `Origin` header whatever
+   * you pass.
    */
   readonly origins?: readonly string[] | '*' | OriginCheck
   /**

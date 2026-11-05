@@ -4,8 +4,8 @@ import { invalidOption } from './options.js'
 /**
  * You pass a function of this type to choose the origins that a request may come from.
  *
- * @param origin - The package passes the `Origin` header of the request, which it has checked to
- * be a serialised `http` or `https` origin such as `https://shop.example`.
+ * @param origin - The package passes the `Origin` header of the request once it has checked that
+ * the header holds a serialised `http` or `https` origin, such as `https://shop.example`.
  * @param context - The package passes the context of the request.
  * @returns The function returns `true` for an origin that you allow.
  */
