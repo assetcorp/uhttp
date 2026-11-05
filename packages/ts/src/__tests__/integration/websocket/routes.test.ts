@@ -65,10 +65,12 @@ describe('registering a WebSocket route', () => {
     ]) {
       expect(addRoute({ origins: [origin] })).toThrowError(expect.objectContaining({ code: 'INVALID_ROUTE' }))
     }
-    expect(addRoute({ origins: 'https://app.example.com' })).toThrowError(
-      expect.objectContaining({ code: 'INVALID_ROUTE' }),
-    )
+    for (const origins of ['https://app.example.com', 'null', '**', '', {}, 42, true, null]) {
+      expect(addRoute({ origins })).toThrowError(expect.objectContaining({ code: 'INVALID_ROUTE' }))
+    }
     expect(addTo({ origins: ['https://app.example.com', 'http://localhost:5173'] })).not.toThrow()
+    expect(addTo({ origins: '*' })).not.toThrow()
+    expect(addTo({ origins: origin => origin === 'https://app.example.com' })).not.toThrow()
   })
 
   it('refuses body and maxBodyBytes in the options of a WebSocket route', () => {

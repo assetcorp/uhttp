@@ -135,6 +135,9 @@ export interface MultipartResult {
 export type Next = () => Promise<void>;
 
 // @public
+export type OriginCheck = (origin: string, context: Context) => boolean | Promise<boolean>;
+
+// @public
 export interface PublishOptions {
     readonly binary?: boolean;
     readonly compress?: boolean;
@@ -401,7 +404,7 @@ export interface WebSocketRoute<Data extends object = Record<string, unknown>> {
     readonly maxMessageBytes?: number;
     readonly message?: (socket: ServerWebSocket<Data>, message: string | Uint8Array) => void | Promise<void>;
     readonly open?: (socket: ServerWebSocket<Data>) => void | Promise<void>;
-    readonly origins?: readonly string[];
+    readonly origins?: readonly string[] | '*' | OriginCheck;
 }
 
 ```

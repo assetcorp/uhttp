@@ -18,7 +18,7 @@ import { writeReply } from '../native/write.js'
 import type { CopiedRequest } from '../request.js'
 import { type DecodedChain, decodeChain, type RequestChain } from '../resolve.js'
 import { forEachResponseHeader } from '../response.js'
-import { acceptUpgrade, type HandshakeHeaders, handshakeError, handshakeOf, refuseUpgrade } from './handshake.js'
+import { acceptUpgrade, type HandshakeHeaders, handshakeHandler, handshakeOf } from './handshake.js'
 import type { Hub } from './hub.js'
 import { NativeSocket, SOCKET_STATE } from './socket.js'
 
@@ -108,8 +108,10 @@ function respond(upgrade: Upgrade, request: CopiedRequest, chain: RequestChain):
  * Returns the upgrade handler of one WebSocket route for uWebSockets.js, which calls the handler for
  * a GET request whose `sec-websocket-key` has 24 characters. Inside that synchronous call, the
  * handler applies the framing checks of an HTTP route and copies the path parameters, the declared
- * headers, and the handshake headers. It then passes the request to the middleware of the route,
- * and the last handler returns the 101 for a valid handshake or throws a 400, a 403, or a 426.
+ * headers, and the handshake headers. It then passes the request to the middleware of the route.
+ * The last handler returns the 101 when the client follows RFC 6455 and the package accepts the
+ * origin under the `origins` of the route. Otherwise, the last handler throws a 400, a 403, or a
+ * 426, or it passes on unchanged the error that an origin check throws.
  * Once every middleware has returned, the package switches the connection inside a cork, with the
  * values that your middleware stored as the `data` of the socket. When a middleware has returned
  * another reply in place of the 101, the package writes that reply. The handler attaches the abort
@@ -154,13 +156,10 @@ export function upgradeHandler(app: CompiledApp, socket: CompiledWebSocket, hub:
         decoded = decodeChain(app, { ...base, rawParameters: raw })
       }
       handshake = handshakeOf(visit => req.forEach(visit))
-      const error = handshakeError(handshake, socket.route.origins, framing.declaresBody)
+      const handler = handshakeHandler(handshake, socket.route.origins, framing.declaresBody)
       if (framing.declaresBody) exchange.closeAfterReply = true
       attachBody(res, exchange, decoded.chain, framing)
-      chain =
-        error !== undefined && decoded.chain.matchedRoute
-          ? { ...decoded.chain, handler: refuseUpgrade(error) }
-          : decoded.chain
+      chain = handler !== acceptUpgrade && decoded.chain.matchedRoute ? { ...decoded.chain, handler } : decoded.chain
       request = copyRequest(res, req, exchange, UPGRADE_METHOD, path, decoded, framing, undefined)
     } catch (error) {
       return crash(res, exchange, error, UPGRADE_METHOD, path)

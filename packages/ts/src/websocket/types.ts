@@ -1,3 +1,4 @@
+import type { OriginCheck } from '../middleware/origins.js'
 import type { Middleware, RouteOptions } from '../types.js'
 
 /**
@@ -104,12 +105,19 @@ export interface ServerWebSocket<Data extends object = Record<string, unknown>> 
  */
 export interface WebSocketRoute<Data extends object = Record<string, unknown>> {
   /**
-   * When you pass this list, the package accepts an upgrade only from these origins, such as
-   * `https://app.example.com`. When you leave the list out, the package accepts an origin whose
-   * host and port match the `Host` header of the request. The package always refuses the `null`
-   * origin, and it accepts an upgrade without an `Origin` header.
+   * You choose the origins from which the package accepts an upgrade. When you leave this out, the
+   * package accepts an origin whose host and port match the `Host` header of the request. When you
+   * pass a list, such as `['https://app.example.com']`, the package accepts only those origins.
+   * When you pass an {@link OriginCheck} function, which can be async, the package accepts an
+   * origin for which your function returns `true`. With any of these three, the package accepts
+   * only an `http` or an `https` origin, so it refuses the `null` origin and calls your function
+   * only for an `http` or an `https` origin. When you pass `'*'`, the package accepts
+   * every origin, including `null`. Pass `'*'` only when you sign each client in with a token that
+   * the client adds itself, because the browser of your user sends its cookies with a socket that
+   * a page on any site opens. The package accepts an upgrade without an `Origin` header whatever
+   * you pass.
    */
-  readonly origins?: readonly string[]
+  readonly origins?: readonly string[] | '*' | OriginCheck
   /**
    * uWebSockets.js drops the connection of a client that sends a message longer than this many
    * bytes, which is 16 KiB by default.

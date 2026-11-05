@@ -13,9 +13,26 @@ import {
 } from '../constants.js'
 import { UhttpError } from '../errors.js'
 import { checkedWholeNumber } from '../limits.js'
+import type { OriginCheck } from '../middleware/origins.js'
 import type { WebSocketRoute } from './types.js'
 
 type AnyRoute = WebSocketRoute<object>
+
+/**
+ * The package checks the `Origin` header of an upgrade request against the `origins` of its route
+ * in this form.
+ *
+ * @internal
+ */
+export type UpgradeOrigins =
+  | { readonly kind: 'host' }
+  | { readonly kind: 'list'; readonly listed: readonly string[] }
+  | { readonly kind: 'any' }
+  | { readonly kind: 'check'; readonly check: OriginCheck }
+
+const ANY_ORIGIN = '*'
+const HOST_ORIGINS: UpgradeOrigins = { kind: 'host' }
+const ANY_ORIGINS: UpgradeOrigins = { kind: 'any' }
 
 /**
  * The package stores a {@link WebSocketRoute} in this form once it has checked the route, with
@@ -24,8 +41,8 @@ type AnyRoute = WebSocketRoute<object>
  * @internal
  */
 export interface CheckedWebSocketRoute {
-  /** The package accepts an upgrade from these origins, and from the host of the request when this is `undefined`. */
-  readonly origins: readonly string[] | undefined
+  /** The package checks the origin of each upgrade request against this value. */
+  readonly origins: UpgradeOrigins
   /** uWebSockets.js drops the connection of a client that sends a message longer than this many bytes. */
   readonly maxPayloadLength: number
   /** uWebSockets.js closes a socket after this many seconds without a message. */
@@ -118,10 +135,14 @@ export function checkedOrigin(entry: unknown): string {
   return url.origin
 }
 
-function originsOf(value: unknown): readonly string[] | undefined {
-  if (value === undefined) return undefined
-  if (!Array.isArray(value)) throw invalid('Set the origins of a WebSocket route to a list of origins.')
-  return value.map(checkedOrigin)
+function originsOf(value: AnyRoute['origins']): UpgradeOrigins {
+  if (value === undefined) return HOST_ORIGINS
+  if (value === ANY_ORIGIN) return ANY_ORIGINS
+  if (typeof value === 'function') return { kind: 'check', check: value }
+  if (!Array.isArray(value)) {
+    throw invalid(`Set the origins of a WebSocket route to a list of origins, '${ANY_ORIGIN}', or a function.`)
+  }
+  return { kind: 'list', listed: value.map(checkedOrigin) }
 }
 
 /**
