@@ -93,6 +93,26 @@ describe('an upgrade request through app.request()', () => {
     expect([listed.status, local.status, ownHost.status]).toEqual([101, 101, 403])
   })
 
+  it('refuses an origin whose check returns anything but true, and calls no check for a handshake that breaks RFC 6455', async () => {
+    const origin = 'https://app.example.com'
+    for (const verdict of ['yes', 1, {}, undefined, Promise.resolve('true'), Promise.resolve(1)]) {
+      const app = createApp()
+      Reflect.apply(app.ws, app, ['/chat', { origins: () => verdict }])
+      const response = await app.request('/chat', { headers: handshakeHeaders({ origin }) })
+      expect([verdict, response.status, await errorOf(response)]).toEqual([verdict, 403, 'FORBIDDEN_ORIGIN'])
+    }
+    const checked: string[] = []
+    const app = createApp().ws('/chat', {
+      origins: seen => {
+        checked.push(seen)
+        return true
+      },
+    })
+    const version = await app.request('/chat', { headers: handshakeHeaders({ origin, 'sec-websocket-version': '8' }) })
+    const accepted = await app.request('/chat', { headers: handshakeHeaders({ origin }) })
+    expect([version.status, accepted.status, checked]).toEqual([426, 101, [origin]])
+  })
+
   it('answers 426 with the supported version to a client that asks for another version', async () => {
     const app = createApp().ws('/chat', {})
 

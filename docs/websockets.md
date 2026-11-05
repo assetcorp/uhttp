@@ -67,13 +67,34 @@ For a plain GET to a WebSocket path, the package sends a 426 with the headers `u
 
 Under [section 10.2 of RFC 6455](https://www.rfc-editor.org/rfc/rfc6455#section-10.2), a server should check the `Origin` header of an upgrade, because a page on another site can open a socket to your server from the browser of your user. That browser can then send the cookies that your server uses to sign the user in. The package therefore sends a 403 for an upgrade from an origin that fails the check of the route.
 
-By default, an origin passes the check when its host and port match the `Host` header of the request, whatever its scheme. To allow a fixed list of origins in place of that check, pass `origins`:
+You choose the check of a route with its `origins` option:
+
+| `origins` | The package accepts an upgrade from |
+| --- | --- |
+| Left out | An origin whose host and port match the `Host` header of the request, whatever its scheme |
+| A list of origins | Each origin in the list |
+| A function | Each origin for which the function returns `true` |
+| `'*'` | Every origin, including `null` |
 
 ```ts
 app.ws('/chat', { origins: ['https://app.example.com', 'http://localhost:5173'] })
+
+app.ws('/rooms', { origins: async origin => tenants.hasOrigin(origin) })
+
+app.ws('/live', requireLogin, { origins: '*' })
 ```
 
-The `null` origin always fails the check. A browser sends that origin from a sandboxed iframe or from a page on a `file:` URL, among [other cases](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin). An upgrade without an `Origin` header passes the check, because under [section 4.1 of RFC 6455](https://www.rfc-editor.org/rfc/rfc6455#section-4.1), a browser must send one. Such a request can therefore only come from a client outside a browser, which has none of the cookies that the browsers of your users store. Use a login middleware to check those clients.
+The default check, a list, and a function all refuse the `null` origin. A browser sends that origin from a sandboxed iframe or from a page on a `file:` URL, among [other cases](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin). Those three checks also refuse an origin with a scheme other than `http` or `https`, such as the origin of a browser extension.
+
+The package calls your function at the end of the chain, once every middleware of the route has called `next()`. It passes the function the origin, which it has checked to be an `http` or an `https` origin such as `https://app.example.com`, and the context of the request, so the function can read every value that a middleware stored with `c.set()`. The package accepts the origin only when the function returns `true` or a promise of `true`, so it sends a 403 for any other value. When the function throws or rejects, the package handles the error as it handles the error of any handler, so by default it logs the error and sends a 500. The `timeoutMs` of the route limits how long the package waits for a promise.
+
+An upgrade without an `Origin` header passes every check, because under [section 4.1 of RFC 6455](https://www.rfc-editor.org/rfc/rfc6455#section-4.1), a browser must send one. Such a request can therefore only come from a client outside a browser, which has none of the cookies that the browsers of your users store. Use a login middleware to check those clients.
+
+### When to accept every origin
+
+Accept every origin only on a route that signs each client in with a credential which the client adds itself, such as a token in the query string or in the `Authorization` header. A page on another site can open a socket to such a route from the browser of your user, but the browser adds no token to that socket, so the page can sign in only with a token that it already holds.
+
+Keep one of the other three checks on a route that trusts anything the browser sends by itself. That covers a cookie, the credentials of HTTP authentication that the browser remembers, a TLS client certificate, and the address of a client on a private network. With `'*'`, a page on any site can open a socket from the browser of your user, and the route then receives the cookie, the credentials, the certificate, and the network address of that browser.
 
 ## Handshake errors
 
@@ -83,7 +104,7 @@ When the handshake fails a check, the package throws the error at the end of the
 | --- | --- | --- |
 | `UPGRADE_REQUIRED` | 426 | The client sends a `sec-websocket-version` other than 13. The package sends `sec-websocket-version: 13` with the reply. |
 | `INVALID_UPGRADE` | 400 | The request has no `upgrade: websocket` or no `connection: upgrade`, its `sec-websocket-key` is malformed, or it has a `content-length` above 0 or a `transfer-encoding` header. When the request has a body, the package closes the connection after the reply. |
-| `FORBIDDEN_ORIGIN` | 403 | The origin is `null`, or the origin fails the check of the route. |
+| `FORBIDDEN_ORIGIN` | 403 | The origin fails the check of the route, as the `null` origin does on every route that leaves out `origins: '*'`. |
 
 uWebSockets.js handles a request as an upgrade only when its `sec-websocket-key` has 24 characters, so the package handles a request with a key of any other length as a plain GET.
 
