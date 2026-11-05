@@ -8,6 +8,8 @@ import { afterEach } from 'vitest'
 const HOOK = fileURLToPath(new URL('./typescript-hook.ts', import.meta.url))
 const HOST = fileURLToPath(new URL('../fixtures/thread-host.ts', import.meta.url))
 const START_WAIT_MS = 20_000
+const POSIX_SHELL = '/bin/sh'
+const EXEC_WITHOUT_CORE_DUMPS = 'ulimit -c 0 && exec "$0" "$@"'
 
 export interface Exit {
   code: number | null
@@ -48,7 +50,7 @@ export function stateDirectory(): string {
 }
 
 export function startHost(env: Record<string, string>): Promise<Host> {
-  const child = spawn(process.execPath, ['--import', HOOK, HOST], {
+  const child = spawn(POSIX_SHELL, ['-c', EXEC_WITHOUT_CORE_DUMPS, process.execPath, '--import', HOOK, HOST], {
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
