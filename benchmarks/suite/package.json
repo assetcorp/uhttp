@@ -18,7 +18,7 @@
     "express": "5.3.0",
     "fastify": "5.12.7",
     "helmet": "8.3.0",
-    "hono": "4.13.13",
+    "hono": "4.13.16",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#9ec36de7709996c58dce03d63796216c90a17136"
   },
   "devDependencies": {
