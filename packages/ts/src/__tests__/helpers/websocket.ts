@@ -165,8 +165,12 @@ export class TestSocket {
   }
 }
 
-export function openSocket(port: number, path: string, protocols?: string | string[]): Promise<TestSocket> {
-  const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`, protocols)
+export function openSocket(
+  port: number,
+  path: string,
+  init?: ConstructorParameters<typeof WebSocket>[1],
+): Promise<TestSocket> {
+  const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`, init)
   sockets.add(socket)
   const wrapped = new TestSocket(socket)
   const { promise, resolve, reject } = Promise.withResolvers<TestSocket>()
