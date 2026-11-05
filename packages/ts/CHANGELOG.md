@@ -1,3 +1,13 @@
+## 0.1.2 (2026-11-05)
+
+### 🚀 Features
+
+- **websocket:** let a route accept every origin or decide each origin in a function ([d4b0494](https://github.com/assetcorp/uhttp/commit/d4b0494))
+
+### ❤️ Thank You
+
+- assetcorp
+
 ## 0.1.1 (2026-10-21)
 
 ### 🚀 Features
