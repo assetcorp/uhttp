@@ -1,8 +1,11 @@
 import { WEBSOCKET_VERSION } from '../constants.js'
 import type { Context } from '../context.js'
 import { UhttpError } from '../errors.js'
-import { switchingReply } from '../reply.js'
+import { isThenable } from '../middleware/options.js'
+import { isSerialisedOrigin, type OriginCheck } from '../middleware/origins.js'
+import { type Reply, switchingReply } from '../reply.js'
 import type { Handler } from '../types.js'
+import type { UpgradeOrigins } from './route.js'
 
 const BASE64_NONCE = /^[A-Za-z0-9+/]{22}==$/
 const ALLOWED_SCHEMES: readonly string[] = ['http:', 'https:']
@@ -86,41 +89,34 @@ function hostOf(scheme: string, host: string): string | undefined {
   return plain && url.hash === '' ? url.host : undefined
 }
 
-function originAllowed(headers: HandshakeHeaders, origins: readonly string[] | undefined): boolean {
-  const { origin, host } = headers
-  if (origin === undefined) return true
-  if (origin === NULL_ORIGIN) return false
+function serialisedOrigin(origin: string): URL | undefined {
+  if (origin === NULL_ORIGIN) return undefined
   let url: URL
   try {
     url = new URL(origin)
   } catch {
-    return false
+    return undefined
   }
-  if (url.origin !== origin || !ALLOWED_SCHEMES.includes(url.protocol)) return false
-  if (origins !== undefined) return origins.includes(url.origin)
-  if (host === undefined) return false
-  return hostOf(url.protocol, host) === url.host
+  return url.origin === origin && ALLOWED_SCHEMES.includes(url.protocol) ? url : undefined
 }
 
-/**
- * Returns the error that refuses an upgrade request, or `undefined` for a request that the package
- * can accept. A request without an `origin` header passes the origin check, because a browser sends
- * the header with every upgrade and a client outside a browser can send any origin that it likes.
- *
- * @param headers - The package passes the handshake headers of the request.
- * @param origins - The package passes the `origins` list of the route, or `undefined` to accept an
- * origin whose host and port match the `host` header of the request.
- * @param declaresBody - The package passes `true` when body bytes follow the head of the request.
- * @returns The function returns an `INVALID_UPGRADE` error for a request that breaks RFC 6455, an
- * `UPGRADE_REQUIRED` error for a version other than 13, and a `FORBIDDEN_ORIGIN` error for the
- * `null` origin or an origin that the route doesn't accept.
- * @internal
- */
-export function handshakeError(
-  headers: HandshakeHeaders,
-  origins: readonly string[] | undefined,
-  declaresBody: boolean,
-): UhttpError | undefined {
+function forbiddenOrigin(): UhttpError {
+  return new UhttpError('FORBIDDEN_ORIGIN', 'The origin of the request fails the origin check of this WebSocket route.')
+}
+
+function replyForVerdict(verdict: unknown): Reply {
+  if (verdict !== true) throw forbiddenOrigin()
+  return switchingReply()
+}
+
+function checkedUpgrade(check: OriginCheck, origin: string): Handler {
+  return context => {
+    const verdict = check(origin, context)
+    return isThenable(verdict) ? Promise.resolve(verdict).then(replyForVerdict) : replyForVerdict(verdict)
+  }
+}
+
+function protocolError(headers: HandshakeHeaders, declaresBody: boolean): UhttpError | undefined {
   if (!hasToken(headers.upgrade, 'websocket') || !hasToken(headers.connection, 'upgrade')) {
     return new UhttpError(
       'INVALID_UPGRADE',
@@ -135,12 +131,6 @@ export function handshakeError(
     return new UhttpError(
       'UPGRADE_REQUIRED',
       `This server supports version ${WEBSOCKET_VERSION} of the WebSocket protocol alone.`,
-    )
-  }
-  if (!originAllowed(headers, origins)) {
-    return new UhttpError(
-      'FORBIDDEN_ORIGIN',
-      'The origin of the request fails the origin check of this WebSocket route.',
     )
   }
   return undefined
@@ -175,19 +165,57 @@ export const upgradeRequired: Handler = context => {
  */
 export const acceptUpgrade: Handler = () => switchingReply()
 
-/**
- * Returns the handler that refuses an upgrade request at the end of its chain, so that every
- * middleware of the route receives the error reply after `await next()`. For an
- * `UPGRADE_REQUIRED` error, the reply has the version that the package supports in
- * `sec-websocket-version`.
- *
- * @param error - The package passes the error from {@link handshakeError}.
- * @returns The function returns a handler that throws the error.
- * @internal
- */
-export function refuseUpgrade(error: UhttpError): Handler {
+function refuseUpgrade(error: UhttpError): Handler {
   return context => {
     if (error.code === 'UPGRADE_REQUIRED') announceUpgrade(context)
     throw error
+  }
+}
+
+function hostAllowed(origin: string, host: string | undefined): boolean {
+  const url = serialisedOrigin(origin)
+  return url !== undefined && host !== undefined && hostOf(url.protocol, host) === url.host
+}
+
+function originHandler(allowed: boolean): Handler {
+  return allowed ? acceptUpgrade : refuseUpgrade(forbiddenOrigin())
+}
+
+/**
+ * Returns the handler at the end of the chain of an upgrade request, so that every middleware of
+ * the route receives the reply of the handshake after `await next()`. The package accepts a
+ * request without an `origin` header under every origin check, because a browser sends the header
+ * with every upgrade, while a client outside a browser can send any origin that its code chooses.
+ *
+ * @param headers - The package passes the handshake headers of the request.
+ * @param origins - The package passes the `origins` of the route.
+ * @param declaresBody - The package passes `true` when body bytes follow the head of the request.
+ * @returns The function returns {@link acceptUpgrade} when the client follows RFC 6455 and the
+ * package accepts the origin. For a route with an {@link OriginCheck}, the function returns a
+ * handler that calls the check with the origin and the context. That handler returns the 101 when
+ * the check returns `true` or a promise of `true`. For any other result, the handler throws a
+ * `FORBIDDEN_ORIGIN` error, while it passes on unchanged an error that the check throws or rejects
+ * with. Otherwise, the function returns a handler that throws one of three errors. It throws an
+ * `INVALID_UPGRADE` error when the client sends a body, a malformed key, or upgrade headers that
+ * lack `upgrade: websocket` or `connection: upgrade`. It throws an `UPGRADE_REQUIRED` error when
+ * the client asks for a version other than 13, after it sets the version that the package supports
+ * in `sec-websocket-version`. It throws a `FORBIDDEN_ORIGIN` error when the package refuses the
+ * origin under the `origins` of the route.
+ * @internal
+ */
+export function handshakeHandler(headers: HandshakeHeaders, origins: UpgradeOrigins, declaresBody: boolean): Handler {
+  const error = protocolError(headers, declaresBody)
+  if (error !== undefined) return refuseUpgrade(error)
+  const { origin } = headers
+  if (origin === undefined) return acceptUpgrade
+  switch (origins.kind) {
+    case 'host':
+      return originHandler(hostAllowed(origin, headers.host))
+    case 'list':
+      return originHandler(origins.listed.includes(origin))
+    case 'any':
+      return acceptUpgrade
+    case 'check':
+      return isSerialisedOrigin(origin) ? checkedUpgrade(origins.check, origin) : refuseUpgrade(forbiddenOrigin())
   }
 }

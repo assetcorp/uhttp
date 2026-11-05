@@ -12,6 +12,7 @@ export type { Context, HeaderOptions, StreamOptions } from './context.js'
 export { type ErrorCode, UhttpError, type UhttpErrorOptions, type ValidationIssue } from './errors.js'
 export type { Group } from './group.js'
 export type { HeaderRecord } from './headers.js'
+export type { OriginCheck } from './middleware/origins.js'
 export type {
   MultipartOptions,
   MultipartResult,

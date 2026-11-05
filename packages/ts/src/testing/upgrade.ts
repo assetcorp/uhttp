@@ -12,13 +12,7 @@ import type { Exchange } from '../exchange/index.js'
 import { type DecodedChain, decodeChain } from '../resolve.js'
 import { forEachResponseHeader } from '../response.js'
 import { splitPath } from '../router/index.js'
-import {
-  acceptUpgrade,
-  type HandshakeHeaders,
-  handshakeError,
-  handshakeOf,
-  refuseUpgrade,
-} from '../websocket/handshake.js'
+import { acceptUpgrade, type HandshakeHeaders, handshakeHandler, handshakeOf } from '../websocket/handshake.js'
 import { firstValue, type ParsedTestRequest } from './parse.js'
 
 const ACCEPTED_BASE_STATUS = 200
@@ -72,10 +66,10 @@ export function testUpgradeOf(app: CompiledApp, parsed: ParsedTestRequest): Test
     contentLength: firstValue(lines, 'content-length'),
     transferEncoding: firstValue(lines, 'transfer-encoding'),
   })
-  const error = handshakeError(handshake, match.value.route.origins, declaresBody)
-  if (error === undefined || !decoded.chain.matchedRoute) return { decoded, handshake, declaresBody }
+  const handler = handshakeHandler(handshake, match.value.route.origins, declaresBody)
+  if (handler === acceptUpgrade || !decoded.chain.matchedRoute) return { decoded, handshake, declaresBody }
   return {
-    decoded: { ...decoded, chain: { ...decoded.chain, handler: refuseUpgrade(error) } },
+    decoded: { ...decoded, chain: { ...decoded.chain, handler } },
     handshake,
     declaresBody,
   }
