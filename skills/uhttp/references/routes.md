@@ -12,7 +12,7 @@ interface Account {
   name: string
 }
 
-const accountsByToken = new Map<string, Account>([['token-ama', { id: 'acc_1', name: 'Ama' }]])
+const accountsByToken = new Map<string, Account>([['token-support', { id: 'acc_1', name: 'Support agent' }]])
 
 const requireAccount: Middleware = {
   headers: ['authorization'],
@@ -127,7 +127,7 @@ import { createApp, serve } from '@delali/uhttp'
 const app = createApp({ logger: console }).get('/prices', c =>
   c.sse(async events => {
     for (let sequence = 1; sequence <= 3; sequence++) {
-      const price = { sequence, cedis: 12.5 + sequence }
+      const price = { sequence, usd: 12.5 + sequence }
       const sent = await events.send({ event: 'price', id: String(sequence), data: JSON.stringify(price) })
       if (!sent) return
       await sleep(1_000)
@@ -172,7 +172,7 @@ test('an order with a quantity of zero fails validation', async () => {
   const response = await app.request('/orders', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ sku: 'kente-01', quantity: 0 }),
+    body: JSON.stringify({ sku: 'desk-lamp-01', quantity: 0 }),
   })
   assert.equal(response.status, 400)
   const reply = (await response.json()) as { error: { code: string } }

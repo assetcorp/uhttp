@@ -129,7 +129,7 @@ Read the reference file for each capability that the task needs:
 
    ```bash
    curl -si http://127.0.0.1:3000/health
-   curl -si -X POST http://127.0.0.1:3000/orders -H 'content-type: application/json' -d '{"sku":"kente-01","quantity":2}'
+   curl -si -X POST http://127.0.0.1:3000/orders -H 'content-type: application/json' -d '{"sku":"desk-lamp-01","quantity":2}'
    ```
 
    `app.request()` sends a request through the app without a port, but it skips the code that writes the reply to the socket, so it leaves this check undone.

@@ -33,7 +33,7 @@ await serve({ app, port: 3000 })
 Send it a file over the network to check it:
 
 ```bash
-curl -si -F caption='Kakum canopy' -F photo=@canopy.jpg http://127.0.0.1:3000/photos
+curl -si -F caption='Product photo' -F photo=@product.jpg http://127.0.0.1:3000/photos
 ```
 
 - Set `maxBodyBytes` on every upload route, because the body limit of the route, which is 1 MiB by default, also caps the whole upload and each file in it.

@@ -91,7 +91,7 @@ process.once('SIGTERM', async () => {
 In a test, you can send a request through the app without opening a port:
 
 ```ts
-const response = await app.request('/hello/Ama')
+const response = await app.request('/hello/support')
 console.log(await response.json())
 ```
 
