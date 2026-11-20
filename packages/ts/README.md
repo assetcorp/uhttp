@@ -17,6 +17,7 @@ In the newest recorded run, the suite measured uhttp at 153,147 requests a secon
 ## Contents
 
 - [Install](#install)
+- [Add uhttp with a coding agent](#add-uhttp-with-a-coding-agent)
 - [Quick start](#quick-start)
 - [Features](#features)
 - [Documentation](#documentation)
@@ -26,23 +27,25 @@ In the newest recorded run, the suite measured uhttp at 153,147 requests a secon
 
 ## Install
 
-uhttp works on Node.js 22.15 or a later 22 release, on Node.js 24, and on Node.js 26. Install the package from npm:
-
-```bash
-pnpm add -E @delali/uhttp
-```
-
-You also have to install uWebSockets.js beside uhttp. Its author publishes it on GitHub alone, so give your package manager the release tag on GitHub. With pnpm or Bun, install it with one command:
+uhttp works on Node.js 22.15 or a later 22 release, on Node.js 24, and on Node.js 26. uhttp also needs uWebSockets.js, which its author publishes on GitHub alone, so give your package manager the release tag on GitHub. Install uWebSockets.js first and uhttp second, because pnpm, npm, and Bun fail with a 404 when you install uhttp first, as each of them then tries to fetch uWebSockets.js from the npm registry. With pnpm:
 
 ```bash
 pnpm add -E uWebSockets.js@github:uNetworking/uWebSockets.js#v20.71.0
+pnpm add -E @delali/uhttp
+```
+
+With Bun:
+
+```bash
 bun add --exact uWebSockets.js@github:uNetworking/uWebSockets.js#v20.71.0
+bun add --exact @delali/uhttp
 ```
 
 npm 12 installs a dependency from GitHub only when you allow one, so pass `--allow-git=root`, which npm 11 accepts as well:
 
 ```bash
 npm install --save-exact --allow-git=root uWebSockets.js@github:uNetworking/uWebSockets.js#v20.71.0
+npm install --save-exact @delali/uhttp
 ```
 
 Yarn 4 installs a dependency from GitHub only when you approve its repository first:
@@ -50,9 +53,20 @@ Yarn 4 installs a dependency from GitHub only when you approve its repository fi
 ```bash
 yarn config set --json approvedGitRepositories '["https://github.com/uNetworking/uWebSockets.js.git"]'
 yarn add --exact uWebSockets.js@github:uNetworking/uWebSockets.js#v20.71.0
+yarn add --exact @delali/uhttp
 ```
 
-The author of uWebSockets.js builds its binaries for Linux with glibc, for macOS, and for Windows alone, so uWebSockets.js throws an error when your app loads it on Alpine Linux or on any other system that uses musl in place of glibc.
+The author of uWebSockets.js builds its binaries for Linux with glibc, for macOS, and for Windows alone. On Linux, the binaries of v20.71.0 need glibc 2.38 or newer, so uWebSockets.js throws an error when your app loads it on Alpine Linux or on any other system that uses musl, on Debian 12, or on Ubuntu 22.04. The Node.js images on Docker Hub with a `bookworm` tag hold Debian 12, and so do `node:24-slim` and `node:22-slim` while those tags point to `bookworm`. Build your image on a `trixie` tag such as `node:24-trixie-slim`, which holds Debian 13 with glibc 2.41 and loads uWebSockets.js.
+
+## Add uhttp with a coding agent
+
+The [uhttp skill](https://github.com/assetcorp/uhttp/tree/main/skills/uhttp) tells a coding agent on which systems uWebSockets.js loads, in which order to install the two packages, and which parts of a request each route has to declare before its code reads them. It also guides the agent through moving an app from another Node.js framework to uhttp. Install the skill into the coding agents on your machine with the skills CLI:
+
+```bash
+npx skills add assetcorp/uhttp
+```
+
+The skill has the agent read the uhttp version that your project installs, and it sends the agent to the types and the documentation of that version.
 
 ## Quick start
 
@@ -77,7 +91,7 @@ process.once('SIGTERM', async () => {
 In a test, you can send a request through the app without opening a port:
 
 ```ts
-const response = await app.request('/hello/Ama')
+const response = await app.request('/hello/support')
 console.log(await response.json())
 ```
 

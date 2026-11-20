@@ -327,7 +327,7 @@ describe('a WebSocket route on the network', () => {
     const app = createApp().ws('/flood', {
       closeOnBackpressureLimit: true,
       message: socket => {
-        for (let index = 0; index < 64; index++) statuses.push(socket.send(big))
+        for (let index = 0; index < 1024 && statuses.at(-1) !== 2; index++) statuses.push(socket.send(big))
       },
       close: (_socket, code) => {
         closes.push(code)
