@@ -6,7 +6,7 @@ A uhttp app matches each request to a route by its method and its path. The pack
 import { createApp, serve } from '@delali/uhttp'
 
 const app = createApp()
-  .get('/users', c => c.json({ users: ['Ama', 'Kofi'] }))
+  .get('/users', c => c.json({ users: ['Support agent', 'Billing agent'] }))
   .get('/users/:id', c => c.json({ id: c.req.param('id') }))
   .post('/users', c => c.json({ created: true }, 201))
 

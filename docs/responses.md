@@ -3,7 +3,7 @@
 A handler returns a reply that a helper on the context builds. Once the whole middleware chain has returned, the package writes that reply to the client. It writes the status, the headers, and the body inside one cork of uWebSockets.js, so that uWebSockets.js sends them to the socket in one write.
 
 ```ts
-const app = createApp().get('/users/:id', c => c.json({ id: c.req.param('id'), name: 'Ama' }))
+const app = createApp().get('/users/:id', c => c.json({ id: c.req.param('id'), name: 'Support agent' }))
 ```
 
 ## Send JSON, text, bytes, or a redirect

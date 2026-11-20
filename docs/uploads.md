@@ -69,7 +69,7 @@ Because the network can split a boundary between two chunks, pass the multipart 
 
 ```ts
 const body = Buffer.from(
-  '--frontier\r\nContent-Disposition: form-data; name="caption"\r\n\r\nKakum canopy\r\n--frontier--\r\n',
+  '--frontier\r\nContent-Disposition: form-data; name="caption"\r\n\r\nProduct photo\r\n--frontier--\r\n',
 )
 
 for (let position = 1; position < body.byteLength; position++) {
