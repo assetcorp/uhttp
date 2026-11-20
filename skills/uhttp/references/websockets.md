@@ -9,7 +9,7 @@ interface Member {
   name: string
 }
 
-const membersByToken = new Map<string, Member>([['token-ama', { name: 'Ama' }]])
+const membersByToken = new Map<string, Member>([['token-support', { name: 'Support agent' }]])
 
 const joinRoom: Middleware = {
   before: c => {
@@ -45,7 +45,7 @@ await serve({ app, port: 3000 })
 Check the route from Node.js with the global `WebSocket`:
 
 ```ts
-const socket = new WebSocket('ws://127.0.0.1:3000/rooms/kumasi?token=token-ama')
+const socket = new WebSocket('ws://127.0.0.1:3000/rooms/support?token=token-support')
 const welcome = await new Promise(resolve => socket.addEventListener('message', event => resolve(event.data), { once: true }))
 console.log(welcome)
 socket.close()
