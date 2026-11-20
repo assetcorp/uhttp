@@ -45,7 +45,7 @@ Every parser apart from `bytes()` checks the `Content-Type` of the request befor
 
 When `json()` can't parse the body, it throws a `UhttpError` with the code `INVALID_JSON`, which the client receives as a 400. It throws the same error for a body with a `__proto__` key at any depth, or with a `constructor` key whose value has a `prototype` key, because code that merges such an object recursively into another object can add properties to `Object.prototype`, which every object in the process inherits.
 
-`form()` parses a URL-encoded body into a map with no bracket or dot nesting, so the map holds `user[name]=Ama` under the name `user[name]`. For a name that the form repeats, such as a group of checkboxes, the map holds a list of the values. The map has no prototype, so a field named `__proto__` is an ordinary entry. `form()` counts the parameters while it parses them and throws `PAYLOAD_TOO_LARGE` as soon as a body passes 1,000 of them, which the client receives as a 413.
+`form()` parses a URL-encoded body into a map with no bracket or dot nesting, so the map holds `user[name]=support` under the name `user[name]`. For a name that the form repeats, such as a group of checkboxes, the map holds a list of the values. The map has no prototype, so a field named `__proto__` is an ordinary entry. `form()` counts the parameters while it parses them and throws `PAYLOAD_TOO_LARGE` as soon as a body passes 1,000 of them, which the client receives as a 413.
 
 After a parser reads the body, the package keeps its bytes, so you can call any parser again, or call `stream()`, which then yields those bytes as one chunk. However, once your code streams a body that no parser has read, every later read throws `BODY_ALREADY_READ`.
 
@@ -148,14 +148,14 @@ Pass `body` to `app.request()` as text, as bytes, or as a list or an async itera
 const response = await app.request('/users', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ name: 'Ama', email: 'ama@example.com' }),
+  body: JSON.stringify({ name: 'Support agent', email: 'support@example.com' }),
 })
 ```
 
 Because the network can split a body at any byte, a parser that reads one chunk at a time can fail at a split. Pass the body as a list of chunks to test every split:
 
 ```ts
-const body = Buffer.from('{"name":"Ama","email":"ama@example.com"}')
+const body = Buffer.from('{"name":"Support agent","email":"support@example.com"}')
 
 for (let position = 1; position < body.byteLength; position++) {
   const response = await app.request('/users', {
