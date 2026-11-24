@@ -70,7 +70,7 @@ export function checkedMessage(message: unknown): string | Uint8Array {
 }
 
 /**
- * Returns a copy of bytes in a buffer of their own, or the bytes unchanged when they already fill
+ * Returns a copy of bytes in a new buffer of exactly their length, or the bytes unchanged when they already fill
  * their buffer, so that a structured clone copies the message alone.
  *
  * @param bytes - The package passes the bytes of a message.

@@ -317,7 +317,7 @@ export const PUBSUB_COMPRESS_FLAG = 2
 /** By default, `serve()` serves every request on the main thread. */
 export const DEFAULT_THREADS = 0
 
-/** `serve()` throws for more worker threads than this, so that a mistyped count can't start thousands of threads, each with its own heap. */
+/** `serve()` throws for more worker threads than this, so that a mistyped count can't start thousands of threads, each with a separate heap. */
 export const MAX_THREADS = 1_024
 
 /** The main thread starts the first replacement for a crashed worker after this many milliseconds. */

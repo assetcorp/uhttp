@@ -234,7 +234,7 @@ export class Group {
   }
 
   /**
-   * Returns a group of routes under a path prefix, with its own middleware.
+   * Returns a group of routes under a path prefix, with middleware for the requests under that prefix.
    *
    * @param prefix - The prefix must start with `/` and end without `/`, and it can contain `:name`
    * parameters.
@@ -342,7 +342,7 @@ export class Group {
   /**
    * Adds a WebSocket route. The package passes an upgrade request through the middleware of the
    * app, of each matching group, and of the route, so that a middleware can refuse the upgrade with
-   * its own reply. The package copies the values that your middleware stores with
+   * a reply. The package copies the values that your middleware stores with
    * {@link Context.set} into the `data` of the socket. When a GET request to the same path asks for
    * no upgrade, the package answers with a 426, unless you add a GET route to that path.
    *

@@ -1,6 +1,6 @@
 # Start and stop a server
 
-`serve()` starts a server on a port or on a Unix socket, while `server.close()` waits for each request in progress, up to a grace period, before it stops that server. The package installs no signal handler, so you can call `server.close()` from a handler of your own, such as one for `SIGTERM`.
+`serve()` starts a server on a port or on a Unix socket, while `server.close()` waits for each request in progress, up to a grace period, before it stops that server. The package installs no signal handler, so you can call `server.close()` from a signal handler that your app installs, such as one for `SIGTERM`.
 
 ```ts
 import { createApp, serve } from '@delali/uhttp'
@@ -30,7 +30,7 @@ Once the server listens, the package sets the mode of the socket file to `0o600`
 const server = await serve({ app, path: '/run/shop/http.sock', socketMode: 0o660 })
 ```
 
-Between the bind and that change of mode, the file has the mode that the umask of the process allows. To let only your own user connect during that gap, set a strict umask such as `077`. `server.close()` removes the socket file.
+Between the bind and that change of mode, the file has the mode that the umask of the process allows. To let only the user who owns the process connect during that gap, set a strict umask such as `077`. `server.close()` removes the socket file.
 
 ## Close the server
 
@@ -47,7 +47,7 @@ uWebSockets.js v20.71.0 gives the package no way to reach a connection between t
 
 ## Close the server on a signal
 
-The package installs no handler for `SIGTERM` or `SIGINT`, because your app may have to close resources of its own after the server, such as a database pool:
+The package installs no handler for `SIGTERM` or `SIGINT`, because your app may have to close other resources after the server, such as a database pool:
 
 ```ts
 import { createApp, serve } from '@delali/uhttp'

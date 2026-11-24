@@ -15,7 +15,7 @@ const app = createApp()
 
 ## Name your proxies
 
-List your proxies in the `trust` option as addresses such as `10.0.0.5` or `::1`, as CIDR ranges such as `10.0.0.0/8` or `fd00::/8`, and as the word `unix` for a proxy that connects over a Unix socket. The list is empty by default, so the package treats no peer as a proxy until you add it to the list. `trustedProxies()` throws a `UhttpError` with the code `INVALID_MIDDLEWARE_OPTIONS` for a hop count such as `1` and for `true`, because a client can add its own entries to `X-Forwarded-For`, which a hop count or `true` can lead the package to take as the address of the client.
+List your proxies in the `trust` option as addresses such as `10.0.0.5` or `::1`, as CIDR ranges such as `10.0.0.0/8` or `fd00::/8`, and as the word `unix` for a proxy that connects over a Unix socket. The list is empty by default, so the package treats no peer as a proxy until you add it to the list. `trustedProxies()` throws a `UhttpError` with the code `INVALID_MIDDLEWARE_OPTIONS` for a hop count such as `1` and for `true`, because a client can add any entry that it chooses to `X-Forwarded-For`, which a hop count or `true` can lead the package to take as the address of the client.
 
 ## How the package finds the client
 

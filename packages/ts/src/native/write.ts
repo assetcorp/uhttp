@@ -49,7 +49,7 @@ export function writeReply(res: HttpResponse, exchange: Exchange, context: Conte
 
 /**
  * Returns the head that uWebSockets.js writes in one call for a plain 200, which has no stream, no
- * header of its own, and a text or a JSON content type. When a middleware added one block of
+ * headers set on the reply, and a text or a JSON content type. When a middleware added one block of
  * default headers that it built at startup, such as the block of `secureHeaders()`, the head holds
  * that block too.
  *
@@ -68,7 +68,7 @@ export function plainHeadOf(exchange: Exchange, reply: Reply): ArrayBuffer | und
 /**
  * Writes a plain 200 with a text or a JSON body, whose head the package built once as bytes, with
  * one call into uWebSockets.js for the head and one for the body. The function writes nothing when
- * the reply has another status, a stream, or headers of its own, when your code or a middleware set
+ * the reply has another status, a stream, or a set of headers, when your code or a middleware set
  * a header, when a body is on its way, or when the connection closes after the response.
  *
  * @param res - The package passes the response of uWebSockets.js, which the caller has corked.

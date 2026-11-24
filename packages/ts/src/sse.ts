@@ -13,7 +13,7 @@ const NUL = '\u0000'
  * leave out.
  */
 export interface ServerSentEvent {
-  /** The package splits the data on CR, LF, and CRLF, and it sends each line as its own `data` field. */
+  /** The package splits the data on CR, LF, and CRLF, and it sends each line as a separate `data` field. */
   readonly data?: string
   /** The browser dispatches the event under this name, which must contain no CR and no LF. */
   readonly event?: string

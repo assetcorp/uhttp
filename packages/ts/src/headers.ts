@@ -9,7 +9,7 @@ const TAB_CODE = 0x09
 const DELETE_CODE = 0x7f
 
 /**
- * Returns the UTF-8 bytes of a header name or value in an `ArrayBuffer` of their own. The package
+ * Returns the UTF-8 bytes of a header name or value in a new `ArrayBuffer` that holds those bytes alone. The package
  * builds each one once, because uWebSockets.js reads an `ArrayBuffer` in place, while it converts
  * text to UTF-8 on every call and looks up the underlying buffer of a view such as a `Buffer`.
  *

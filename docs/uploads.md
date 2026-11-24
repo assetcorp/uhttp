@@ -55,7 +55,7 @@ The package also limits every part to 16 header lines and 16 KiB of headers, and
 
 While a destination has a full buffer, the package waits for it to drain before it parses more of the body. Once the package holds 64 KiB of the body that the parser hasn't read, it pauses the uWebSockets.js socket until the parser reads enough to bring that figure below 64 KiB. The kernel's receive buffer for the connection then fills, so TCP flow control slows the client down.
 
-uWebSockets.js clears its idle timer while the package keeps a socket paused, so the package keeps a timer of its own and closes the connection once the socket stays paused for 10 seconds.
+uWebSockets.js clears its idle timer while the package keeps a socket paused, so the package keeps a separate timer and closes the connection once the socket stays paused for 10 seconds.
 
 ## What happens when an upload fails
 

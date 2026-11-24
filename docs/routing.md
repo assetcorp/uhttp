@@ -55,7 +55,7 @@ The package matches the method in upper case alone, so it sends a 405 to a reque
 
 ## Add middleware
 
-The package calls a middleware with the context and a function called `next`. Your middleware can work before `await next()` and on the reply after it. It can also end the request with its own reply in place of calling `next`:
+The package calls a middleware with the context and a function called `next`. Your middleware can work before `await next()` and on the reply after it. It can also end the request by returning a reply in place of calling `next`:
 
 ```ts
 import { createApp, type Middleware } from '@delali/uhttp'

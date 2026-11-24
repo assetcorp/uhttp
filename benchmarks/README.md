@@ -10,7 +10,7 @@ On Linux with `taskset` and at least 6 CPUs, the suite pins each server to CPU 1
 
 ## Record a run on a cloud machine
 
-When you record a run on your own computer, the figures describe that computer alone, so record a run for the published page on a cloud machine that anybody can rent. The toolkit in [`cloud/`](cloud/README.md) creates that machine on GCP, Hetzner, DigitalOcean, or AWS, installs what the suite needs, and starts the suite on it in either profile. Once the suite finishes, the toolkit copies the new run directory back into `results/runs/` or `results/.smoke/runs/`:
+When you record a run on your computer, the figures describe that computer alone, so record a run for the published page on a cloud machine that anybody can rent. The toolkit in [`cloud/`](cloud/README.md) creates that machine on GCP, Hetzner, DigitalOcean, or AWS, installs what the suite needs, and starts the suite on it in either profile. Once the suite finishes, the toolkit copies the new run directory back into `results/runs/` or `results/.smoke/runs/`:
 
 ```bash
 cd benchmarks/cloud

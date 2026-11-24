@@ -19,7 +19,7 @@ export declare namespace StandardSchemaV1 {
   export interface Props<Input = unknown, Output = Input> {
     /** The version of Standard Schema is 1. */
     readonly version: 1
-    /** The validator writes its own name here, such as `valibot`. */
+    /** The validator writes its name here, such as `valibot`. */
     readonly vendor: string
     /**
      * The validator checks a value with this function.

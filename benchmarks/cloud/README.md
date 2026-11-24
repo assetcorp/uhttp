@@ -21,7 +21,7 @@ The prices are from the pages for [`c3-standard-8`](https://sparecores.com/serve
 
 - Install the command-line tool of your provider and sign in with it: `gcloud auth login` with a project set, `hcloud context create` or an `HCLOUD_TOKEN`, `doctl auth init`, or `aws configure`.
 - For `hetzner`, `digitalocean`, and `aws`, you need an SSH key pair. The toolkit uses `~/.ssh/id_ed25519` or `~/.ssh/id_rsa` unless you set `SSH_KEY=/path/to/key`, and it reads the public key from `<key>.pub`. On GCP, `gcloud` manages the keys for you.
-- You need git and bash on your own machine, since the toolkit asks git which files to send.
+- You need git and bash on the machine where you start the toolkit, since the toolkit asks git which files to send.
 
 ## One command
 
@@ -93,7 +93,7 @@ Every default comes from an environment variable:
 
 The toolkit passes each `BENCH_` variable in the last two rows of the table to the suite as the option of the same name, such as `BENCH_SERVERS` as `--servers` and `BENCH_WARM_UP` as `--warm-up`, and [`benchmarks/README.md`](../README.md) describes every option. The toolkit accepts letters, digits, and commas alone in those variables. It also refuses `BENCH_SERVERS`, `BENCH_ROUTES`, and `BENCH_HEADERS` in the published profile before it creates anything, because the suite measures every server, route, and set of headers in that profile.
 
-Each driver also reads its own variables: `GCP_PROJECT`, `GCP_ZONE`, `MIN_CPU_PLATFORM`, and `USE_IAP` for GCP, `HCLOUD_LOCATION` for Hetzner, `DO_REGION` for DigitalOcean, and `AWS_REGION`, `AWS_SUBNET`, `AWS_AMI`, and `AWS_SG_NAME` for AWS.
+Each driver also reads a separate set of variables: `GCP_PROJECT`, `GCP_ZONE`, `MIN_CPU_PLATFORM`, and `USE_IAP` for GCP, `HCLOUD_LOCATION` for Hetzner, `DO_REGION` for DigitalOcean, and `AWS_REGION`, `AWS_SUBNET`, `AWS_AMI`, and `AWS_SG_NAME` for AWS.
 
 ## The deadline on the VM
 
@@ -115,7 +115,7 @@ When the suite records a failed measurement, `fetch` still copies the run and te
 
 ## Publish a run
 
-The suite regenerates the page on the VM, and the toolkit leaves that copy there, so regenerate `BENCHMARKS.md` and both READMEs on your own machine after `fetch`:
+The suite regenerates the page on the VM, and the toolkit leaves that copy there, so regenerate `BENCHMARKS.md` and both READMEs on your local machine after `fetch`:
 
 ```bash
 cd benchmarks/writeup
@@ -134,4 +134,4 @@ Then commit the new run directory together with the page and both READMEs. In th
 
 Treat every VM as a machine that you will throw away, and delete it once you have fetched its run. On Hetzner and DigitalOcean, the toolkit adds no firewall, so the VM accepts SSH connections from any address. On AWS, the security group allows SSH from each address that the toolkit adds to it, and the toolkit removes none of them, so delete an old address in the AWS console once you stop using it. On GCP, the firewall rules of your project set which addresses can reach port 22.
 
-The toolkit accepts the host key that the SSH server on a new VM presents and stores none, because the provider gives each VM a fresh address and the VM generates a fresh host key. That choice means the toolkit cannot detect an impostor on any connection to a VM. The toolkit prints no credentials, since each command-line tool reads its credentials from its own configuration. The toolkit also sends no cloud credentials to the VM.
+The toolkit accepts the host key that the SSH server on a new VM presents and stores none, because the provider gives each VM a fresh address and the VM generates a fresh host key. That choice means the toolkit cannot detect an impostor on any connection to a VM. The toolkit prints no credentials, since each command-line tool reads its credentials from the configuration of that tool. The toolkit also sends no cloud credentials to the VM.

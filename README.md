@@ -86,7 +86,7 @@ process.once('SIGTERM', async () => {
 })
 ```
 
-`secureHeaders()` adds the security headers that a browser checks, such as `X-Content-Type-Options: nosniff` and `X-Frame-Options: SAMEORIGIN`, to every response. `server.close()` waits for each request in progress, for up to 10 seconds by default, before it stops the server. The package installs no signal handler of its own, so in the quick start, a handler for `SIGTERM` calls `server.close()` when the process receives that signal.
+`secureHeaders()` adds the security headers that a browser checks, such as `X-Content-Type-Options: nosniff` and `X-Frame-Options: SAMEORIGIN`, to every response. `server.close()` waits for each request in progress, for up to 10 seconds by default, before it stops the server. The package installs no signal handler, so in the quick start, a handler for `SIGTERM` calls `server.close()` when the process receives that signal.
 
 In a test, you can send a request through the app without opening a port:
 
@@ -109,7 +109,7 @@ console.log(await response.json())
 
 **Start, stop, and HTTPS.** `serve()` listens on a port or on a Unix socket. `server.close()` [waits for the requests in progress](docs/start-and-stop.md) for up to a grace period. With `server.reload()`, you can [replace the certificates](docs/https.md) while the server goes on serving.
 
-**Optional middleware.** The package has ten optional middleware, for trusted proxies, request IDs, access logs, rate limits, security headers, CORS, CSRF protection, cookies, compression, and static files. Each of them has an entry point of its own, such as `@delali/uhttp/cors`, so that a bundler can leave out every middleware that your app doesn't import.
+**Optional middleware.** The package has ten optional middleware, for trusted proxies, request IDs, access logs, rate limits, security headers, CORS, CSRF protection, cookies, compression, and static files. Each of them has a separate entry point, such as `@delali/uhttp/cors`, so that a bundler can leave out every middleware that your app doesn't import.
 
 ## Documentation
 
