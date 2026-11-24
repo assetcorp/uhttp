@@ -1,6 +1,6 @@
 # Serve HTTPS
 
-With the `tls` option, `serve()` serves HTTPS with a key and a certificate that the package loads from PEM files. You can serve several hostnames, each with a certificate of its own. You can also renew every certificate while the server goes on serving.
+With the `tls` option, `serve()` serves HTTPS with a key and a certificate that the package loads from PEM files. You can serve several hostnames, each with a separate certificate. You can also renew every certificate while the server goes on serving.
 
 ```ts
 import { createApp, serve } from '@delali/uhttp'
@@ -20,7 +20,7 @@ Put the intermediate certificates after your certificate in `certFile`, so that 
 
 ## Serve several hostnames
 
-During the TLS handshake, a client sends the hostname of the server in the Server Name Indication extension from section 3 of RFC 6066. Under `hostnames`, map each hostname to a key and a certificate of its own:
+During the TLS handshake, a client sends the hostname of the server in the Server Name Indication extension from section 3 of RFC 6066. Under `hostnames`, map each hostname to its key and its certificate:
 
 ```ts
 const server = await serve({

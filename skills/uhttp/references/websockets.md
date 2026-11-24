@@ -1,6 +1,6 @@
 # WebSockets and pub/sub
 
-`app.ws(path, ...middleware, route)` adds a WebSocket route. uhttp sends the upgrade request through the middleware of the app, of each matching group, and of the route, as it does a GET, so a login check can refuse an upgrade with its own reply. Every value that a middleware stores with `c.set()` during the upgrade becomes part of `socket.data`, and the type argument of `ws` gives that data its type.
+`app.ws(path, ...middleware, route)` adds a WebSocket route. uhttp sends the upgrade request through the middleware of the app, of each matching group, and of the route, as it does a GET, so a login check can refuse an upgrade with a reply. Every value that a middleware stores with `c.set()` during the upgrade becomes part of `socket.data`, and the type argument of `ws` gives that data its type.
 
 ```ts
 import { createApp, type Middleware, serve } from '@delali/uhttp'

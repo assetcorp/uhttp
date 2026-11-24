@@ -52,7 +52,7 @@ async function serveOnWorkers(uws: Uws, options: CheckedServeOptions, module: UR
 /**
  * Returns a server that listens on the address that you choose, once the package registers the
  * routes of the app with uWebSockets.js. With `threads`, each worker thread imports the module at
- * the URL that you pass and builds its own app from it. The main thread receives each connection
+ * the URL that you pass and builds a separate app from it. The main thread receives each connection
  * and passes it to a worker. It also replaces a worker that crashes. The server exits with an error
  * when no worker is left, when workers crash `crashLimit` times within `crashWindowMs`, or when a
  * worker hangs. Before it exits, it closes the healthy workers as {@link Server.close} does. When

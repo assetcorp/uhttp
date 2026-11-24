@@ -36,7 +36,7 @@ export function invalidOption(message: string): UhttpError {
  * Returns the options object that you passed to a middleware, after checking that it is an object.
  *
  * @param value - The middleware passes the options that it received.
- * @param owner - The middleware passes its own name, such as `cors()`.
+ * @param owner - The middleware passes its name, such as `cors()`.
  * @returns The function returns the object, or an empty object for `undefined`.
  * @throws {@link UhttpError} with the code `INVALID_MIDDLEWARE_OPTIONS` for any value other than an
  * object or `undefined`.

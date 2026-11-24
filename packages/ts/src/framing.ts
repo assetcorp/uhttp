@@ -10,7 +10,7 @@ function asciiLowerCase(text: string): string {
 }
 
 /**
- * Returns `true` when uWebSockets.js v20.71.0 answers a request with its own 400 because of the
+ * Returns `true` when uWebSockets.js v20.71.0 itself answers a request with a 400 because of the
  * framing lines of that request. uWebSockets.js calls the handler of the route before it applies most of these
  * checks, so the package applies them first and starts no chain for such a request.
  *

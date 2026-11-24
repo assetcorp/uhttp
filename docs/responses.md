@@ -81,7 +81,7 @@ app.get('/prices', c =>
 )
 ```
 
-Each event can have a `data` string, an `event` name, an `id`, and a `retry` time in milliseconds. The helper splits `data` on CR, LF, and CRLF, and it sends each line as its own `data` field. A stray CR, LF, or NUL in another field can change how a browser parses the rest of the stream, so the helper throws a `UhttpError` with the code `INVALID_EVENT` for an event that breaks one of these rules:
+Each event can have a `data` string, an `event` name, an `id`, and a `retry` time in milliseconds. The helper splits `data` on CR, LF, and CRLF, and it sends each line as a separate `data` field. A stray CR, LF, or NUL in another field can change how a browser parses the rest of the stream, so the helper throws a `UhttpError` with the code `INVALID_EVENT` for an event that breaks one of these rules:
 
 - An event name has to be free of CR and LF.
 - An ID has to be free of CR, LF, and NUL.

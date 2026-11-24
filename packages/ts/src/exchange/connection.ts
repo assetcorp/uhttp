@@ -1,11 +1,10 @@
 import type { Exchange } from './state.js'
 
 /**
- * Returns `true` when the package closes the connection after the response for a reason of its
- * own, in which case the reply contains `Connection: close`. The reason is an early rejection, a
- * `PAYLOAD_TOO_LARGE` error, a time limit, a rejected `transfer-encoding`, an unread rest of the
- * body that is longer than the package discards to keep the connection open, or a server that is
- * closing or reloading.
+ * Returns `true` when the package closes the connection after the response because of an early
+ * rejection, a `PAYLOAD_TOO_LARGE` error, a time limit, a rejected `transfer-encoding`, an unread
+ * rest of the body that is longer than the package discards to keep the connection open, or a
+ * server that is closing or reloading. In each of those cases, the reply contains `Connection: close`.
  *
  * @param exchange - The package passes the state of the request.
  * @returns The function returns `false` when only the client can ask for the close.

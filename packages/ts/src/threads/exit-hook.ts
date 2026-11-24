@@ -34,7 +34,7 @@ function waitForWorkers(workers: Iterable<ExitingWorker>): void {
  * every worker that is alive and not hung, and then it blocks the main thread until each of those
  * workers closes its connections, for up to {@link EXIT_HOOK_WAIT_MS} in total. Node.js aborts the
  * process when it exits while a worker has sockets of uWebSockets.js open. A worker can close its
- * sockets while the main thread blocks, because each thread has its own event loop.
+ * sockets while the main thread blocks, because each thread has a separate event loop.
  *
  * @param workers - The package passes a function that returns the current workers.
  * @returns The function returns a function that removes the listener.

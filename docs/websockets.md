@@ -1,6 +1,6 @@
 # WebSockets
 
-The package sends the upgrade request of a WebSocket route through the same middleware as an HTTP route, so a login check that you add to your HTTP routes can stop an upgrade with its own reply as well. Once every middleware calls `next()`, the package passes the connection to uWebSockets.js, which frames and parses every message in native code.
+The package sends the upgrade request of a WebSocket route through the same middleware as an HTTP route, so a login check that you add to your HTTP routes can also stop an upgrade with a reply. Once every middleware calls `next()`, the package passes the connection to uWebSockets.js, which frames and parses every message in native code.
 
 ```ts
 import { createApp, serve } from '@delali/uhttp'
@@ -35,7 +35,7 @@ When `open`, `message`, or `drain` throws or rejects, the package logs the error
 
 ## Accept or refuse the upgrade in middleware
 
-The package calls the middleware of the app, of each matching group, and of the route for an upgrade request, as it does for a GET. A middleware can await anything and then end the upgrade with its own reply, such as a 401.
+The package calls the middleware of the app, of each matching group, and of the route for an upgrade request, as it does for a GET. A middleware can await anything and then end the upgrade with a reply, such as a 401.
 
 When every middleware calls `next()`, the package sends a 101 and switches the connection to the WebSocket protocol. The package sends every header that a middleware sets with `c.header()` on that 101. uWebSockets.js writes `upgrade`, `sec-websocket-accept`, `sec-websocket-protocol`, and `sec-websocket-extensions` itself, so the package leaves out any header of those names that a middleware sets. When the client sends several subprotocols in `sec-websocket-protocol`, uWebSockets.js selects the first one.
 
@@ -178,7 +178,7 @@ Pass a pub/sub adapter to `createApp()` to deliver each message to the subscribe
 - The package calls `publish(topic, payload)` for each message that code on the thread publishes.
 - The package calls `close()` once on each thread when the server closes.
 
-The package passes `publish` the message as bytes, after a header with the version of the format, the type of the message, and an ID of the process that publishes it. Pass those bytes unchanged to `deliver` on every other server. The package drops a message from its own process, because that process already delivers the message to its own subscribers on every worker. It also drops a message that it fails to parse, together with a warning that it logs to the logger of the app.
+The package passes `publish` the message as bytes, after a header with the version of the format, the type of the message, and an ID of the process that publishes it. Pass those bytes unchanged to `deliver` on every other server. The package drops a message that the same process published, because that process already delivers the message to its subscribers on every worker. It also drops a message that it fails to parse, together with a warning that it logs to the logger of the app.
 
 The adapter below uses [node-redis](https://github.com/redis/node-redis/blob/master/docs/pub-sub.md):
 

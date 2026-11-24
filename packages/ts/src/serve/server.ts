@@ -16,7 +16,8 @@ export interface Server {
    * in response to every new request on an open connection. It closes the idle connections of a
    * thread once no request is in progress on that thread. Once `gracePeriodMs` passes, it closes
    * every connection that is left and then stops every worker thread. The package installs no
-   * signal handler, so call this method from a handler of your own, such as one for `SIGTERM`.
+   * signal handler, so call this method from a signal handler that your app installs, such as one
+   * for `SIGTERM`.
    *
    * @returns The promise settles once the server is closed. A second call returns the same promise.
    */

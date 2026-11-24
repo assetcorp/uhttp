@@ -34,7 +34,7 @@ export interface ServeOptions {
    * You pass the app from {@link createApp}, or the URL of a module whose default export is the
    * app or a function that returns the app or a promise of it. With `threads`, pass the URL, such
    * as `new URL('./app.js', import.meta.url)`, because each worker imports the module and builds
-   * its own app from it.
+   * a separate app from it.
    */
   app: App | URL
   /**

@@ -23,7 +23,7 @@ export type Next = () => Promise<void>
 
 /**
  * A middleware function receives the {@link Context} of one request and `next`. It can end the
- * request with its own {@link Reply}, or it can call `next` and work on the reply afterwards.
+ * request by returning a {@link Reply}, or it can call `next` and work on the reply afterwards.
  *
  * @param context - The package passes the context of the request to the middleware.
  * @param next - The middleware calls this function at most once to pass the request on.
@@ -156,7 +156,7 @@ export interface Logger {
 export interface AppOptions {
   /**
    * The package answers 413 to a request body larger than this many bytes, which is 1 MiB by
-   * default. A route can set its own limit.
+   * default. A route can set a different limit.
    */
   readonly maxBodyBytes?: number
   /**
@@ -179,8 +179,8 @@ export interface AppOptions {
   /**
    * The package passes every message that your code publishes with `app.publish()` or
    * `socket.publish()` to this adapter, such as an adapter for Redis, so that the adapter can
-   * deliver the message to the subscribers on other servers. Each worker thread builds its own
-   * app, so each worker has its own adapter.
+   * deliver the message to the subscribers on other servers. Each worker thread builds a separate
+   * app, so each worker has a separate adapter.
    */
   readonly pubsub?: PubSubAdapter
 }

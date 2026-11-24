@@ -29,7 +29,7 @@
 
 - run middleware before functions without next ([8bed47b](https://github.com/assetcorp/uhttp/commit/8bed47b))
 - publish prereleases to npm and add the benchmark suite ([e90c46e](https://github.com/assetcorp/uhttp/commit/e90c46e))
-- add ten optional middleware with their own entry points ([a60ebee](https://github.com/assetcorp/uhttp/commit/a60ebee))
+- add ten optional middleware, each with a separate entry point ([a60ebee](https://github.com/assetcorp/uhttp/commit/a60ebee))
 - stop worker threads that take too long to build their app ([e33088a](https://github.com/assetcorp/uhttp/commit/e33088a))
 - serve HTTPS, reload certificates, and close servers gracefully ([8ece409](https://github.com/assetcorp/uhttp/commit/8ece409))
 - serve WebSockets, worker threads, and pub/sub ([9a5900c](https://github.com/assetcorp/uhttp/commit/9a5900c))

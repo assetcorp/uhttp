@@ -49,7 +49,7 @@ function warnMissedRoute(app: CompiledApp, method: string, path: string): void {
 /**
  * Returns the uWebSockets.js handler of one route. Inside the synchronous handler, the function
  * checks the `content-length` and `transfer-encoding` lines, and starts no chain for a request that
- * uWebSockets.js answers with its own 400 or whose transfer coding the package rejects. It then
+ * uWebSockets.js itself answers with a 400 or whose transfer coding the package rejects. It then
  * copies the path parameters, the content length, the declared headers, and, where the chain
  * declared it, the client address. On a route without parameters, uWebSockets.js calls the handler
  * for the exact path of the route alone, so the function takes the path from the route and asks

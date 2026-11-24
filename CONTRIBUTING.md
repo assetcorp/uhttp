@@ -61,7 +61,7 @@ On [`BENCHMARKS.md`](BENCHMARKS.md), you can compare uhttp with uWebSockets.js a
 - Keep each source file under 400 lines. When you split a module across several files, put them in a directory with an `index.ts` that re-exports the module.
 - Let Biome format the code, and keep the layout that it writes.
 - Write a TSDoc comment on every published export, and write no other comment anywhere.
-- Give each optional middleware a directory under `packages/ts/src/middleware/` and an entry of its own in the `exports` map of `packages/ts/package.json`, and add it to the lists in `src/__tests__/package/tree-shaking.test.ts` and `src/__tests__/package/built-package.test.ts`, so that the tests check its entry in the `exports` map and check that a bundler can leave it out of an app that never imports it.
+- Give each optional middleware a directory under `packages/ts/src/middleware/` and a separate entry in the `exports` map of `packages/ts/package.json`, and add it to the lists in `src/__tests__/package/tree-shaking.test.ts` and `src/__tests__/package/built-package.test.ts`, so that the tests check its entry in the `exports` map and check that a bundler can leave it out of an app that never imports it.
 - Put every test in one of the three groups that the Tests section describes.
 
 ## Propose a change

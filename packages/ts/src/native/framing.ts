@@ -20,7 +20,7 @@ export interface RequestFraming extends BodyFraming {
   readonly declaresBody: boolean
   /** This is `true` when uWebSockets.js closes the connection after the response, because the client sent `Connection: close`. */
   readonly clientCloses: boolean
-  /** This is `true` when uWebSockets.js answers the request with its own 400 once the handler returns. */
+  /** This is `true` when uWebSockets.js itself answers the request with a 400 once the handler returns. */
   readonly parserRejects: boolean
   /** The package answers the request with this error before it calls any handler, and it is `undefined` otherwise. */
   readonly rejection: UhttpError | undefined
@@ -91,8 +91,8 @@ function readBodyFraming(req: HttpRequest, contentLength: string, transferEncodi
 
 /**
  * Returns the framing facts of a request that the package serves. The function returns `undefined`
- * when the package has refused the connection, when uWebSockets.js answers the request with its own
- * 400, or when the package rejects the transfer coding of the request. In each of those cases, the
+ * when the package has refused the connection, when uWebSockets.js itself answers the request with
+ * a 400, or when the package rejects the transfer coding of the request. In each of those cases, the
  * function answers the request or leaves it alone before it returns.
  *
  * @param res - The package passes the response of uWebSockets.js.
@@ -109,7 +109,7 @@ export function admittedFraming(res: HttpResponse, req: HttpRequest, exchange: E
 
 /**
  * Returns the framing facts that {@link readFraming} read, when the package serves the request.
- * The function returns `undefined` when uWebSockets.js answers the request with its own 400, or
+ * The function returns `undefined` when uWebSockets.js itself answers the request with a 400, or
  * when the package rejects the transfer coding of the request, and it answers the request or
  * leaves it alone before it returns. The caller has already checked that the package has not
  * refused the connection.
